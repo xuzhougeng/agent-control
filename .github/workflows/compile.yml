@@ -1,0 +1,49 @@
+name: compile
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.component }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: cc-agent
+            dir: cc-agent
+            pkg: ./cmd/cc-agent
+            out: cc-agent-linux-amd64
+          - component: cc-control
+            dir: cc-control
+            pkg: ./cmd/cc-control
+            out: cc-control-linux-amd64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: true
+
+      - name: Build
+        run: |
+          mkdir -p dist
+          go -C "${{ matrix.dir }}" mod download
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go -C "${{ matrix.dir }}" build -trimpath -ldflags "-s -w" \
+            -o "../dist/${{ matrix.out }}" "${{ matrix.pkg }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.component }}-linux-amd64
+          path: dist/${{ matrix.out }}
