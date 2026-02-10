@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code Control Plane</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-title-row">
+      <button
+        id="sidebarToggleBtn"
+        class="icon-btn"
+        type="button"
+        aria-label="Toggle sidebar"
+        aria-controls="sidebar"
+        aria-expanded="false"
+      >
+        ☰
+      </button>
+      <h1>Claude Code Control Plane</h1>
+    </div>
+    <div class="token-row">
+      <span id="wsStatus" class="badge badge-offline">WS: disconnected</span>
+      <label for="tokenInput">UI Token</label>
+      <input id="tokenInput" type="password" placeholder="admin-dev-token">
+      <button id="saveTokenBtn">Save</button>
+    </div>
+  </header>
+
+  <main>
+    <aside id="sidebar">
+      <section>
+        <h2>Servers</h2>
+        <button id="refreshServersBtn">Refresh</button>
+        <ul id="serversList"></ul>
+      </section>
+      <section>
+        <h2>New Session</h2>
+        <label for="cwdInput">cwd</label>
+        <input id="cwdInput" type="text" placeholder="/path/to/repo">
+        <label for="envInput">env (KEY=VALUE, comma-separated)</label>
+        <input id="envInput" type="text" placeholder="CC_PROFILE=dev">
+        <button id="newSessionBtn">Create</button>
+      </section>
+      <section>
+        <h2>Sessions</h2>
+        <button id="refreshSessionsBtn">Refresh</button>
+        <ul id="sessionsList"></ul>
+      </section>
+    </aside>
+
+    <section class="content">
+      <section class="alerts">
+        <details id="approvalDetails" open>
+          <summary>
+            <span>Pending Approvals</span>
+            <span id="approvalCount" class="badge">0</span>
+          </summary>
+          <ul id="approvalList"></ul>
+        </details>
+      </section>
+      <section class="terminal-section">
+        <div class="terminal-toolbar">
+          <div id="currentSessionLabel">Session: (none)</div>
+          <button id="approveBtn">Approve (1)</button>
+          <button id="stopBtn">Option 2</button>
+          <button id="rejectBtn">Reject (3)</button>
+        </div>
+        <div id="terminal"></div>
+        <div class="input-row">
+          <input id="manualInput" type="text" placeholder="manual input">
+          <button id="sendInputBtn">Send</button>
+        </div>
+      </section>
+    </section>
+  </main>
+  <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
+
