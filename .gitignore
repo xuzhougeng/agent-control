@@ -1,0 +1,37 @@
+cc-control/audit.jsonl
+*.log
+
+# Go build/test artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+coverage.txt
+profile.out
+cpu.out
+mem.out
+bench.out
+
+# Go workspace/sum files
+go.work.sum
+
+# Common build output dirs
+bin/
+dist/
+build/
+tmp/
+
+# Local "go build" outputs (when building inside module dirs)
+cc-agent/cc-agent
+cc-control/cc-control
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
