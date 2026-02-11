@@ -285,13 +285,15 @@ li .row {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   min-width: 0;
 }
 
-.toolbar-actions, .toolbar-keys {
+.toolbar-keys {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -419,7 +421,7 @@ body.sidebar-open .sidebar-backdrop {
   .terminal-toolbar { flex-wrap: wrap; padding: 8px; }
   #currentSessionLabel { flex: 1 1 100%; }
 
-  .toolbar-actions, .toolbar-keys { flex-wrap: wrap; }
+  .toolbar-keys { flex-wrap: wrap; }
 
   button, input { min-height: 42px; font-size: 16px; }
 }

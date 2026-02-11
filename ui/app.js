@@ -167,10 +167,6 @@
     attachSession(session.session_id);
   });
 
-  document.getElementById("approveBtn").addEventListener("click", () => doQuickAction("approve"));
-  document.getElementById("stopBtn").addEventListener("click", () => doQuickAction("option2"));
-  document.getElementById("rejectBtn").addEventListener("click", () => doQuickAction("reject"));
-
   document.getElementById("scrollUp").addEventListener("click", () => term.scrollPages(-1));
   document.getElementById("scrollDown").addEventListener("click", () => term.scrollPages(1));
   document.getElementById("keyUp").addEventListener("click", () => sendQuickKey("\x1b[A"));
@@ -447,22 +443,6 @@
     });
   }
 
-  function latestPendingApproval(sessionID = "") {
-    let latest = null;
-    for (const ev of state.approvals.values()) {
-      if (ev.resolved) {
-        continue;
-      }
-      if (sessionID && ev.session_id !== sessionID) {
-        continue;
-      }
-      if (!latest || ev.ts_ms > latest.ts_ms) {
-        latest = ev;
-      }
-    }
-    return latest;
-  }
-
   function sendQuickKey(keyValue) {
     if (!state.selectedSessionID) {
       alert("No session attached — click a session first");
@@ -477,34 +457,6 @@
       session_id: state.selectedSessionID,
       data_b64: bytesToB64(keyValue),
     });
-  }
-
-  function doQuickAction(kind) {
-    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-      alert("WebSocket not connected");
-      return;
-    }
-    if (kind === "approve" || kind === "reject") {
-      const pending = latestPendingApproval(state.selectedSessionID) || latestPendingApproval();
-      if (pending) {
-        action(kind, pending.event_id, pending.session_id);
-        return;
-      }
-    }
-    const sessionID = state.selectedSessionID;
-    if (!sessionID) {
-      alert("No session attached — click a session first");
-      return;
-    }
-    if (kind === "approve") {
-      sendQuickKey("\r");
-      return;
-    }
-    if (kind === "option2") {
-      sendQuickKey("\t");
-      return;
-    }
-    sendQuickKey("\u001b");
   }
 
   function sendResize() {
