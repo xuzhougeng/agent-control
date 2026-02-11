@@ -33,6 +33,12 @@
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg-base);
   color: var(--text);
@@ -83,8 +89,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: v
 main {
   display: grid;
   grid-template-columns: 300px 1fr;
-  height: calc(100vh - 52px);
-  height: calc(100dvh - 52px);
+  flex: 1;
   min-height: 0;
 }
 
@@ -377,8 +382,6 @@ body.sidebar-open .sidebar-backdrop {
 
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width: 900px) {
-  html, body { height: 100vh; height: 100dvh; overflow: hidden; }
-
   h1 { font-size: 14px; }
 
   .icon-btn { display: inline-flex; }
@@ -391,8 +394,7 @@ body.sidebar-open .sidebar-backdrop {
   main {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 84px);
-    height: calc(100dvh - 84px);
+    flex: 1;
     overflow: hidden;
   }
 

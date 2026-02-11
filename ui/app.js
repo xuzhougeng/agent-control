@@ -37,6 +37,7 @@
   const sidebarToggleBtn = document.getElementById("sidebarToggleBtn");
   const sidebarBackdrop = document.getElementById("sidebarBackdrop");
   const mobileMedia = window.matchMedia("(max-width: 900px)");
+  let mobileKeyboardOpen = false;
 
   tokenInput.value = state.token;
 
@@ -59,6 +60,28 @@
   function syncTerminalLayout() {
     fitAddon.fit();
     sendResize();
+  }
+
+  function handleMobileViewportChange() {
+    if (!isMobileViewport()) {
+      mobileKeyboardOpen = false;
+      return;
+    }
+    const vv = window.visualViewport;
+    if (!vv) {
+      return;
+    }
+    // On mobile, a large visual viewport height drop usually means keyboard opened.
+    const keyboardNowOpen = (window.innerHeight - vv.height) > 120;
+    if (keyboardNowOpen && !mobileKeyboardOpen) {
+      setTimeout(() => {
+        syncTerminalLayout();
+        term.scrollToBottom();
+      }, 0);
+    } else {
+      syncTerminalLayout();
+    }
+    mobileKeyboardOpen = keyboardNowOpen;
   }
 
   function toggleSidebar(open) {
@@ -108,6 +131,9 @@
     }
     syncTerminalLayout();
   });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", handleMobileViewportChange);
+  }
   approvalDetails.addEventListener("toggle", () => {
     localStorage.setItem("approval_collapsed", approvalDetails.open ? "0" : "1");
     setTimeout(syncTerminalLayout, 0);
@@ -169,6 +195,9 @@
 
   document.getElementById("scrollUp").addEventListener("click", () => term.scrollPages(-1));
   document.getElementById("scrollDown").addEventListener("click", () => term.scrollPages(1));
+  document.getElementById("keyTab").addEventListener("click", () => sendQuickKey("\t"));
+  document.getElementById("keyEsc").addEventListener("click", () => sendQuickKey("\u001b"));
+  document.getElementById("keyCtrlC").addEventListener("click", () => sendQuickKey("\u0003"));
   document.getElementById("keyUp").addEventListener("click", () => sendQuickKey("\x1b[A"));
   document.getElementById("keyDown").addEventListener("click", () => sendQuickKey("\x1b[B"));
   document.getElementById("keyRight").addEventListener("click", () => sendQuickKey("\x1b[C"));
