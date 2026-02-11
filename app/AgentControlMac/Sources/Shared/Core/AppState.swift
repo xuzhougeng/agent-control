@@ -75,7 +75,23 @@ final class AppState: ObservableObject {
         wsClient.configure(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
     }
 
+    static func isValidBaseURL(_ raw: String) -> Bool {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: value),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              let host = components.host, !host.isEmpty else {
+            return false
+        }
+        if let port = components.port, !(1...65535).contains(port) {
+            return false
+        }
+        // Keep base URL simple to avoid unexpected path joining issues.
+        return components.path.isEmpty || components.path == "/"
+    }
+
     func saveConfig(baseURL: String, token: String, skipTLSVerify: Bool = false) {
+        guard Self.isValidBaseURL(baseURL) else { return }
         UserDefaults.standard.set(baseURL, forKey: "baseURL")
         UserDefaults.standard.set(skipTLSVerify, forKey: "skipTLSVerify")
         KeychainHelper.save(key: "ui_token", value: token)

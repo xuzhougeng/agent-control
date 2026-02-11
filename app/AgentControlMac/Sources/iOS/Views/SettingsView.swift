@@ -10,6 +10,14 @@ struct SettingsView: View {
     @State private var saved = false
     @State private var connectionCheck: ConnectionCheckResult?
 
+    private var isBaseURLValid: Bool {
+        AppState.isValidBaseURL(baseURL)
+    }
+
+    private var canSubmit: Bool {
+        isBaseURLValid && !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -21,6 +29,11 @@ struct SettingsView: View {
                     SecureField("UI Token", text: $token)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                    if !baseURL.isEmpty && !isBaseURLValid {
+                        Text("Invalid Base URL. Use format like http://127.0.0.1:18080")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
                 }
 
                 Section {
@@ -46,7 +59,7 @@ struct SettingsView: View {
                                 }
                             }
                         }
-                        .disabled(baseURL.isEmpty || token.isEmpty)
+                        .disabled(!canSubmit)
                         Spacer()
                         Button {
                             appState.saveConfig(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
@@ -63,6 +76,7 @@ struct SettingsView: View {
                             }
                         }
                         .buttonStyle(.borderedProminent)
+                        .disabled(!canSubmit)
                     }
                 }
             }
