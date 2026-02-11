@@ -2,6 +2,8 @@ name: compile
 
 on:
   push:
+    branches: [main, master]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -10,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: build (${{ matrix.component }})
+    name: build ${{ matrix.component }} ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -19,11 +21,53 @@ jobs:
           - component: cc-agent
             dir: cc-agent
             pkg: ./cmd/cc-agent
-            out: cc-agent-linux-amd64
+            goos: linux
+            goarch: amd64
+          - component: cc-agent
+            dir: cc-agent
+            pkg: ./cmd/cc-agent
+            goos: linux
+            goarch: arm64
+          - component: cc-agent
+            dir: cc-agent
+            pkg: ./cmd/cc-agent
+            goos: darwin
+            goarch: amd64
+          - component: cc-agent
+            dir: cc-agent
+            pkg: ./cmd/cc-agent
+            goos: darwin
+            goarch: arm64
+          - component: cc-agent
+            dir: cc-agent
+            pkg: ./cmd/cc-agent
+            goos: windows
+            goarch: amd64
           - component: cc-control
             dir: cc-control
             pkg: ./cmd/cc-control
-            out: cc-control-linux-amd64
+            goos: linux
+            goarch: amd64
+          - component: cc-control
+            dir: cc-control
+            pkg: ./cmd/cc-control
+            goos: linux
+            goarch: arm64
+          - component: cc-control
+            dir: cc-control
+            pkg: ./cmd/cc-control
+            goos: darwin
+            goarch: amd64
+          - component: cc-control
+            dir: cc-control
+            pkg: ./cmd/cc-control
+            goos: darwin
+            goarch: arm64
+          - component: cc-control
+            dir: cc-control
+            pkg: ./cmd/cc-control
+            goos: windows
+            goarch: amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,13 +81,46 @@ jobs:
       - name: Build
         run: |
           mkdir -p dist
-          go -C "${{ matrix.dir }}" mod download
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+          suffix=""
+          [ "${{ matrix.goos }}" = "windows" ] && suffix=".exe"
+          out="dist/${{ matrix.component }}-${{ matrix.goos }}-${{ matrix.goarch }}${suffix}"
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
             go -C "${{ matrix.dir }}" build -trimpath -ldflags "-s -w" \
-            -o "../dist/${{ matrix.out }}" "${{ matrix.pkg }}"
+            -o "../${out}" "${{ matrix.pkg }}"
+          echo "OUT_PATH=${out}" >> $GITHUB_ENV
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.component }}-linux-amd64
-          path: dist/${{ matrix.out }}
+          name: ${{ matrix.component }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.OUT_PATH }}
+
+  release:
+    name: release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Move binaries to release dir
+        run: |
+          mkdir -p release
+          for d in artifacts/*/; do
+            cp "$d"/* release/ 2>/dev/null || true
+          done
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
