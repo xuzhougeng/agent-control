@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var token = ""
     @State private var skipTLSVerify = false
     @State private var saved = false
+    @State private var connectionCheck: ConnectionCheckResult?
 
     var body: some View {
         NavigationStack {
@@ -30,23 +31,39 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Button {
-                        appState.saveConfig(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
-                        saved = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saved = false }
-                    } label: {
-                        HStack {
-                            Spacer()
-                            if saved {
-                                Label("Saved", systemImage: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                            } else {
-                                Text("Save & Reconnect")
-                            }
-                            Spacer()
-                        }
+                    if let result = connectionCheck {
+                        HStack { result.label.font(.caption); Spacer() }
                     }
-                    .buttonStyle(.borderedProminent)
+                    HStack {
+                        Button("Check connection") {
+                            connectionCheck = .checking
+                            Task {
+                                do {
+                                    try await APIClient.checkConnection(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
+                                    await MainActor.run { connectionCheck = .ok }
+                                } catch {
+                                    await MainActor.run { connectionCheck = .failed(error.localizedDescription) }
+                                }
+                            }
+                        }
+                        .disabled(baseURL.isEmpty || token.isEmpty)
+                        Spacer()
+                        Button {
+                            appState.saveConfig(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
+                            saved = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saved = false }
+                        } label: {
+                            HStack {
+                                if saved {
+                                    Label("Saved", systemImage: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                } else {
+                                    Text("Save & Reconnect")
+                                }
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
             }
             .navigationTitle("Settings")

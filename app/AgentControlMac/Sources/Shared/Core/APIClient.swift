@@ -44,6 +44,27 @@ final class APIClient {
         self.skipTLSVerify = skipTLSVerify
     }
 
+    /// One-off connectivity check with given config (does not change instance state).
+    static func checkConnection(baseURL: String, token: String, skipTLSVerify: Bool) async throws {
+        let base = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+        guard let url = URL(string: base + "/api/servers") else { throw APIError.invalidURL }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let session: URLSession
+        if skipTLSVerify {
+            let delegate = TLSBypassDelegate()
+            session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        } else {
+            session = URLSession.shared
+        }
+        let (data, response) = try await session.data(for: req)
+        if skipTLSVerify { session.invalidateAndCancel() }
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidURL }
+        if !(200...299).contains(http.statusCode) {
+            throw APIError.httpError(http.statusCode, String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
     // MARK: - REST endpoints
 
     func fetchServers() async throws -> [Server] {

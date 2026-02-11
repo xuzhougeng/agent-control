@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var token = ""
     @State private var skipTLSVerify = false
     @State private var saved = false
+    @State private var connectionCheck: ConnectionCheckResult?
 
     var body: some View {
         Form {
@@ -22,7 +23,25 @@ struct SettingsView: View {
             }
 
             Section {
+                if let result = connectionCheck {
+                    HStack {
+                        result.label.font(.caption)
+                        Spacer()
+                    }
+                }
                 HStack {
+                    Button("Check connection") {
+                        connectionCheck = .checking
+                        Task {
+                            do {
+                                try await APIClient.checkConnection(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
+                                await MainActor.run { connectionCheck = .ok }
+                            } catch {
+                                await MainActor.run { connectionCheck = .failed(error.localizedDescription) }
+                            }
+                        }
+                    }
+                    .disabled(baseURL.isEmpty || token.isEmpty)
                     Spacer()
                     if saved {
                         Label("Saved", systemImage: "checkmark.circle.fill")
@@ -40,7 +59,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 450, height: 260)
+        .frame(width: 450, height: 300)
         .onAppear {
             baseURL = UserDefaults.standard.string(forKey: "baseURL") ?? "http://127.0.0.1:18080"
             token = KeychainHelper.load(key: "ui_token") ?? "admin-dev-token"
