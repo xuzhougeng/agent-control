@@ -6,7 +6,9 @@ import (
 	"errors"
 	"log"
 	"runtime"
+	"strings"
 	"sync"
+	"unicode"
 
 	"cc-agent/internal/pty"
 	"cc-agent/internal/security"
@@ -129,8 +131,29 @@ func (m *SessionManager) startSession(sessionID string, req StartSessionPayload)
 		return err
 	}
 
+	resumeID := strings.TrimSpace(req.ResumeID)
+	if resumeID != "" {
+		if len(resumeID) > 128 {
+			err := errors.New("resume_id too long")
+			m.sendError(sessionID, "reject_resume_id:too_long")
+			return err
+		}
+		for _, r := range resumeID {
+			if unicode.IsSpace(r) {
+				err := errors.New("resume_id contains whitespace")
+				m.sendError(sessionID, "reject_resume_id:contains_whitespace")
+				return err
+			}
+		}
+	}
+
+	args := make([]string, 0, 2)
+	if resumeID != "" {
+		args = append(args, "--resume", resumeID)
+	}
+
 	env := security.FilterEnv(req.Env, m.cfg.EnvAllowKeys, m.cfg.EnvAllowPrefix)
-	sess, err := pty.Start(sessionID, req.Cwd, m.cfg.ClaudePath, env, req.Cols, req.Rows)
+	sess, err := pty.Start(sessionID, req.Cwd, m.cfg.ClaudePath, args, env, req.Cols, req.Rows)
 	if err != nil {
 		m.sendError(sessionID, "start_failed:"+err.Error())
 		return err

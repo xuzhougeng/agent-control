@@ -39,8 +39,8 @@ type Session struct {
 	closed chan struct{}
 }
 
-func Start(id, cwd, cmdPath string, env map[string]string, cols, rows uint16) (*Session, error) {
-	cmd := exec.Command(cmdPath)
+func Start(id, cwd, cmdPath string, args []string, env map[string]string, cols, rows uint16) (*Session, error) {
+	cmd := exec.Command(cmdPath, args...)
 	cmd.Dir = cwd
 	cmd.Env = minimalHostEnv()
 	for k, v := range env {

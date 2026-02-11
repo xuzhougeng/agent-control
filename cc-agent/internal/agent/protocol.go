@@ -36,11 +36,12 @@ type RegisterPayload struct {
 }
 
 type StartSessionPayload struct {
-	Cwd  string            `json:"cwd"`
-	Cmd  []string          `json:"cmd"`
-	Env  map[string]string `json:"env"`
-	Cols uint16            `json:"cols"`
-	Rows uint16            `json:"rows"`
+	Cwd      string            `json:"cwd"`
+	Cmd      []string          `json:"cmd"`
+	ResumeID string            `json:"resume_id,omitempty"`
+	Env      map[string]string `json:"env"`
+	Cols     uint16            `json:"cols"`
+	Rows     uint16            `json:"rows"`
 }
 
 type ResizePayload struct {
