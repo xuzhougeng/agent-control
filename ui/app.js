@@ -171,6 +171,12 @@
   document.getElementById("stopBtn").addEventListener("click", () => doQuickAction("option2"));
   document.getElementById("rejectBtn").addEventListener("click", () => doQuickAction("reject"));
 
+  document.getElementById("keyUp").addEventListener("click", () => sendQuickKey("\x1b[A"));
+  document.getElementById("keyDown").addEventListener("click", () => sendQuickKey("\x1b[B"));
+  document.getElementById("keyRight").addEventListener("click", () => sendQuickKey("\x1b[C"));
+  document.getElementById("keyLeft").addEventListener("click", () => sendQuickKey("\x1b[D"));
+  document.getElementById("keyEnter").addEventListener("click", () => sendQuickKey("\r"));
+
   async function refreshAll() {
     await fetchServers();
     await fetchSessions();
@@ -204,17 +210,19 @@
     serversList.innerHTML = "";
     for (const s of state.servers) {
       const li = document.createElement("li");
+      if (s.server_id === state.selectedServerID) li.classList.add("selected");
       const statusClass = s.status === "online" ? "badge-online" : "badge-offline";
       li.innerHTML = `
         <div class="row">
           <strong>${escapeHtml(s.server_id)}</strong>
           <span class="badge ${statusClass}">${escapeHtml(s.status)}</span>
         </div>
-        <div>${escapeHtml(s.hostname || "")}</div>
-        <div>${(s.tags || []).map(escapeHtml).join(", ")}</div>
+        <div class="item-meta">${escapeHtml(s.hostname || "")}</div>
+        <div class="item-meta">${(s.tags || []).map(escapeHtml).join(", ")}</div>
       `;
       li.addEventListener("click", async () => {
         state.selectedServerID = s.server_id;
+        renderServers();
         await fetchSessions();
         closeSidebarOnMobile();
       });
@@ -226,16 +234,18 @@
     sessionsList.innerHTML = "";
     for (const s of state.sessions) {
       const li = document.createElement("li");
+      if (s.session_id === state.selectedSessionID) li.classList.add("selected");
+      const statusBadge = s.status === "running" ? "badge badge-running" : "badge";
       li.innerHTML = `
         <div class="row">
           <strong>${escapeHtml(s.session_id.slice(0, 8))}</strong>
-          <span class="badge">${escapeHtml(s.status)}</span>
+          <span class="${statusBadge}">${escapeHtml(s.status)}</span>
         </div>
-        <div>${escapeHtml(s.cwd || "")}</div>
-        ${s.resume_id ? `<div style="color:#a6b1c8;font-size:12px;word-break:break-word;margin-top:4px;">resume: ${escapeHtml(s.resume_id)}</div>` : ""}
-        <div>approval: ${s.awaiting_approval ? "yes" : "no"}</div>
-        ${s.resume_id ? `<div class="row" style="margin-top:6px;"><button type="button" data-action="resume">Resume</button></div>` : ""}
-        ${s.exit_reason ? `<div style="color:#a6b1c8;font-size:12px;word-break:break-word;margin-top:4px;">reason: ${escapeHtml(s.exit_reason)}</div>` : ""}
+        <div class="item-meta">${escapeHtml(s.cwd || "")}</div>
+        ${s.resume_id ? `<div class="item-meta">resume: ${escapeHtml(s.resume_id)}</div>` : ""}
+        <div class="item-meta">approval: ${s.awaiting_approval ? "yes" : "no"}</div>
+        ${s.resume_id ? `<div class="row" style="margin-top:6px;"><button type="button" data-action="resume" class="btn-secondary">Resume</button></div>` : ""}
+        ${s.exit_reason ? `<div class="item-meta">reason: ${escapeHtml(s.exit_reason)}</div>` : ""}
       `;
       if (s.resume_id) {
         const resumeBtn = li.querySelector('[data-action="resume"]');
@@ -297,10 +307,8 @@
       }
       pendingCount++;
       const li = document.createElement("li");
-      const promptText = (ev.prompt_excerpt || "").trim() || "Pending approval";
       li.innerHTML = `
-        <div>${escapeHtml(promptText)}</div>
-        <div class="approval-item-subtle">${escapeHtml(ev.session_id.slice(0, 8))} @ ${escapeHtml(ev.server_id)} · click to open</div>
+        <div><strong>${escapeHtml(ev.session_id.slice(0, 8))}</strong> @ ${escapeHtml(ev.server_id)}</div>
       `;
       li.classList.add("approval-item");
       li.tabIndex = 0;
@@ -413,6 +421,7 @@
     }
     state.selectedSessionID = sessionID;
     currentSessionLabel.textContent = `Session: ${sessionID}`;
+    renderSessions();
     term.clear();
     sendWS({
       type: "attach",

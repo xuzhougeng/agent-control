@@ -26,7 +26,7 @@
       <span id="wsStatus" class="badge badge-offline">WS: disconnected</span>
       <label for="tokenInput">UI Token</label>
       <input id="tokenInput" type="password" placeholder="admin-dev-token">
-      <button id="saveTokenBtn">Save</button>
+      <button id="saveTokenBtn" class="btn-primary">Save</button>
     </div>
   </header>
 
@@ -66,10 +66,21 @@
       </section>
       <section class="terminal-section">
         <div class="terminal-toolbar">
-          <div id="currentSessionLabel">Session: (none)</div>
-          <button id="approveBtn">Approve (1)</button>
-          <button id="stopBtn">Option 2</button>
-          <button id="rejectBtn">Reject (3)</button>
+          <div class="toolbar-left">
+            <div id="currentSessionLabel">Session: (none)</div>
+            <div class="toolbar-keys">
+              <button id="keyUp" class="btn-key" aria-label="Arrow Up">&#x25B2;</button>
+              <button id="keyDown" class="btn-key" aria-label="Arrow Down">&#x25BC;</button>
+              <button id="keyLeft" class="btn-key" aria-label="Arrow Left">&#x25C0;</button>
+              <button id="keyRight" class="btn-key" aria-label="Arrow Right">&#x25B6;</button>
+              <button id="keyEnter" class="btn-key btn-key-wide" aria-label="Enter">&#x23CE;</button>
+            </div>
+          </div>
+          <div class="toolbar-actions">
+            <button id="approveBtn" class="btn-primary">Approve (1)</button>
+            <button id="stopBtn" class="btn-secondary">Option 2</button>
+            <button id="rejectBtn" class="btn-danger">Reject (3)</button>
+          </div>
         </div>
         <div id="terminal"></div>
       </section>
