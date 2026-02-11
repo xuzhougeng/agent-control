@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -22,8 +23,9 @@ func main() {
 		tagsCSV        = flag.String("tags", getenv("TAGS", ""), "comma-separated tags")
 		allowRootsCSV  = flag.String("allow-root", getenv("ALLOW_ROOT", ""), "comma-separated allowed repo roots")
 		claudePath     = flag.String("claude-path", getenv("CLAUDE_PATH", "claude-code"), "claude-code executable path")
-		agentToken     = flag.String("agent-token", getenv("AGENT_TOKEN", "agent-dev-token"), "agent bearer token")
-		envAllowKeys   = flag.String("env-allow-keys", getenv("ENV_ALLOW_KEYS", ""), "comma-separated allowed env keys")
+		agentToken       = flag.String("agent-token", getenv("AGENT_TOKEN", "agent-dev-token"), "agent bearer token")
+		tlsSkipVerify    = flag.Bool("tls-skip-verify", getenvBool("TLS_SKIP_VERIFY", false), "skip TLS cert verification (e.g. self-signed)")
+		envAllowKeys     = flag.String("env-allow-keys", getenv("ENV_ALLOW_KEYS", ""), "comma-separated allowed env keys")
 		envAllowPrefix = flag.String("env-allow-prefix", getenv("ENV_ALLOW_PREFIX", "CC_"), "allowed env key prefix")
 	)
 	flag.Parse()
@@ -59,6 +61,7 @@ func main() {
 		Token:          *agentToken,
 		HeartbeatEvery: 5 * time.Second,
 		Manager:        mgr,
+		TLSSkipVerify:  *tlsSkipVerify,
 	}
 
 	stop := make(chan struct{})
@@ -81,4 +84,12 @@ func getenv(k, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+func getenvBool(k string, fallback bool) bool {
+	v := os.Getenv(k)
+	if v == "" {
+		return fallback
+	}
+	return v == "1" || strings.EqualFold(v, "true") || v == "yes"
 }

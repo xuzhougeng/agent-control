@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -14,10 +15,11 @@ import (
 )
 
 type Client struct {
-	URL            string
-	Token          string
-	HeartbeatEvery time.Duration
-	Manager        *SessionManager
+	URL               string
+	Token             string
+	HeartbeatEvery    time.Duration
+	Manager           *SessionManager
+	TLSSkipVerify     bool // 自签名证书时设为 true
 }
 
 func (c *Client) Run(stop <-chan struct{}) error {
@@ -59,6 +61,9 @@ func (c *Client) runOnce(stop <-chan struct{}) (bool, error) {
 	header.Set("Authorization", "Bearer "+c.Token)
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
+	}
+	if c.TLSSkipVerify {
+		dialer.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 	conn, _, err := dialer.Dial(c.URL, header)
 	if err != nil {

@@ -10,6 +10,8 @@ Minimal multi-server controller for launching and managing `claude-code` session
 
 ## Quick Start
 
+Only for test, for depolyment see `docs/deploy-public-server.md`.
+
 1. Start control plane:
 
 ```bash
@@ -31,18 +33,6 @@ go run ./cmd/cc-agent \
   -server-id srv-local \
   -allow-root /path/to/repo \
   -claude-path /absolute/path/to/claude-code
-```
-
-for example, in macOS
-
-```bash
-cd cc-agent
-go run ./cmd/cc-agent \
-  -control-url ws://127.0.0.1:18080/ws/agent \
-  -agent-token agent-dev-token \
-  -server-id srv-local \
-  -allow-root /Users/xuzhougeng/Documents/agent-control/cc-agent \
-  -claude-path /opt/homebrew/bin/claude
 ```
 
 3. Open browser:

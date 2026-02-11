@@ -9,6 +9,7 @@ Agent 主动向 Control Plane 发起 WebSocket 出站连接，无需内网开放
 |------|---------|------|
 | **方案 A：直连（无 TLS）** | 测试/内部网络/快速验证 | 仅公网 IP + 一个端口 |
 | **方案 B：Nginx + TLS** | 生产环境 | 域名 + 证书 + 443 端口 |
+| **方案 B'：Nginx + 自签名 TLS** | 无域名但要加密 | 公网 IP + 自签名证书 + 443 端口 |
 
 ---
 
@@ -371,17 +372,128 @@ journalctl -u cc-agent -f
 
 ---
 
+## 方案 B'：无域名 + 自签名 TLS
+
+无域名时无法使用 Let's Encrypt，可用自签名证书在 Nginx 上启用 TLS，传输仍加密；浏览器和 agent 需接受自签名（浏览器手动信任，agent 用 `-tls-skip-verify`）。
+
+### B'.1 生成自签名证书（含 IP SAN）
+
+将 `1.2.3.4` 换成公网服务器 IP。
+
+```bash
+mkdir -p /opt/cc-control/tls
+cd /opt/cc-control/tls
+
+# openssl 配置文件：证书包含 IP
+cat > openssl.cnf << 'EOF'
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+[req_distinguished_name]
+CN = cc-control
+[v3_req]
+subjectAltName = @alt
+[alt]
+IP.1 = 1.2.3.4
+EOF
+
+openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout key.pem -out cert.pem -config openssl.cnf -extensions v3_req
+```
+
+### B'.2 cc-control 与 B 相同
+
+与方案 B 的 B.1～B.3 一致：cc-control 监听 `127.0.0.1:18080`，由 Nginx 反向代理。
+
+### B'.3 Nginx 使用自签名证书
+
+不装 certbot，直接配置 Nginx 使用上面生成的证书。
+
+`/etc/nginx/conf.d/cc.conf`：
+
+```nginx
+server {
+    listen 443 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
+    server_name _;
+
+    ssl_certificate     /opt/cc-control/tls/cert.pem;
+    ssl_certificate_key /opt/cc-control/tls/key.pem;
+
+    location /ws/ {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+```bash
+nginx -t && systemctl reload nginx
+ufw allow 443/tcp
+ufw enable
+```
+
+### B'.4 内网机器：cc-agent（启用 -tls-skip-verify）
+
+自签名证书无法通过系统 CA 校验，agent 需加 `-tls-skip-verify`（或环境变量 `TLS_SKIP_VERIFY=1`）。
+
+```bash
+/opt/cc-agent/cc-agent \
+  -control-url wss://1.2.3.4/ws/agent \
+  -tls-skip-verify \
+  -agent-token "$AGENT_TOKEN" \
+  -server-id srv-gpu-01 \
+  -allow-root /home/deploy/repos \
+  -claude-path /usr/local/bin/claude
+```
+
+Systemd 示例：
+
+```ini
+ExecStart=/opt/cc-agent/cc-agent \
+  -control-url wss://1.2.3.4/ws/agent \
+  -tls-skip-verify \
+  -agent-token ${AGENT_TOKEN} \
+  -server-id ${SERVER_ID} \
+  ...
+```
+
+也可在 `/opt/cc-agent/.env` 中设 `TLS_SKIP_VERIFY=1`，则 ExecStart 可不写 `-tls-skip-verify`。
+
+### B'.5 验证
+
+- 浏览器访问 `https://1.2.3.4`，会提示证书不受信任，手动「继续访问」后用 UI_TOKEN 登录。
+- 内网机器：`journalctl -u cc-agent -f` 确认连接成功。
+
+**注意**：`-tls-skip-verify` 仅适用于受控环境（如自签名或内网）。在公网对不可信服务器不要开启，以免中间人攻击。
+
+---
+
 ## 3. 安全加固清单
 
-| 项目 | 方案 A (无 TLS) | 方案 B (TLS) |
-|------|----------------|-------------|
-| 传输加密 | 无，token 明文 | TLS 加密 |
-| Token | 强随机，防火墙限源 IP | 强随机即可 |
-| allow-root | 严格限制到项目目录 | 同左 |
-| 运行用户 | 非 root | 同左 |
-| 端口暴露 | 防火墙限源 IP | 仅 80/443 |
-| UI 访问限制 | 防火墙限源 IP | Nginx IP 白名单 / Basic Auth |
-| 日志审计 | `audit.jsonl` 定期归档 | 同左 |
+| 项目 | 方案 A (无 TLS) | 方案 B (域名 TLS) | 方案 B' (自签名 TLS) |
+|------|----------------|-------------------|----------------------|
+| 传输加密 | 无，token 明文 | TLS 加密 | TLS 加密 |
+| Token | 强随机，防火墙限源 IP | 强随机即可 | 强随机即可 |
+| allow-root | 严格限制到项目目录 | 同左 | 同左 |
+| 运行用户 | 非 root | 同左 | 同左 |
+| 端口暴露 | 防火墙限源 IP | 仅 80/443 | 仅 443 |
+| UI 访问限制 | 防火墙限源 IP | Nginx IP 白名单 / Basic Auth | 同左 |
+| 日志审计 | `audit.jsonl` 定期归档 | 同左 | 同左 |
+| 证书 | — | Let's Encrypt | 自签名，agent 用 `-tls-skip-verify` |
 
 ## 4. 多 Agent 批量部署（可选）
 
