@@ -297,10 +297,18 @@ li .row {
 
 .toolbar-keys {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 6px;
   margin-left: auto;
   flex-shrink: 0;
+}
+
+.toolbar-keys-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .btn-key {
@@ -434,14 +442,9 @@ body.sidebar-open .sidebar-backdrop {
 
   .toolbar-keys {
     margin-left: 0;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 2px;
+    align-items: stretch;
   }
-  .toolbar-keys::-webkit-scrollbar { display: none; }
+  .toolbar-keys-row { justify-content: flex-end; }
   .toolbar-keys .btn-key { flex: 0 0 auto; }
 
   button, input { min-height: 42px; font-size: 16px; }

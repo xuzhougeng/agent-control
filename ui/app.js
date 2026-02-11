@@ -17,6 +17,7 @@
     token: localStorage.getItem("ui_token") || "admin-dev-token",
     selectedServerID: "",
     selectedSessionID: "",
+    pendingFirstOutputSessionID: "",
     ws: null,
     approvals: new Map(),
     sessions: [],
@@ -459,7 +460,15 @@
   function handleWS(msg) {
     if (msg.type === "term_out") {
       if (msg.session_id === state.selectedSessionID && msg.data_b64) {
-        term.write(b64ToBytes(msg.data_b64));
+        if (state.pendingFirstOutputSessionID === msg.session_id) {
+          term.write(b64ToBytes(msg.data_b64), () => {
+            term.scrollToBottom();
+            state.pendingFirstOutputSessionID = "";
+            currentSessionLabel.textContent = `Session: ${msg.session_id}`;
+          });
+        } else {
+          term.write(b64ToBytes(msg.data_b64));
+        }
       }
       return;
     }
@@ -494,10 +503,12 @@
     if (!sessionID) {
       return;
     }
+    state.pendingFirstOutputSessionID = sessionID;
     state.selectedSessionID = sessionID;
-    currentSessionLabel.textContent = `Session: ${sessionID}`;
+    currentSessionLabel.textContent = `Session: ${sessionID} (loading...)`;
     renderSessions();
-    term.clear();
+    term.reset();
+    term.scrollToBottom();
     sendWS({
       type: "attach",
       data: { session_id: sessionID, since_seq: 0 },
