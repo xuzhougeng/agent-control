@@ -267,7 +267,7 @@ li .row {
 /* ── Terminal ──────────────────────────────────────────── */
 .terminal-section {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: 1fr auto;
   min-height: 0;
 }
 
@@ -277,7 +277,7 @@ li .row {
   justify-content: space-between;
   gap: 8px;
   padding: 8px 14px;
-  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
   background: var(--bg-surface);
 }
 

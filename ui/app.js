@@ -171,6 +171,8 @@
   document.getElementById("stopBtn").addEventListener("click", () => doQuickAction("option2"));
   document.getElementById("rejectBtn").addEventListener("click", () => doQuickAction("reject"));
 
+  document.getElementById("scrollUp").addEventListener("click", () => term.scrollPages(-1));
+  document.getElementById("scrollDown").addEventListener("click", () => term.scrollPages(1));
   document.getElementById("keyUp").addEventListener("click", () => sendQuickKey("\x1b[A"));
   document.getElementById("keyDown").addEventListener("click", () => sendQuickKey("\x1b[B"));
   document.getElementById("keyRight").addEventListener("click", () => sendQuickKey("\x1b[C"));
