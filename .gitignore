@@ -15,7 +15,6 @@ profile.out
 cpu.out
 mem.out
 bench.out
-
 # Go workspace/sum files
 go.work.sum
 
@@ -35,3 +34,10 @@ cc-control/cc-control
 .DS_Store
 *.swp
 *.swo
+
+# macOS app (XcodeGen + Xcode)
+app/AgentControlMac/AgentControlMac.xcodeproj/
+app/**/DerivedData/
+app/**/.build/
+app/**/*.app
+**/xcuserdata/
