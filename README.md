@@ -69,3 +69,8 @@ Use UI token: `admin-dev-token`.
 - Separate agent/UI bearer tokens
 - Basic per-token rate limiting on control plane
 
+## Docs
+
+- API reference (REST + WS): `docs/api.md`
+- Public deployment guide: `docs/deploy-public-server.md`
+
