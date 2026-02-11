@@ -18,6 +18,21 @@ struct SettingsView: View {
         isBaseURLValid && !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var isLoopbackBaseURL: Bool {
+        guard let host = URLComponents(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines))?.host?.lowercased() else {
+            return false
+        }
+        return host == "127.0.0.1" || host == "localhost" || host == "::1"
+    }
+
+    private var showDeviceLoopbackWarning: Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return isLoopbackBaseURL
+        #endif
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -33,6 +48,11 @@ struct SettingsView: View {
                         Text("Invalid Base URL. Use format like http://127.0.0.1:18080")
                             .font(.caption)
                             .foregroundColor(.red)
+                    }
+                    if showDeviceLoopbackWarning {
+                        Text("This iOS device cannot use localhost/127.0.0.1. Use your Mac/server LAN address instead.")
+                            .font(.caption)
+                            .foregroundColor(.orange)
                     }
                 }
 

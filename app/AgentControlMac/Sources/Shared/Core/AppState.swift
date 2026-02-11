@@ -11,6 +11,7 @@ final class AppState: ObservableObject {
     @Published var selectedSessionID: String?
     @Published var wsConnected = false
     @Published var showNewSessionSheet = false
+    @Published var connectionHint: String?
 
     // MARK: - Subsystems
     let apiClient = APIClient()
@@ -21,6 +22,10 @@ final class AppState: ObservableObject {
     private var sessionRefreshTask: DispatchWorkItem?
     /// Prevent multiple start() from reconnecting (e.g. iOS onAppear firing repeatedly).
     private var didStart = false
+    /// Track real background->foreground transitions on iOS.
+    private var wasBackgrounded = false
+    /// Some configs are valid syntactically but cannot be used on current platform.
+    private var shouldAutoConnect = true
 
     var pendingApprovals: [SessionEvent] {
         approvals.values.filter { !$0.resolved }.sorted { $0.tsMS > $1.tsMS }
@@ -44,6 +49,10 @@ final class AppState: ObservableObject {
         }
         guard !didStart else { return }
         didStart = true
+        guard shouldAutoConnect else {
+            wsConnected = false
+            return
+        }
         wsClient.connect()
         Task {
             await fetchServers()
@@ -53,11 +62,18 @@ final class AppState: ObservableObject {
 
     /// Call when the app moves to background (iOS) to gracefully disconnect WS.
     func pause() {
+        wasBackgrounded = true
         wsClient.disconnect(reconnect: false)
     }
 
     /// Call when the app returns to foreground (iOS) to reconnect WS.
     func resume() {
+        guard wasBackgrounded else { return }
+        wasBackgrounded = false
+        guard shouldAutoConnect else {
+            wsConnected = false
+            return
+        }
         if !wsConnected { wsClient.connect() }
         Task {
             await fetchServers()
@@ -73,6 +89,34 @@ final class AppState: ObservableObject {
         let skipTLSVerify = UserDefaults.standard.bool(forKey: "skipTLSVerify")
         apiClient.configure(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
         wsClient.configure(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
+        applyConnectionPolicy(baseURL: baseURL)
+    }
+
+    private static let loopbackHosts: Set<String> = ["127.0.0.1", "localhost", "::1"]
+
+    private static func shouldBlockAutoConnect(baseURL: String) -> Bool {
+        guard let host = URLComponents(string: baseURL)?.host?.lowercased(),
+              loopbackHosts.contains(host) else {
+            return false
+        }
+        #if os(iOS)
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return true
+        #endif
+        #else
+        return false
+        #endif
+    }
+
+    private func applyConnectionPolicy(baseURL: String) {
+        shouldAutoConnect = !Self.shouldBlockAutoConnect(baseURL: baseURL)
+        if shouldAutoConnect {
+            connectionHint = nil
+        } else {
+            connectionHint = "Current Base URL points to localhost. On iPhone/iPad, set Base URL to your Mac/server address (for example http://192.168.x.x:18080)."
+        }
     }
 
     static func isValidBaseURL(_ raw: String) -> Bool {
@@ -97,7 +141,12 @@ final class AppState: ObservableObject {
         KeychainHelper.save(key: "ui_token", value: token)
         apiClient.configure(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
         wsClient.configure(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
+        applyConnectionPolicy(baseURL: baseURL)
         wsClient.disconnect()
+        guard shouldAutoConnect else {
+            wsConnected = false
+            return
+        }
         wsClient.connect()
         Task {
             await fetchServers()

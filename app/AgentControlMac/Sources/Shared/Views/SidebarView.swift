@@ -2,6 +2,17 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject var appState: AppState
+    @State private var showServerGuide = false
+    let onOpenSettings: (() -> Void)?
+    let onOpenSessionTerminal: (() -> Void)?
+
+    init(
+        onOpenSettings: (() -> Void)? = nil,
+        onOpenSessionTerminal: (() -> Void)? = nil
+    ) {
+        self.onOpenSettings = onOpenSettings
+        self.onOpenSessionTerminal = onOpenSessionTerminal
+    }
 
     var body: some View {
         List {
@@ -19,12 +30,30 @@ struct SidebarView: View {
                 HStack {
                     Text("Servers")
                     Spacer()
+                    if let onOpenSettings {
+                        Button(action: onOpenSettings) {
+                            Image(systemName: "gearshape")
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .help("Connection Settings")
+                    }
+                    Button { showServerGuide = true } label: {
+                        Image(systemName: "questionmark.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .help("How to add server")
                     Button { Task { await appState.fetchServers() } } label: {
                         Image(systemName: "arrow.clockwise")
                     }
                     .buttonStyle(.plain)
                     .font(.caption)
                 }
+            } footer: {
+                Text("Servers are discovered from the connected control plane. Tap ? for steps to add one.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
 
             // -- Sessions --
@@ -32,7 +61,10 @@ struct SidebarView: View {
                 ForEach(appState.sessions) { session in
                     SessionRow(session: session, isSelected: session.sessionID == appState.selectedSessionID)
                         .contentShape(Rectangle())
-                        .onTapGesture { appState.attachSession(session.sessionID) }
+                        .onTapGesture {
+                            appState.attachSession(session.sessionID)
+                            onOpenSessionTerminal?()
+                        }
                         .contextMenu { sessionContextMenu(session) }
                 }
             } header: {
@@ -58,6 +90,9 @@ struct SidebarView: View {
                 .help("New Session")
             }
         }
+        .sheet(isPresented: $showServerGuide) {
+            ServerGuideSheet(onOpenSettings: onOpenSettings)
+        }
     }
 
     @ViewBuilder
@@ -67,6 +102,41 @@ struct SidebarView: View {
         }
         if session.isRunning {
             Button("Stop") { Task { await appState.stopSession(session.sessionID) } }
+        }
+    }
+}
+
+struct ServerGuideSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let onOpenSettings: (() -> Void)?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("How server list works") {
+                    Text("You do not create servers inside this app. The list comes from the control plane endpoint (/api/servers).")
+                        .font(.subheadline)
+                }
+                Section("Add a server") {
+                    Label("Open Settings and confirm Base URL + UI Token.", systemImage: "gearshape")
+                    Label("Start cc-agent on target machine with a unique -server-id.", systemImage: "terminal")
+                    Label("Return here and tap refresh in the Servers section.", systemImage: "arrow.clockwise")
+                }
+                if let onOpenSettings {
+                    Section {
+                        Button("Open Settings") {
+                            dismiss()
+                            onOpenSettings()
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Add Server")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }
