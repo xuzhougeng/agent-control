@@ -16,10 +16,15 @@ PORT="${PORT:-18082}"
 CONTROL_URL="http://127.0.0.1:${PORT}"
 CONTROL_WS_AGENT_URL="ws://127.0.0.1:${PORT}/ws/agent"
 CONTROL_WS_CLIENT_URL="ws://127.0.0.1:${PORT}/ws/client"
+USE_EXISTING_CONTROL="${USE_EXISTING_CONTROL:-0}"
+USE_EXISTING_AGENT="${USE_EXISTING_AGENT:-0}"
 
 AGENT_TOKEN="${AGENT_TOKEN:-agent-test-token}"
 UI_TOKEN="${UI_TOKEN:-admin-test-token}"
-SERVER_ID="${SERVER_ID:-srv-e2e-approve-fix}"
+SERVER_ID="${SERVER_ID:-}"
+if [[ -z "$SERVER_ID" && "$USE_EXISTING_CONTROL" != "1" ]]; then
+  SERVER_ID="srv-e2e-approve-fix"
+fi
 ALLOW_ROOT="${ALLOW_ROOT:-$ROOT_DIR}"
 CLAUDE_PATH="${CLAUDE_PATH:-/opt/homebrew/bin/claude}"
 
@@ -27,6 +32,7 @@ COMMAND_TEXT="${COMMAND_TEXT:-create file approve_click_fix_case\\r}"
 APPROVAL_TIMEOUT_SEC="${APPROVAL_TIMEOUT_SEC:-240}"
 ACTION_TIMEOUT_SEC="${ACTION_TIMEOUT_SEC:-45}"
 STARTUP_TIMEOUT_SEC="${STARTUP_TIMEOUT_SEC:-60}"
+ENTER_FALLBACK_SEC="${ENTER_FALLBACK_SEC:-3}"
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cc-agent-e2e-approve.XXXXXX")"
 CONTROL_LOG="${TMP_DIR}/cc-control.log"
@@ -61,31 +67,46 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "port ${PORT} already in use; set PORT to another value" >&2
-  exit 1
+echo "[cc-agent][e2e] logs: ${TMP_DIR}"
+if [[ "$USE_EXISTING_CONTROL" == "1" ]]; then
+  echo "[cc-agent][e2e] using existing cc-control on :${PORT}"
+else
+  if lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "port ${PORT} already in use; set PORT to another value or USE_EXISTING_CONTROL=1" >&2
+    exit 1
+  fi
+  echo "[cc-agent][e2e] starting cc-control on :${PORT}"
+  go -C "$ROOT_DIR/cc-control" run ./cmd/cc-control \
+    -addr ":${PORT}" \
+    -ui-dir ../ui \
+    -agent-token "$AGENT_TOKEN" \
+    -ui-token "$UI_TOKEN" \
+    -audit-path "$AUDIT_PATH" \
+    >"$CONTROL_LOG" 2>&1 &
+  CONTROL_PID="$!"
 fi
 
-echo "[cc-agent][e2e] logs: ${TMP_DIR}"
-echo "[cc-agent][e2e] starting cc-control on :${PORT}"
-go -C "$ROOT_DIR/cc-control" run ./cmd/cc-control \
-  -addr ":${PORT}" \
-  -ui-dir ../ui \
-  -agent-token "$AGENT_TOKEN" \
-  -ui-token "$UI_TOKEN" \
-  -audit-path "$AUDIT_PATH" \
-  >"$CONTROL_LOG" 2>&1 &
-CONTROL_PID="$!"
-
-echo "[cc-agent][e2e] starting cc-agent (server_id=${SERVER_ID})"
-go -C "$ROOT_DIR/cc-agent" run ./cmd/cc-agent \
-  -control-url "$CONTROL_WS_AGENT_URL" \
-  -agent-token "$AGENT_TOKEN" \
-  -server-id "$SERVER_ID" \
-  -allow-root "$ALLOW_ROOT" \
-  -claude-path "$CLAUDE_PATH" \
-  >"$AGENT_LOG" 2>&1 &
-AGENT_PID="$!"
+if [[ "$USE_EXISTING_AGENT" == "1" ]]; then
+  if [[ -n "$SERVER_ID" ]]; then
+    echo "[cc-agent][e2e] using existing online agent (server_id=${SERVER_ID})"
+  else
+    echo "[cc-agent][e2e] using existing online agent (server_id=auto)"
+  fi
+else
+  if [[ -z "$SERVER_ID" ]]; then
+    echo "SERVER_ID is required when USE_EXISTING_AGENT=0" >&2
+    exit 1
+  fi
+  echo "[cc-agent][e2e] starting cc-agent (server_id=${SERVER_ID})"
+  go -C "$ROOT_DIR/cc-agent" run ./cmd/cc-agent \
+    -control-url "$CONTROL_WS_AGENT_URL" \
+    -agent-token "$AGENT_TOKEN" \
+    -server-id "$SERVER_ID" \
+    -allow-root "$ALLOW_ROOT" \
+    -claude-path "$CLAUDE_PATH" \
+    >"$AGENT_LOG" 2>&1 &
+  AGENT_PID="$!"
+fi
 
 set +e
 python3 - \
@@ -93,11 +114,13 @@ python3 - \
   "$CONTROL_WS_CLIENT_URL" \
   "$UI_TOKEN" \
   "$SERVER_ID" \
+  "$USE_EXISTING_AGENT" \
   "$ALLOW_ROOT" \
   "$COMMAND_TEXT" \
   "$APPROVAL_TIMEOUT_SEC" \
   "$ACTION_TIMEOUT_SEC" \
-  "$STARTUP_TIMEOUT_SEC" <<'PY'
+  "$STARTUP_TIMEOUT_SEC" \
+  "$ENTER_FALLBACK_SEC" <<'PY'
 import base64
 import json
 import sys
@@ -120,15 +143,19 @@ except Exception as e:  # pragma: no cover
     ws_client_base,
     ui_token,
     server_id,
+    use_existing_agent,
     allow_root,
     command_text_raw,
     approval_timeout_sec,
     action_timeout_sec,
     startup_timeout_sec,
+    enter_fallback_sec,
 ) = sys.argv[1:]
+use_existing_agent = use_existing_agent == "1"
 approval_timeout_sec = int(approval_timeout_sec)
 action_timeout_sec = int(action_timeout_sec)
 startup_timeout_sec = int(startup_timeout_sec)
+enter_fallback_sec = int(enter_fallback_sec)
 
 def request_json(method, path, body=None, timeout=8):
     req = urllib.request.Request(control_url + path, method=method)
@@ -153,12 +180,25 @@ def wait_server_online(timeout_sec):
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
         status, body = request_json("GET", "/api/servers")
+        if status in (401, 403):
+            raise RuntimeError(
+                f"unauthorized when calling /api/servers (status={status}); "
+                "check UI_TOKEN"
+            )
         if status == 200:
-            for s in body.get("servers", []):
-                if s.get("server_id") == server_id and s.get("status") == "online":
-                    return True
+            servers = body.get("servers", [])
+            if server_id:
+                for s in servers:
+                    if s.get("server_id") == server_id and s.get("status") == "online":
+                        return server_id
+            else:
+                for s in servers:
+                    if s.get("status") == "online":
+                        sid = s.get("server_id")
+                        if sid:
+                            return sid
         time.sleep(1)
-    return False
+    return None
 
 def create_session():
     status, body = request_json("POST", "/api/sessions", {
@@ -189,12 +229,25 @@ def decode_command(raw):
     cmd = raw
     if "\\r" in cmd or "\\n" in cmd or "\\t" in cmd:
         cmd = cmd.encode("utf-8").decode("unicode_escape")
-    if not cmd.endswith("\r"):
-        cmd += "\r"
-    return cmd
+    # Send Enter separately to avoid CR/LF handling differences.
+    return cmd.rstrip("\r\n")
 
-if not wait_server_online(startup_timeout_sec):
-    raise RuntimeError(f"server {server_id} did not become online in {startup_timeout_sec}s")
+resolved_server_id = wait_server_online(startup_timeout_sec)
+if not resolved_server_id:
+    if server_id:
+        if not use_existing_agent:
+            raise RuntimeError(
+                f"server {server_id} did not become online in {startup_timeout_sec}s; "
+                "if control is existing, AGENT_TOKEN may not match control's -agent-token"
+            )
+        raise RuntimeError(
+            f"server {server_id} did not become online in {startup_timeout_sec}s"
+        )
+    raise RuntimeError(
+        f"no online server found in {startup_timeout_sec}s; "
+        "set SERVER_ID to an existing online server id"
+    )
+server_id = resolved_server_id
 print(f"[python] server online: {server_id}")
 
 session_id = create_session()
@@ -225,18 +278,29 @@ start = time.time()
 while time.time() - start < 8:
     _ = recv_json(timeout=0.5)
 
+def send_term_text(text):
+    ws.send(json.dumps({
+        "type": "term_in",
+        "session_id": session_id,
+        "data_b64": base64.b64encode(text.encode()).decode(),
+    }))
+
 command = decode_command(command_text_raw)
-ws.send(json.dumps({
-    "type": "term_in",
-    "session_id": session_id,
-    "data_b64": base64.b64encode(command.encode()).decode(),
-}))
-print(f"[python] sent command: {command_text_raw!r}")
+send_term_text(command)
+time.sleep(0.12)
+send_term_text("\r")
+print(f"[python] sent command text + Enter(CR): {command_text_raw!r}")
 
 approval_event = None
 deadline = time.time() + approval_timeout_sec
+enter_fallback_at = time.time() + enter_fallback_sec
+enter_fallback_sent = False
 last_error = None
 while time.time() < deadline:
+    if not enter_fallback_sent and time.time() >= enter_fallback_at:
+        send_term_text("\n")
+        enter_fallback_sent = True
+        print("[python] Enter fallback sent: LF")
     msg = recv_json(timeout=2)
     if msg is None:
         continue
