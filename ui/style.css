@@ -375,6 +375,8 @@ body.sidebar-open .sidebar-backdrop {
 
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width: 900px) {
+  html, body { height: 100vh; height: 100dvh; overflow: hidden; }
+
   h1 { font-size: 14px; }
 
   .icon-btn { display: inline-flex; }
@@ -385,9 +387,11 @@ body.sidebar-open .sidebar-backdrop {
   .token-row input { flex: 1; width: auto; min-width: 120px; }
 
   main {
-    display: block;
+    display: flex;
+    flex-direction: column;
     height: calc(100vh - 84px);
     height: calc(100dvh - 84px);
+    overflow: hidden;
   }
 
   aside#sidebar {
@@ -406,7 +410,9 @@ body.sidebar-open .sidebar-backdrop {
 
   body.sidebar-open aside#sidebar { transform: translateX(0); }
 
-  .content { grid-template-rows: auto 1fr; height: 100%; }
+  .content { flex: 1; min-height: 0; grid-template-rows: auto 1fr; }
+
+  .terminal-section { min-height: 0; }
 
   .alerts { max-height: 38vh; padding: 8px 10px; }
 
