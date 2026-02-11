@@ -282,6 +282,7 @@ li .row {
   justify-content: space-between;
   gap: 8px;
   padding: 8px 14px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   background: var(--bg-surface);
 }
@@ -420,10 +421,28 @@ body.sidebar-open .sidebar-backdrop {
 
   .alerts { max-height: 38vh; padding: 8px 10px; }
 
-  .terminal-toolbar { flex-wrap: wrap; padding: 8px; }
-  #currentSessionLabel { flex: 1 1 100%; }
+  .terminal-toolbar {
+    padding: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+  .toolbar-left {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  #currentSessionLabel { flex: 0 0 auto; }
 
-  .toolbar-keys { flex-wrap: wrap; }
+  .toolbar-keys {
+    margin-left: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .toolbar-keys::-webkit-scrollbar { display: none; }
+  .toolbar-keys .btn-key { flex: 0 0 auto; }
 
   button, input { min-height: 42px; font-size: 16px; }
 }

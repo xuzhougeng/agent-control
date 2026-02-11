@@ -193,8 +193,8 @@
     attachSession(session.session_id);
   });
 
-  document.getElementById("scrollUp").addEventListener("click", () => term.scrollPages(-1));
-  document.getElementById("scrollDown").addEventListener("click", () => term.scrollPages(1));
+  bindScrollButton("scrollUp", -1);
+  bindScrollButton("scrollDown", 1);
   document.getElementById("keyTab").addEventListener("click", () => sendQuickKey("\t"));
   document.getElementById("keyEsc").addEventListener("click", () => sendQuickKey("\u001b"));
   document.getElementById("keyCtrlC").addEventListener("click", () => sendQuickKey("\u0003"));
@@ -203,6 +203,54 @@
   document.getElementById("keyRight").addEventListener("click", () => sendQuickKey("\x1b[C"));
   document.getElementById("keyLeft").addEventListener("click", () => sendQuickKey("\x1b[D"));
   document.getElementById("keyEnter").addEventListener("click", () => sendQuickKey("\r"));
+
+  function bindScrollButton(buttonID, pageDelta) {
+    const button = document.getElementById(buttonID);
+    const step = () => term.scrollPages(pageDelta);
+    let repeatDelayTimer = 0;
+    let repeatTimer = 0;
+    let suppressClickUntil = 0;
+
+    const clearTimers = () => {
+      if (repeatDelayTimer) {
+        window.clearTimeout(repeatDelayTimer);
+        repeatDelayTimer = 0;
+      }
+      if (repeatTimer) {
+        window.clearInterval(repeatTimer);
+        repeatTimer = 0;
+      }
+    };
+
+    button.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      if (button.setPointerCapture) {
+        button.setPointerCapture(event.pointerId);
+      }
+      step();
+      suppressClickUntil = Date.now() + 700;
+      clearTimers();
+      repeatDelayTimer = window.setTimeout(() => {
+        repeatTimer = window.setInterval(step, 110);
+      }, 300);
+    });
+
+    const stopRepeat = () => clearTimers();
+    button.addEventListener("pointerup", stopRepeat);
+    button.addEventListener("pointercancel", stopRepeat);
+    button.addEventListener("lostpointercapture", stopRepeat);
+
+    // Keep keyboard accessibility: Enter/Space still triggers a single scroll.
+    button.addEventListener("click", () => {
+      if (Date.now() < suppressClickUntil) {
+        return;
+      }
+      step();
+    });
+  }
 
   async function refreshAll() {
     await fetchServers();
@@ -456,20 +504,6 @@
     });
     sendResize();
     closeSidebarOnMobile();
-  }
-
-  function action(kind, eventID = "", sessionID = "") {
-    const target = sessionID || state.selectedSessionID;
-    if (!target) {
-      return;
-    }
-    sendWS({
-      type: "action",
-      session_id: target,
-      // Rely on server-side current pending approval for this session.
-      // This avoids stale event_id mismatches after reconnect/replay.
-      data: { kind },
-    });
   }
 
   function sendQuickKey(keyValue) {
