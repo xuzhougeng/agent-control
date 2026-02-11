@@ -2,7 +2,9 @@ import Foundation
 import Security
 
 enum KeychainHelper {
-    private static let service = "com.agentcontrol.mac"
+    private static let service: String = {
+        Bundle.main.bundleIdentifier ?? "com.agentcontrol"
+    }()
 
     static func save(key: String, value: String) {
         guard let data = value.data(using: .utf8) else { return }
@@ -14,6 +16,7 @@ enum KeychainHelper {
         SecItemDelete(query as CFDictionary)
         var item = query
         item[kSecValueData as String] = data
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         SecItemAdd(item as CFDictionary, nil)
     }
 

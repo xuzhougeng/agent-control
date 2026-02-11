@@ -58,7 +58,9 @@ struct NewSessionSheet: View {
             }
         }
         .padding(20)
+        #if os(macOS)
         .frame(width: 420)
+        #endif
     }
 
     private func parseEnv(_ input: String) -> [String: String] {

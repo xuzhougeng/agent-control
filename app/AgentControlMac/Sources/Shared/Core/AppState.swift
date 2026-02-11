@@ -19,6 +19,8 @@ final class AppState: ObservableObject {
 
     // Debounce: coalesce rapid session_update WS messages into one REST fetch
     private var sessionRefreshTask: DispatchWorkItem?
+    /// Prevent multiple start() from reconnecting (e.g. iOS onAppear firing repeatedly).
+    private var didStart = false
 
     var pendingApprovals: [SessionEvent] {
         approvals.values.filter { !$0.resolved }.sorted { $0.tsMS > $1.tsMS }
@@ -35,13 +37,28 @@ final class AppState: ObservableObject {
             guard let self else { return }
             self.wsConnected = connected
             if connected, let sid = self.selectedSessionID {
-                // Clear terminal before re-attach to avoid duplicate content
                 self.terminalBridge.clear()
                 self.wsClient.sendAttach(sessionID: sid)
                 self.sendResize(cols: self.terminalBridge.currentCols, rows: self.terminalBridge.currentRows)
             }
         }
+        guard !didStart else { return }
+        didStart = true
         wsClient.connect()
+        Task {
+            await fetchServers()
+            await fetchSessions()
+        }
+    }
+
+    /// Call when the app moves to background (iOS) to gracefully disconnect WS.
+    func pause() {
+        wsClient.disconnect(reconnect: false)
+    }
+
+    /// Call when the app returns to foreground (iOS) to reconnect WS.
+    func resume() {
+        if !wsConnected { wsClient.connect() }
         Task {
             await fetchServers()
             await fetchSessions()

@@ -21,6 +21,7 @@ final class WSClient: NSObject, URLSessionWebSocketDelegate, URLSessionDelegate 
     // MARK: - Connection lifecycle
 
     func connect() {
+        if task != nil { return }
         disconnect(reconnect: false)
         shouldReconnect = true
 

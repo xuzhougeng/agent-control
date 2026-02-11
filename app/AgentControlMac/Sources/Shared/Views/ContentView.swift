@@ -2,6 +2,9 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    #if os(iOS)
+    @State private var showSettings = false
+    #endif
 
     var body: some View {
         NavigationSplitView {
@@ -17,11 +20,24 @@ struct ContentView: View {
             ToolbarItem(placement: .automatic) {
                 ConnectionBadge(connected: appState.wsConnected)
             }
+            #if os(iOS)
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { showSettings = true } label: {
+                    Image(systemName: "gear")
+                }
+            }
+            #endif
         }
         .sheet(isPresented: $appState.showNewSessionSheet) {
             NewSessionSheet()
                 .environmentObject(appState)
         }
+        #if os(iOS)
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .environmentObject(appState)
+        }
+        #endif
     }
 }
 
