@@ -55,7 +55,11 @@ struct SwiftTermView: NSViewRepresentable {
             }
         }
 
-        func scrolled(source: TerminalView, position: Double) {}
+        func scrolled(source: TerminalView, position: Double) {
+            DispatchQueue.main.async { [weak self] in
+                self?.appState.terminalBridge.updateScrollPosition(position, canScroll: source.canScroll)
+            }
+        }
         func setTerminalTitle(source: TerminalView, title: String) {}
 
         func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {

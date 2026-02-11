@@ -43,6 +43,7 @@ final class AppState: ObservableObject {
             self.wsConnected = connected
             if connected, let sid = self.selectedSessionID {
                 self.terminalBridge.clear()
+                self.terminalBridge.prepareForAttach()
                 self.wsClient.sendAttach(sessionID: sid)
                 self.sendResize(cols: self.terminalBridge.currentCols, rows: self.terminalBridge.currentRows)
             }
@@ -222,6 +223,7 @@ final class AppState: ObservableObject {
     func attachSession(_ sessionID: String) {
         selectedSessionID = sessionID
         terminalBridge.clear()
+        terminalBridge.prepareForAttach()
         wsClient.sendAttach(sessionID: sessionID)
         sendResize(cols: terminalBridge.currentCols, rows: terminalBridge.currentRows)
     }

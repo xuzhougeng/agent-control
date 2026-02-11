@@ -15,6 +15,10 @@ struct ContentView: View {
                 onOpenSettings: { showSettings = true },
                 onOpenSessionTerminal: horizontalSizeClass == .compact ? { showSessionTerminal = true } : nil
             )
+            .navigationDestination(isPresented: $showSessionTerminal) {
+                SessionTerminalScreen()
+                    .environmentObject(appState)
+            }
             #else
             SidebarView()
             #endif
@@ -47,10 +51,6 @@ struct ContentView: View {
         #if os(iOS)
         .sheet(isPresented: $showSettings) {
             SettingsView()
-                .environmentObject(appState)
-        }
-        .sheet(isPresented: $showSessionTerminal) {
-            SessionTerminalSheet()
                 .environmentObject(appState)
         }
         #endif
@@ -100,25 +100,19 @@ struct ConnectionHintBanner: View {
 }
 
 #if os(iOS)
-private struct SessionTerminalSheet: View {
+private struct SessionTerminalScreen: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ApprovalPanelView()
-                Divider()
-                TerminalContainerView()
-            }
-            .navigationTitle(appState.selectedSessionID.map { "Session \(String($0.prefix(8)))" } ?? "Terminal")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
+        VStack(spacing: 0) {
+            ApprovalPanelView()
+            Divider()
+            TerminalContainerView()
         }
+        .ignoresSafeArea(.keyboard)
+        .navigationTitle(appState.selectedSessionID.map { "Session \(String($0.prefix(8)))" } ?? "Terminal")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { appState.terminalBridge.requestScrollToBottom() }
     }
 }
 #endif

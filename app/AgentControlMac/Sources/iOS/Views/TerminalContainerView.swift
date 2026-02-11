@@ -9,7 +9,7 @@ struct TerminalContainerView: View {
             SwiftTermView(appState: appState)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Quick-input toolbar for keys hard to reach on iOS keyboard
+            // Keybar visible when keyboard is hidden; keyboard's inputAccessoryView takes over when keyboard is up
             TerminalKeybar(appState: appState)
 
             HStack(spacing: 8) {
@@ -63,6 +63,69 @@ private struct TerminalKeybar: View {
     }
 }
 
+// MARK: - UIKit inputAccessoryView keybar (shown above keyboard)
+
+private final class KeybarAccessoryView: UIInputView {
+    private weak var appState: AppState?
+
+    init(appState: AppState) {
+        self.appState = appState
+        super.init(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 44), inputViewStyle: .keyboard)
+        autoresizingMask = .flexibleWidth
+        setupButtons()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func setupButtons() {
+        let keys: [(String, [UInt8])] = [
+            ("Esc", [0x1b]), ("Tab", [0x09]), ("Ctrl-C", [0x03]),
+            ("\u{25B2}", [0x1b, 0x5b, 0x41]), ("\u{25BC}", [0x1b, 0x5b, 0x42]),
+            ("\u{25C0}", [0x1b, 0x5b, 0x44]), ("\u{25B6}", [0x1b, 0x5b, 0x43]),
+        ]
+
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        for (label, bytes) in keys {
+            var cfg = UIButton.Configuration.filled()
+            cfg.baseBackgroundColor = .systemFill
+            cfg.baseForegroundColor = .label
+            cfg.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
+            cfg.cornerStyle = .medium
+            cfg.title = label
+            cfg.titleTextAttributesTransformer = .init { attr in
+                var a = attr
+                a.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .medium)
+                return a
+            }
+            let btn = UIButton(configuration: cfg, primaryAction: UIAction { [weak self] _ in
+                self?.appState?.sendTerminalInput(Data(bytes))
+            })
+            stack.addArrangedSubview(btn)
+        }
+
+        let scroll = UIScrollView()
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.addSubview(stack)
+        addSubview(scroll)
+
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 10),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -10),
+            stack.centerYAnchor.constraint(equalTo: scroll.centerYAnchor),
+        ])
+    }
+}
+
 // MARK: - UIViewRepresentable
 
 struct SwiftTermView: UIViewRepresentable {
@@ -73,6 +136,7 @@ struct SwiftTermView: UIViewRepresentable {
         tv.terminalDelegate = context.coordinator
         tv.nativeBackgroundColor = UIColor(red: 0.043, green: 0.063, blue: 0.125, alpha: 1)
         tv.nativeForegroundColor = .white
+        tv.inputAccessoryView = KeybarAccessoryView(appState: appState)
         appState.terminalBridge.terminalView = tv
         return tv
     }
@@ -92,7 +156,11 @@ struct SwiftTermView: UIViewRepresentable {
             }
         }
 
-        func scrolled(source: TerminalView, position: Double) {}
+        func scrolled(source: TerminalView, position: Double) {
+            DispatchQueue.main.async { [weak self] in
+                self?.appState.terminalBridge.updateScrollPosition(position, canScroll: source.canScroll)
+            }
+        }
         func setTerminalTitle(source: TerminalView, title: String) {}
 
         func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {

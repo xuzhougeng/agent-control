@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -27,6 +27,8 @@
 		853917761F3913DA796BDF89 /* WSClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DC35E57E51A916686CD5D39 /* WSClient.swift */; };
 		855529DE7399346FB9EAE436 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A6F3F26E5EDE9E83B41D48 /* APIClient.swift */; };
 		8A2E3E36D619AB5CD6E12150 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB2082E81D8FD809BDCC3312 /* KeychainHelper.swift */; };
+		A1B2C3D4E5F6012345678AB1 /* ConnectionCheckResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678ABC /* ConnectionCheckResult.swift */; };
+		A1B2C3D4E5F6012345678AB2 /* ConnectionCheckResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678ABC /* ConnectionCheckResult.swift */; };
 		AF97474C636A41D8AA46A6C1 /* NewSessionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498588C442FC56686EC592AB /* NewSessionSheet.swift */; };
 		B41735C39EBC038D9B6D70A0 /* ApprovalPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97694B4F401B9AB9E645D4FA /* ApprovalPanelView.swift */; };
 		C2B37E92770B4123C26B605B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63314535A5E8AF288110E6C6 /* SettingsView.swift */; };
@@ -37,8 +39,6 @@
 		E766471F57887D5753B890FE /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FEE33911E850D7C852B51B /* Models.swift */; };
 		EEFCB23F0F58BFEFE8DD87D2 /* TerminalBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DF0782871514CC559C44882 /* TerminalBridge.swift */; };
 		F37A2057F347F693D3566E73 /* ApprovalPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97694B4F401B9AB9E645D4FA /* ApprovalPanelView.swift */; };
-		A1B2C3D4E5F6012345678AB1 /* ConnectionCheckResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678ABC /* ConnectionCheckResult.swift */; };
-		A1B2C3D4E5F6012345678AB2 /* ConnectionCheckResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678ABC /* ConnectionCheckResult.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,7 +48,7 @@
 		40DB3D6F959B5E454B26796E /* AgentControliOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentControliOSApp.swift; sourceTree = "<group>"; };
 		434276F44DC719D073E6E206 /* TLSBypassDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSBypassDelegate.swift; sourceTree = "<group>"; };
 		498588C442FC56686EC592AB /* NewSessionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSessionSheet.swift; sourceTree = "<group>"; };
-		546F855BD9D478EC64BDB31E /* AgentControliOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AgentControliOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		546F855BD9D478EC64BDB31E /* AgentControliOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgentControliOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5617711C60400C17D30AE622 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		63314535A5E8AF288110E6C6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7DC35E57E51A916686CD5D39 /* WSClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WSClient.swift; sourceTree = "<group>"; };
@@ -56,12 +56,12 @@
 		869AFE15192A99280D8E6D67 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		97694B4F401B9AB9E645D4FA /* ApprovalPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalPanelView.swift; sourceTree = "<group>"; };
 		97818FC344B229D0B253975A /* AgentControlMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentControlMacApp.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6012345678ABC /* ConnectionCheckResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionCheckResult.swift; sourceTree = "<group>"; };
 		B3A6F3F26E5EDE9E83B41D48 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		C456C9CDEF2B5A5EDAC5CD9A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		CFC04902A2AD41876B57F68B /* AgentControlMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgentControlMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB2082E81D8FD809BDCC3312 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		E2FEE33911E850D7C852B51B /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F6012345678ABC /* ConnectionCheckResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionCheckResult.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -256,7 +256,6 @@
 			packageReferences = (
 				7A2F90A699F533115180274D /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -341,8 +340,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6T3D7A4CXY;
 				INFOPLIST_FILE = Resources/iOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -351,6 +352,7 @@
 				);
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.agentcontrol.ios;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -361,8 +363,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6T3D7A4CXY;
 				INFOPLIST_FILE = Resources/iOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -371,6 +375,7 @@
 				);
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.agentcontrol.ios;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
