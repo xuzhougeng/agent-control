@@ -61,9 +61,10 @@ type ControlPlane struct {
 	agentConns    map[string]AgentSender
 	subscribers   map[*Subscriber]struct{}
 
-	detector *PromptDetector
-	audit    *AuditLogger
-	limiter  *RateLimiter
+	detector       *PromptDetector
+	resumeDetector *ResumeDetector
+	audit          *AuditLogger
+	limiter        *RateLimiter
 }
 
 func NewControlPlane(cfg Config) (*ControlPlane, error) {
@@ -94,16 +95,17 @@ func NewControlPlane(cfg Config) (*ControlPlane, error) {
 		return nil, err
 	}
 	cp := &ControlPlane{
-		cfg:           cfg,
-		servers:       make(map[string]*Server),
-		sessions:      make(map[string]*Session),
-		sessionEvents: make(map[string][]SessionEvent),
-		sessionHubs:   make(map[string]*SessionHub),
-		agentConns:    make(map[string]AgentSender),
-		subscribers:   make(map[*Subscriber]struct{}),
-		detector:      NewPromptDetector(),
-		audit:         audit,
-		limiter:       NewRateLimiter(cfg.RateLimitPerMin, cfg.RateWindow),
+		cfg:            cfg,
+		servers:        make(map[string]*Server),
+		sessions:       make(map[string]*Session),
+		sessionEvents:  make(map[string][]SessionEvent),
+		sessionHubs:    make(map[string]*SessionHub),
+		agentConns:     make(map[string]AgentSender),
+		subscribers:    make(map[*Subscriber]struct{}),
+		detector:       NewPromptDetector(),
+		resumeDetector: NewResumeDetector(),
+		audit:          audit,
+		limiter:        NewRateLimiter(cfg.RateLimitPerMin, cfg.RateWindow),
 	}
 	return cp, nil
 }
@@ -119,10 +121,14 @@ func (cp *ControlPlane) RateAllow(token string) bool {
 	return cp.limiter.Allow(token)
 }
 
-func (cp *ControlPlane) RegisterOrUpdateServer(reg AgentRegister, conn AgentSender) {
+func (cp *ControlPlane) RegisterOrUpdateServer(reg AgentRegister, conn AgentSender) error {
 	now := time.Now().UnixMilli()
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
+
+	if existing, ok := cp.agentConns[reg.ServerID]; ok && existing != nil {
+		return errors.New("duplicate server_id \"" + reg.ServerID + "\": already connected; rename via -server-id")
+	}
 
 	cp.servers[reg.ServerID] = &Server{
 		ServerID:     reg.ServerID,
@@ -142,6 +148,7 @@ func (cp *ControlPlane) RegisterOrUpdateServer(reg AgentRegister, conn AgentSend
 		ServerID: reg.ServerID,
 		Kind:     "register",
 	})
+	return nil
 }
 
 func (cp *ControlPlane) TouchServer(serverID string) {
@@ -207,6 +214,29 @@ func (cp *ControlPlane) GetSessionEvents(sessionID string) []SessionEvent {
 	return out
 }
 
+// GetPendingApprovalEvents returns unresolved approval events across all sessions.
+func (cp *ControlPlane) GetPendingApprovalEvents() []SessionEvent {
+	cp.mu.RLock()
+	defer cp.mu.RUnlock()
+
+	out := make([]SessionEvent, 0)
+	for _, events := range cp.sessionEvents {
+		for _, ev := range events {
+			if ev.Kind != "approval_needed" || ev.Resolved {
+				continue
+			}
+			out = append(out, ev)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].TsMS == out[j].TsMS {
+			return out[i].EventID > out[j].EventID
+		}
+		return out[i].TsMS > out[j].TsMS
+	})
+	return out
+}
+
 func (cp *ControlPlane) RegisterSubscriber(sub *Subscriber) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
@@ -258,6 +288,15 @@ func (cp *ControlPlane) CreateSession(actor string, req StartSessionRequest) (*S
 		return nil, errors.New("server offline")
 	}
 	sessionID := uuid.NewString()
+	resumeID := strings.TrimSpace(req.ResumeID)
+	cmdPath := strings.TrimSpace(server.ClaudePath)
+	if cmdPath == "" {
+		cmdPath = "claude-code"
+	}
+	cmd := []string{cmdPath}
+	if resumeID != "" {
+		cmd = append(cmd, "--resume", resumeID)
+	}
 	envKeys := make([]string, 0, len(req.Env))
 	for k := range req.Env {
 		envKeys = append(envKeys, k)
@@ -267,7 +306,8 @@ func (cp *ControlPlane) CreateSession(actor string, req StartSessionRequest) (*S
 		SessionID:        sessionID,
 		ServerID:         req.ServerID,
 		Cwd:              req.Cwd,
-		Cmd:              []string{"claude-code"},
+		Cmd:              append([]string(nil), cmd...),
+		ResumeID:         resumeID,
 		EnvKeys:          envKeys,
 		Status:           SessionStarting,
 		CreatedBy:        actor,
@@ -280,10 +320,13 @@ func (cp *ControlPlane) CreateSession(actor string, req StartSessionRequest) (*S
 
 	payload := map[string]any{
 		"cwd":  req.Cwd,
-		"cmd":  []string{"claude-code"},
+		"cmd":  cmd,
 		"env":  req.Env,
 		"cols": req.Cols,
 		"rows": req.Rows,
+	}
+	if resumeID != "" {
+		payload["resume_id"] = resumeID
 	}
 	data, _ := json.Marshal(payload)
 	msg := NewEnvelope("start_session", req.ServerID, sessionID)
@@ -301,7 +344,8 @@ func (cp *ControlPlane) CreateSession(actor string, req StartSessionRequest) (*S
 		SessionID: sessionID,
 		Kind:      "create_session",
 		Meta: map[string]any{
-			"cwd": req.Cwd,
+			"cwd":       req.Cwd,
+			"resume_id": resumeID,
 		},
 	})
 	return sess, nil
@@ -358,6 +402,7 @@ func (cp *ControlPlane) HandlePTYOut(serverID, sessionID string, seq uint64, dat
 		return
 	}
 	var becameRunning bool
+	var resumeUpdated bool
 	cp.mu.Lock()
 	sess, ok := cp.sessions[sessionID]
 	if !ok {
@@ -378,6 +423,10 @@ func (cp *ControlPlane) HandlePTYOut(serverID, sessionID string, seq uint64, dat
 	if hub, ok := cp.sessionHubs[sessionID]; ok {
 		hub.ring.Write(raw)
 	}
+	if resumeID, ok := cp.resumeDetector.Feed(sessionID, raw); ok && resumeID != sess.ResumeID {
+		sess.ResumeID = resumeID
+		resumeUpdated = true
+	}
 	awaiting := sess.AwaitingApproval
 	cp.mu.Unlock()
 
@@ -386,7 +435,7 @@ func (cp *ControlPlane) HandlePTYOut(serverID, sessionID string, seq uint64, dat
 	out.DataB64 = dataB64
 	cp.broadcastToAttached(sessionID, out)
 
-	if becameRunning {
+	if becameRunning || resumeUpdated {
 		cp.broadcastSessionUpdate(sessionID)
 	}
 	if awaiting {
@@ -419,6 +468,10 @@ func (cp *ControlPlane) createApprovalEvent(sessionID, serverID, excerpt string)
 	}
 	cp.sessionEvents[sessionID] = append(cp.sessionEvents[sessionID], ev)
 	cp.mu.Unlock()
+
+	// Clear the detector buffer so the same prompt text sitting in the ring
+	// buffer won't re-trigger a new approval on the next pty_out chunk.
+	cp.detector.Clear(sessionID)
 
 	body, _ := json.Marshal(ev)
 	msg := NewEnvelope("event", serverID, sessionID)
@@ -455,6 +508,7 @@ func (cp *ControlPlane) HandlePTYExit(serverID, sessionID string, exit PTYExit) 
 	cp.mu.Unlock()
 
 	cp.detector.Clear(sessionID)
+	cp.resumeDetector.Clear(sessionID)
 	cp.broadcastSessionUpdate(sessionID)
 	cp.audit.Log(AuditEvent{
 		Actor:     "agent:" + serverID,
@@ -500,11 +554,10 @@ func (cp *ControlPlane) HandleAgentError(serverID, sessionID, message string) {
 		return
 	}
 	if status == SessionStarting {
-		isFatalStartErr := strings.HasPrefix(message, "reject_") ||
-			strings.HasPrefix(message, "start_failed:") ||
-			message == "cwd not in allow roots" ||
-			message == "cwd required"
-		if !isFatalStartErr {
+		// During startup, ignore transient errors caused by early messages (e.g. resize/term_in)
+		// arriving before the agent finishes creating the PTY session.
+		// Everything else should fail the session fast to avoid being stuck in "starting" forever.
+		if message == "session not found" {
 			cp.mu.Unlock()
 			return
 		}
@@ -529,6 +582,7 @@ func (cp *ControlPlane) HandleAgentError(serverID, sessionID, message string) {
 	cp.broadcastToAttached(sessionID, out)
 
 	cp.detector.Clear(sessionID)
+	cp.resumeDetector.Clear(sessionID)
 	cp.broadcastSessionUpdate(sessionID)
 	cp.audit.Log(AuditEvent{
 		Actor:     "agent:" + serverID,
@@ -586,15 +640,16 @@ func (cp *ControlPlane) HandleClientAction(actor, sessionID string, req ActionRe
 			cp.mu.Unlock()
 			return errors.New("no pending approval")
 		}
-		if req.EventID != "" && req.EventID != sess.PendingEventID {
-			cp.mu.Unlock()
-			return errors.New("event mismatch")
-		}
+		// Clients may submit a stale event_id after reconnect; always execute
+		// against the session's current pending event for robustness.
+		requestedEventID := req.EventID
 		eventID := sess.PendingEventID
+		var promptExcerpt string
 		sess.AwaitingApproval = false
 		sess.PendingEventID = ""
 		for i := len(cp.sessionEvents[sessionID]) - 1; i >= 0; i-- {
 			if cp.sessionEvents[sessionID][i].EventID == eventID {
+				promptExcerpt = cp.sessionEvents[sessionID][i].PromptText
 				cp.sessionEvents[sessionID][i].Resolved = true
 				cp.sessionEvents[sessionID][i].Actor = actor
 				break
@@ -606,6 +661,15 @@ func (cp *ControlPlane) HandleClientAction(actor, sessionID string, req ActionRe
 		if req.Kind == "reject" {
 			input = "n\n"
 		}
+		// Claude Code / Cursor-style approval menus are not y/n; approving is Enter (default "Yes"),
+		// rejecting is Esc (cancel).
+		if looksLikeApprovalMenuPrompt(promptExcerpt) {
+			if req.Kind == "approve" {
+				input = "\r"
+			} else {
+				input = "\u001b"
+			}
+		}
 		if err := cp.HandleClientTermIn(actor, sessionID, base64.StdEncoding.EncodeToString([]byte(input))); err != nil {
 			return err
 		}
@@ -615,7 +679,8 @@ func (cp *ControlPlane) HandleClientAction(actor, sessionID string, req ActionRe
 			SessionID: sessionID,
 			Kind:      "action_" + req.Kind,
 			Meta: map[string]any{
-				"event_id": req.EventID,
+				"event_id":           eventID,
+				"requested_event_id": requestedEventID,
 			},
 		})
 		return nil
@@ -624,6 +689,38 @@ func (cp *ControlPlane) HandleClientAction(actor, sessionID string, req ActionRe
 	default:
 		return errors.New("invalid action")
 	}
+}
+
+func looksLikeApprovalMenuPrompt(prompt string) bool {
+	p := normalizePromptForMenuMatch(prompt)
+	if p == "" {
+		return false
+	}
+	// Most reliable menu marker in Claude Code style prompts.
+	if strings.Contains(p, "esc to cancel") && strings.Contains(p, "tab to amend") {
+		return true
+	}
+	// Generic numbered menu patterns:
+	// 1. Yes / 1) Yes
+	// 2. ... and/or 3. No
+	hasFirstYes := strings.Contains(p, "1. yes") || strings.Contains(p, "1) yes")
+	hasSecond := strings.Contains(p, "2. ") || strings.Contains(p, "2) ")
+	hasThirdNo := strings.Contains(p, "3. no") || strings.Contains(p, "3) no")
+	if strings.Contains(p, "do you want to") && hasFirstYes && (hasSecond || hasThirdNo) {
+		return true
+	}
+	if strings.Contains(p, "always allow access") && strings.Contains(p, "from this project") {
+		return true
+	}
+	return false
+}
+
+func normalizePromptForMenuMatch(prompt string) string {
+	if strings.TrimSpace(prompt) == "" {
+		return ""
+	}
+	// Normalize whitespace and case so matching is stable against terminal formatting.
+	return strings.Join(strings.Fields(strings.ToLower(prompt)), " ")
 }
 
 func (cp *ControlPlane) HandleClientResize(actor, sessionID string, cols, rows uint16) error {
@@ -705,6 +802,7 @@ func (cp *ControlPlane) broadcastSessionUpdate(sessionID string) {
 		"status":            sess.Status,
 		"exit_code":         sess.ExitCode,
 		"exit_reason":       sess.ExitReason,
+		"resume_id":         sess.ResumeID,
 		"awaiting_approval": sess.AwaitingApproval,
 		"pending_event_id":  sess.PendingEventID,
 	})

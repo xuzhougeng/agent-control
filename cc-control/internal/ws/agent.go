@@ -97,10 +97,17 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agentConn := NewAgentConn(conn)
+	if err := h.CP.RegisterOrUpdateServer(reg, agentConn); err != nil {
+		_ = conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, err.Error()),
+			time.Now().Add(2*time.Second),
+		)
+		slog.Warn("agent register rejected", "server_id", reg.ServerID, "remote", r.RemoteAddr, "err", err)
+		return
+	}
 	go agentConn.writeLoop()
 	defer agentConn.Close()
-
-	h.CP.RegisterOrUpdateServer(reg, agentConn)
 	defer h.CP.RemoveAgentConnection(reg.ServerID)
 	slog.Info("agent registered",
 		"server_id", reg.ServerID,

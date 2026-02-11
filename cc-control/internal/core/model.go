@@ -35,6 +35,7 @@ type Session struct {
 	ServerID          string        `json:"server_id"`
 	Cwd               string        `json:"cwd"`
 	Cmd               []string      `json:"cmd"`
+	ResumeID          string        `json:"resume_id,omitempty"`
 	EnvKeys           []string      `json:"env_keys"`
 	Status            SessionStatus `json:"status"`
 	CreatedBy         string        `json:"created_by"`
@@ -60,6 +61,7 @@ type SessionEvent struct {
 type StartSessionRequest struct {
 	ServerID string            `json:"server_id"`
 	Cwd      string            `json:"cwd"`
+	ResumeID string            `json:"resume_id,omitempty"`
 	Env      map[string]string `json:"env"`
 	Cols     uint16            `json:"cols"`
 	Rows     uint16            `json:"rows"`

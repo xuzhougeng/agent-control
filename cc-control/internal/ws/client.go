@@ -3,6 +3,7 @@ package ws
 import (
 	"encoding/base64"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ type ClientHandler struct {
 }
 
 func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	remote := r.RemoteAddr
 	token := extractToken(r)
 	if token == "" || token != h.UIToken || !h.CP.RateAllow("ui:"+token) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -29,6 +31,7 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+	slog.Info("ui ws connected", "remote", remote)
 
 	sub := &core.Subscriber{
 		ID:    uuid.NewString(),
@@ -54,6 +57,9 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			case <-stopWriter:
 				return
 			case msg := <-sub.Send:
+				if msg.Type != "term_out" {
+					slog.Info("ui ws send", "remote", remote, "type", msg.Type, "session_id", msg.SessionID)
+				}
 				_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 				if err := conn.WriteJSON(msg); err != nil {
 					return
@@ -62,9 +68,34 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// Debug probe: server-initiated message to UI (logged on backend).
+	probe := core.NewEnvelope("debug_probe", "", "")
+	probe.Data, _ = json.Marshal(map[string]any{"message": "probe"})
+	select {
+	case sub.Send <- probe:
+	default:
+		slog.Warn("ui ws probe dropped", "remote", remote)
+	}
+
+	// Replay all unresolved approval events on connect so UI has a global
+	// pending-approvals view without requiring per-session attach clicks.
+	pendingEvents := h.CP.GetPendingApprovalEvents()
+	for _, ev := range pendingEvents {
+		evMsg := core.NewEnvelope("event", ev.ServerID, ev.SessionID)
+		evMsg.Data, _ = json.Marshal(ev)
+		select {
+		case sub.Send <- evMsg:
+		default:
+		}
+	}
+	if len(pendingEvents) > 0 {
+		slog.Info("ui ws replay pending approvals", "remote", remote, "count", len(pendingEvents))
+	}
+
 	for {
 		var msg core.Envelope
 		if err := conn.ReadJSON(&msg); err != nil {
+			slog.Info("ui ws disconnected", "remote", remote, "err", err)
 			cleanup()
 			<-doneWriter
 			return
@@ -96,6 +127,23 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				out.DataB64 = encodeB64(snapshot)
 				sub.Send <- out
 			}
+
+			// Re-send pending approval events for this session to recover from transient drops.
+			events := h.CP.GetSessionEvents(req.SessionID)
+			pendingApprovals := 0
+			for _, ev := range events {
+				if ev.Kind != "approval_needed" || ev.Resolved {
+					continue
+				}
+				pendingApprovals++
+				evMsg := core.NewEnvelope("event", ev.ServerID, ev.SessionID)
+				evMsg.Data, _ = json.Marshal(ev)
+				select {
+				case sub.Send <- evMsg:
+				default:
+				}
+			}
+			slog.Info("ui attach", "remote", remote, "session_id", req.SessionID, "pending_approvals", pendingApprovals, "total_events", len(events))
 		case "term_in":
 			sessionID := msg.SessionID
 			if sessionID == "" {
