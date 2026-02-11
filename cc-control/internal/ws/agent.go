@@ -134,7 +134,16 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_ = json.Unmarshal(msg.Data, &exit)
 			h.CP.HandlePTYExit(reg.ServerID, msg.SessionID, exit)
 		case "error":
-			slog.Warn("agent error", "server_id", reg.ServerID, "session_id", msg.SessionID, "payload", string(msg.Data))
+			var payload struct {
+				Message string `json:"message"`
+			}
+			_ = json.Unmarshal(msg.Data, &payload)
+			message := payload.Message
+			if message == "" {
+				message = string(msg.Data)
+			}
+			h.CP.HandleAgentError(reg.ServerID, msg.SessionID, message)
+			slog.Warn("agent error", "server_id", reg.ServerID, "session_id", msg.SessionID, "message", message)
 		default:
 		}
 	}

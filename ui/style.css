@@ -167,7 +167,7 @@ li .row {
 
 .terminal-section {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   min-height: 0;
 }
 
@@ -191,15 +191,6 @@ li .row {
 
 .xterm {
   height: 100%;
-}
-
-.input-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  padding: 10px;
-  padding-bottom: calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid #233050;
 }
 
 .badge {
@@ -298,12 +289,6 @@ body.sidebar-open .sidebar-backdrop {
 
   #currentSessionLabel {
     flex: 1 1 100%;
-  }
-
-  .input-row {
-    grid-template-columns: 1fr auto;
-    padding: 8px;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
   }
 
   button,

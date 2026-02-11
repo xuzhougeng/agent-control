@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -464,6 +465,78 @@ func (cp *ControlPlane) HandlePTYExit(serverID, sessionID string, exit PTYExit) 
 			"reason":    exit.Reason,
 			"signal":    exit.Signal,
 			"exit_code": exit.ExitCode,
+		},
+	})
+}
+
+func (cp *ControlPlane) HandleAgentError(serverID, sessionID, message string) {
+	if sessionID == "" {
+		return
+	}
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = "agent error"
+	}
+
+	// Avoid marking a session as failed due to transient early messages (e.g. resize before start_session completes).
+	// For sessions still "starting", only treat explicit start failures as fatal.
+	note := "\r\n[agent error] " + message + "\r\n"
+
+	var (
+		hub    *SessionHub
+		latest uint64
+		status SessionStatus
+	)
+
+	cp.mu.Lock()
+	sess, ok := cp.sessions[sessionID]
+	if !ok {
+		cp.mu.Unlock()
+		return
+	}
+	status = sess.Status
+	if status == SessionError || status == SessionExited {
+		cp.mu.Unlock()
+		return
+	}
+	if status == SessionStarting {
+		isFatalStartErr := strings.HasPrefix(message, "reject_") ||
+			strings.HasPrefix(message, "start_failed:") ||
+			message == "cwd not in allow roots" ||
+			message == "cwd required"
+		if !isFatalStartErr {
+			cp.mu.Unlock()
+			return
+		}
+	}
+
+	sess.Status = SessionError
+	if sess.ExitReason == "" {
+		sess.ExitReason = message
+	}
+	sess.AwaitingApproval = false
+	sess.PendingEventID = ""
+	latest = sess.LatestAgentOutSeq
+	hub = cp.sessionHubs[sessionID]
+	cp.mu.Unlock()
+
+	if hub != nil {
+		hub.ring.Write([]byte(note))
+	}
+	out := NewEnvelope("term_out", serverID, sessionID)
+	out.Seq = latest
+	out.DataB64 = base64.StdEncoding.EncodeToString([]byte(note))
+	cp.broadcastToAttached(sessionID, out)
+
+	cp.detector.Clear(sessionID)
+	cp.broadcastSessionUpdate(sessionID)
+	cp.audit.Log(AuditEvent{
+		Actor:     "agent:" + serverID,
+		ServerID:  serverID,
+		SessionID: sessionID,
+		Kind:      "agent_error",
+		Meta: map[string]any{
+			"message": message,
 		},
 	})
 }

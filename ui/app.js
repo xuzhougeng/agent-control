@@ -33,7 +33,6 @@
   const cwdInput = document.getElementById("cwdInput");
   const envInput = document.getElementById("envInput");
   const currentSessionLabel = document.getElementById("currentSessionLabel");
-  const manualInput = document.getElementById("manualInput");
   const sidebarToggleBtn = document.getElementById("sidebarToggleBtn");
   const sidebarBackdrop = document.getElementById("sidebarBackdrop");
   const mobileMedia = window.matchMedia("(max-width: 900px)");
@@ -163,41 +162,9 @@
     attachSession(session.session_id);
   });
 
-  function doSendManualInput() {
-    const text = manualInput.value;
-    if (!text) {
-      console.warn("[send] empty input, skip");
-      return;
-    }
-    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-      alert("WebSocket not connected");
-      return;
-    }
-    if (!state.selectedSessionID) {
-      alert("No session attached — click a session first");
-      return;
-    }
-    const payload = text.endsWith("\n") ? text : text + "\n";
-    console.log("[send] term_in session=%s len=%d", state.selectedSessionID, payload.length);
-    sendWS({
-      type: "term_in",
-      session_id: state.selectedSessionID,
-      data_b64: bytesToB64(payload),
-    });
-    manualInput.value = "";
-  }
-
-  document.getElementById("sendInputBtn").addEventListener("click", doSendManualInput);
-  manualInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      doSendManualInput();
-    }
-  });
-
-  document.getElementById("approveBtn").addEventListener("click", () => sendQuickChoice("1"));
-  document.getElementById("stopBtn").addEventListener("click", () => sendQuickChoice("2"));
-  document.getElementById("rejectBtn").addEventListener("click", () => sendQuickChoice("3"));
+  document.getElementById("approveBtn").addEventListener("click", () => doQuickAction("approve"));
+  document.getElementById("stopBtn").addEventListener("click", () => doQuickAction("option2"));
+  document.getElementById("rejectBtn").addEventListener("click", () => doQuickAction("reject"));
 
   async function refreshAll() {
     await fetchServers();
@@ -261,6 +228,7 @@
         </div>
         <div>${escapeHtml(s.cwd || "")}</div>
         <div>approval: ${s.awaiting_approval ? "yes" : "no"}</div>
+        ${s.exit_reason ? `<div style="color:#a6b1c8;font-size:12px;word-break:break-word;margin-top:4px;">reason: ${escapeHtml(s.exit_reason)}</div>` : ""}
       `;
       li.addEventListener("click", () => attachSession(s.session_id));
       sessionsList.appendChild(li);
@@ -411,7 +379,20 @@
     });
   }
 
-  function sendQuickChoice(choice) {
+  function latestPendingApproval(sessionID) {
+    let latest = null;
+    for (const ev of state.approvals.values()) {
+      if (ev.resolved || ev.session_id !== sessionID) {
+        continue;
+      }
+      if (!latest || ev.ts_ms > latest.ts_ms) {
+        latest = ev;
+      }
+    }
+    return latest;
+  }
+
+  function sendQuickKey(keyValue) {
     if (!state.selectedSessionID) {
       alert("No session attached — click a session first");
       return;
@@ -423,8 +404,34 @@
     sendWS({
       type: "term_in",
       session_id: state.selectedSessionID,
-      data_b64: bytesToB64(`${choice}\r`),
+      data_b64: bytesToB64(keyValue),
     });
+  }
+
+  function doQuickAction(kind) {
+    const sessionID = state.selectedSessionID;
+    if (!sessionID) {
+      alert("No session attached — click a session first");
+      return;
+    }
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+      alert("WebSocket not connected");
+      return;
+    }
+    const pending = latestPendingApproval(sessionID);
+    if (pending && (kind === "approve" || kind === "reject")) {
+      action(kind, pending.event_id, sessionID);
+      return;
+    }
+    if (kind === "approve") {
+      sendQuickKey("\r");
+      return;
+    }
+    if (kind === "option2") {
+      sendQuickKey("\t");
+      return;
+    }
+    sendQuickKey("\u001b");
   }
 
   function sendResize() {
