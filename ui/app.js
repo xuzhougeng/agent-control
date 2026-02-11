@@ -31,6 +31,7 @@
   const approvalCount = document.getElementById("approvalCount");
   const approvalDetails = document.getElementById("approvalDetails");
   const cwdInput = document.getElementById("cwdInput");
+  const resumeInput = document.getElementById("resumeInput");
   const envInput = document.getElementById("envInput");
   const currentSessionLabel = document.getElementById("currentSessionLabel");
   const sidebarToggleBtn = document.getElementById("sidebarToggleBtn");
@@ -141,6 +142,7 @@
       alert("cwd is required");
       return;
     }
+    const resumeID = resumeInput.value.trim();
     const env = parseEnv(envInput.value);
     const body = {
       server_id: state.selectedServerID,
@@ -149,6 +151,9 @@
       cols: term.cols,
       rows: term.rows,
     };
+    if (resumeID) {
+      body.resume_id = resumeID;
+    }
     const resp = await api("/api/sessions", {
       method: "POST",
       body: JSON.stringify(body),
@@ -227,12 +232,59 @@
           <span class="badge">${escapeHtml(s.status)}</span>
         </div>
         <div>${escapeHtml(s.cwd || "")}</div>
+        ${s.resume_id ? `<div style="color:#a6b1c8;font-size:12px;word-break:break-word;margin-top:4px;">resume: ${escapeHtml(s.resume_id)}</div>` : ""}
         <div>approval: ${s.awaiting_approval ? "yes" : "no"}</div>
+        ${s.resume_id ? `<div class="row" style="margin-top:6px;"><button type="button" data-action="resume">Resume</button></div>` : ""}
         ${s.exit_reason ? `<div style="color:#a6b1c8;font-size:12px;word-break:break-word;margin-top:4px;">reason: ${escapeHtml(s.exit_reason)}</div>` : ""}
       `;
+      if (s.resume_id) {
+        const resumeBtn = li.querySelector('[data-action="resume"]');
+        resumeBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          await resumeSession(s);
+        });
+      }
       li.addEventListener("click", () => attachSession(s.session_id));
       sessionsList.appendChild(li);
     }
+  }
+
+  async function resumeSession(source) {
+    const resumeID = (source.resume_id || "").trim();
+    if (!resumeID) {
+      alert("resume id is required");
+      return;
+    }
+    const serverID = source.server_id || state.selectedServerID;
+    if (!serverID) {
+      alert("select a server first");
+      return;
+    }
+    const cwd = (source.cwd || "").trim();
+    if (!cwd) {
+      alert("cwd is required");
+      return;
+    }
+    const body = {
+      server_id: serverID,
+      cwd,
+      resume_id: resumeID,
+      env: parseEnv(envInput.value),
+      cols: term.cols,
+      rows: term.rows,
+    };
+    const resp = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      alert(await resp.text());
+      return;
+    }
+    const session = await resp.json();
+    state.selectedServerID = serverID;
+    await fetchSessions();
+    attachSession(session.session_id);
   }
 
   function renderApprovals() {
@@ -331,6 +383,10 @@
       }
       return;
     }
+    if (msg.type === "error" && msg.data) {
+      console.error("[ws] server error", msg.session_id || "", msg.data);
+      return;
+    }
     if (msg.type === "session_update" && msg.data) {
       const data = msg.data;
       if (!data.awaiting_approval) {
@@ -366,23 +422,22 @@
     if (!target) {
       return;
     }
-    if (eventID && state.approvals.has(eventID)) {
-      const ev = state.approvals.get(eventID);
-      ev.resolved = true;
-      state.approvals.set(eventID, ev);
-      renderApprovals();
-    }
     sendWS({
       type: "action",
       session_id: target,
-      data: { kind, event_id: eventID || undefined },
+      // Rely on server-side current pending approval for this session.
+      // This avoids stale event_id mismatches after reconnect/replay.
+      data: { kind },
     });
   }
 
-  function latestPendingApproval(sessionID) {
+  function latestPendingApproval(sessionID = "") {
     let latest = null;
     for (const ev of state.approvals.values()) {
-      if (ev.resolved || ev.session_id !== sessionID) {
+      if (ev.resolved) {
+        continue;
+      }
+      if (sessionID && ev.session_id !== sessionID) {
         continue;
       }
       if (!latest || ev.ts_ms > latest.ts_ms) {
@@ -409,18 +464,20 @@
   }
 
   function doQuickAction(kind) {
-    const sessionID = state.selectedSessionID;
-    if (!sessionID) {
-      alert("No session attached — click a session first");
-      return;
-    }
     if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
       alert("WebSocket not connected");
       return;
     }
-    const pending = latestPendingApproval(sessionID);
-    if (pending && (kind === "approve" || kind === "reject")) {
-      action(kind, pending.event_id, sessionID);
+    if (kind === "approve" || kind === "reject") {
+      const pending = latestPendingApproval(state.selectedSessionID) || latestPendingApproval();
+      if (pending) {
+        action(kind, pending.event_id, pending.session_id);
+        return;
+      }
+    }
+    const sessionID = state.selectedSessionID;
+    if (!sessionID) {
+      alert("No session attached — click a session first");
       return;
     }
     if (kind === "approve") {
