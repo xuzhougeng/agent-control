@@ -20,22 +20,19 @@ cc-control 直接监听公网端口，agent 通过 `ws://` 明文连接。
 
 ### 架构
 
-```
-┌──────────────────────────────┐
-│    公网服务器 (1.2.3.4)      │
-│                              │
-│  ┌────────────────────────┐  │
-│  │ cc-control  :18080     │  │
-│  │ (直接监听 0.0.0.0)    │  │
-│  └────────────────────────┘  │
-└──────────────▲───────────────┘
-               │ ws:// (outbound)
-    ┌──────────┴──────────┐
-    │                     │
-┌───┴──────────┐  ┌──────┴──────┐
-│ 内网机器 A    |   │ 内网机器 B   │
-│ cc-agent     │  │ cc-agent    │
-└──────────────┘  └─────────────┘
+```mermaid
+flowchart TB
+    subgraph Public["公网服务器 1.2.3.4"]
+        CC["cc-control :18080\n(直接监听 0.0.0.0)"]
+    end
+
+    subgraph Intranet["内网"]
+        A1["内网机器 A\ncc-agent"]
+        A2["内网机器 B\ncc-agent"]
+    end
+
+    A1 -->|"ws:// (outbound)"| CC
+    A2 -->|"ws:// (outbound)"| CC
 ```
 
 ### A.1 编译 & 上传
@@ -180,23 +177,23 @@ ufw deny 18080/tcp
 
 ### 架构
 
-```
-┌─────────────────────────────────────────────────┐
-│          公网服务器 (如 1.2.3.4)                 │
-│                                                  │
-│  ┌────────────┐    ┌──────────┐   ┌──────────┐  │
-│  │ cc-control │◄───│  Nginx   │◄──│ Let's    │  │
-│  │  :18080    │    │  :443    │   │ Encrypt  │  │
-│  └────────────┘    └──────────┘   └──────────┘  │
-└──────────────────────▲──────────────────────────-┘
-                       │ wss:// (outbound)
-          ┌────────────┴────────────┐
-          │                         │
-┌─────────┴──────┐       ┌─────────┴──────┐
-│ 内网机器 A     │       │ 内网机器 B     │
-│ cc-agent       │       │ cc-agent       │
-│ srv-gpu-01     │       │ srv-gpu-02     │
-└────────────────┘       └────────────────┘
+```mermaid
+flowchart TB
+    subgraph Public["公网服务器 (如 1.2.3.4)"]
+        LE["Let's Encrypt"]
+        Nginx["Nginx :443"]
+        CC["cc-control :18080"]
+        Nginx --> LE
+        Nginx --> CC
+    end
+
+    subgraph Intranet["内网"]
+        A1["内网机器 A\ncc-agent (srv-gpu-01)"]
+        A2["内网机器 B\ncc-agent (srv-gpu-02)"]
+    end
+
+    A1 -->|"wss:// (outbound)"| Nginx
+    A2 -->|"wss:// (outbound)"| Nginx
 ```
 
 ### B.1 编译 & 上传
@@ -479,6 +476,33 @@ ExecStart=/opt/cc-agent/cc-agent \
 - 内网机器：`journalctl -u cc-agent -f` 确认连接成功。
 
 **注意**：`-tls-skip-verify` 仅适用于受控环境（如自签名或内网）。在公网对不可信服务器不要开启，以免中间人攻击。
+
+---
+
+## 2. 客户端连接
+
+部署完成后，用户通过以下方式连接中心化 Control Plane：
+
+### 2.1 macOS 原生客户端
+
+`macos/AgentControlMac` 提供 SwiftUI 原生应用，可连接任意已部署的 cc-control。
+
+1. 打开应用，按 **Cmd+,** 进入 Settings
+2. 填写：
+   - **Base URL**：根据部署方案选择
+     - 方案 A：`http://公网IP:18080`（如 `http://1.2.3.4:18080`）
+     - 方案 B：`https://域名`（如 `https://cc.example.com`）
+     - 方案 B'：`https://公网IP`，必须勾选 **Skip TLS verification**（macOS 无证书信任弹窗，需在客户端跳过校验）
+   - **UI Token**：与 `cc-control -ui-token` 一致
+3. 点击 **Save & Reconnect**
+
+详细说明见 [macos/AgentControlMac/README.md](../macos/AgentControlMac/README.md)。
+
+### 2.2 浏览器
+
+- 方案 A：`http://公网IP:18080`，输入 UI_TOKEN 登录
+- 方案 B：`https://域名`，输入 UI_TOKEN 登录
+- 方案 B'：`https://公网IP`，先接受自签名证书警告，再输入 UI_TOKEN
 
 ---
 

@@ -4,9 +4,20 @@ Minimal multi-server controller for launching and managing `claude-code` session
 
 ## Layout
 
+```mermaid
+flowchart LR
+    Browser["Browser"] --> CC["cc-control"]
+    App["macOS/iOS App"] --> CC
+    CC <--> A1["cc-agent"]
+    CC <--> A2["cc-agent"]
+```
+
 - `cc-control/`: control plane (REST + WS + audit + prompt detection)
 - `cc-agent/`: per-server agent (WS outbound, PTY spawn/stream/input)
 - `ui/`: static browser UI (`xterm.js`)
+- `app/AgentControlMac/`: macOS/iOS native client
+
+架构详图与部署拓扑见 **`docs/architecture.md`**（Mermaid）。
 
 ## Quick Start
 
@@ -61,6 +72,7 @@ Use UI token: `admin-dev-token`.
 
 ## Docs
 
+- **架构（Mermaid）**: `docs/architecture.md`
 - API reference (REST + WS): `docs/api.md`
 - Public deployment guide: `docs/deploy-public-server.md`
 
