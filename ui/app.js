@@ -297,18 +297,23 @@
       }
       pendingCount++;
       const li = document.createElement("li");
+      const promptText = (ev.prompt_excerpt || "").trim() || "Pending approval";
       li.innerHTML = `
-        <div><strong>${escapeHtml(ev.session_id.slice(0, 8))}</strong> @ ${escapeHtml(ev.server_id)}</div>
-        <div>${escapeHtml(ev.prompt_excerpt || "")}</div>
-        <div class="row">
-          <button data-action="approve">Approve</button>
-          <button data-action="reject">Reject</button>
-          <button data-action="open">Open</button>
-        </div>
+        <div>${escapeHtml(promptText)}</div>
+        <div class="approval-item-subtle">${escapeHtml(ev.session_id.slice(0, 8))} @ ${escapeHtml(ev.server_id)} · click to open</div>
       `;
-      li.querySelector('[data-action="approve"]').addEventListener("click", () => action("approve", ev.event_id, ev.session_id));
-      li.querySelector('[data-action="reject"]').addEventListener("click", () => action("reject", ev.event_id, ev.session_id));
-      li.querySelector('[data-action="open"]').addEventListener("click", () => attachSession(ev.session_id));
+      li.classList.add("approval-item");
+      li.tabIndex = 0;
+      li.setAttribute("role", "button");
+      li.setAttribute("aria-label", `Open approval for session ${ev.session_id.slice(0, 8)} on ${ev.server_id}`);
+      const openApproval = () => attachSession(ev.session_id);
+      li.addEventListener("click", openApproval);
+      li.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openApproval();
+        }
+      });
       approvalList.appendChild(li);
     }
     approvalCount.textContent = String(pendingCount);
