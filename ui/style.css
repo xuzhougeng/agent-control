@@ -340,7 +340,7 @@ li .row {
   text-overflow: ellipsis;
 }
 
-#terminal { min-height: 0; overflow: hidden; }
+#terminal { min-height: 0; overflow: hidden; position: relative; }
 .xterm { height: 100%; }
 
 /* ── Badges ────────────────────────────────────────────── */
@@ -404,7 +404,7 @@ body.sidebar-open .sidebar-backdrop {
     display: flex;
     flex-direction: column;
     flex: 1;
-    overflow: hidden;
+    overflow: auto;
   }
 
   aside#sidebar {
@@ -425,7 +425,7 @@ body.sidebar-open .sidebar-backdrop {
 
   .content { flex: 1; min-height: 0; grid-template-rows: auto 1fr; }
 
-  .terminal-section { min-height: 0; }
+  .terminal-section { min-height: 200px; flex-shrink: 0; }
 
   .alerts { max-height: 38vh; padding: 8px 10px; }
 

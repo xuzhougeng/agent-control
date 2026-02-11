@@ -45,6 +45,9 @@
   const term = new Terminal({
     cursorBlink: true,
     convertEol: true,
+    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+    fontSize: 14,
+    lineHeight: 1.2,
     theme: { background: "#0b1020" },
   });
   const fitAddon = new FitAddon.FitAddon();
@@ -78,6 +81,7 @@
       setTimeout(() => {
         syncTerminalLayout();
         term.scrollToBottom();
+        document.getElementById("terminal").scrollIntoView({ behavior: "smooth", block: "end" });
       }, 0);
     } else {
       syncTerminalLayout();
