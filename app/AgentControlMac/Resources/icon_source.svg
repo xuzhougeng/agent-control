@@ -39,14 +39,17 @@
     </filter>
   </defs>
 
-  <!-- Background Squircle -->
-  <rect x="50" y="50" width="924" height="924" rx="220" ry="220" fill="url(#bgGradient)" />
+  <!-- Background with macOS-style rounded corners (~22.37% radius) -->
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#bgGradient)" />
   
-  <!-- Subtle Grid Overlay (Optional, keep it very faint) -->
+  <!-- Subtle Grid Overlay (clipped to rounded rect) -->
+  <clipPath id="iconClip">
+    <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" />
+  </clipPath>
   <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
     <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.05"/>
   </pattern>
-  <rect x="50" y="50" width="924" height="924" rx="220" ry="220" fill="url(#grid)" />
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#grid)" clip-path="url(#iconClip)" />
 
   <!-- Main Composition: Suspended Core in a Glass Frame -->
   <g transform="translate(512, 512)">

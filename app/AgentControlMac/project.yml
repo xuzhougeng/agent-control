@@ -24,8 +24,8 @@ targets:
     sources:
       - path: Sources/Shared
       - path: Sources/macOS
-    resources:
       - path: Resources/Assets.xcassets
+        buildPhase: resources
     dependencies:
       - package: SwiftTerm
     settings:
@@ -49,8 +49,8 @@ targets:
     sources:
       - path: Sources/Shared
       - path: Sources/iOS
-    resources:
       - path: Resources/Assets.xcassets
+        buildPhase: resources
     dependencies:
       - package: SwiftTerm
     settings:
