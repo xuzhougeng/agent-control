@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Agent Control</string>
+    <string>CC Remote</string>
     <key>CFBundleDisplayName</key>
-    <string>Agent Control</string>
+    <string>CC Remote</string>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleVersion</key>
