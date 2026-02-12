@@ -35,7 +35,8 @@ cc-control/cc-control
 *.swp
 *.swo
 
-# macOS app (XcodeGen + Xcode)
+# macOS app (XcodeGen + Xcode); 正式目录为 app/AgentControlMac，macos/ 为历史误提交
+macos/
 app/AgentControlMac/AgentControlMac.xcodeproj/
 app/**/DerivedData/
 app/**/.build/
