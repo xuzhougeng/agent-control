@@ -316,6 +316,7 @@
       const li = document.createElement("li");
       if (s.session_id === state.selectedSessionID) li.classList.add("selected");
       const statusBadge = s.status === "running" ? "badge badge-running" : "badge";
+      const canDelete = s.status !== "running";
       li.innerHTML = `
         <div class="row">
           <strong>${escapeHtml(s.session_id.slice(0, 8))}</strong>
@@ -324,7 +325,10 @@
         <div class="item-meta">${escapeHtml(s.cwd || "")}</div>
         ${s.resume_id ? `<div class="item-meta">resume: ${escapeHtml(s.resume_id)}</div>` : ""}
         <div class="item-meta">approval: ${s.awaiting_approval ? "yes" : "no"}</div>
-        ${s.resume_id ? `<div class="row" style="margin-top:6px;"><button type="button" data-action="resume" class="btn-secondary">Resume</button></div>` : ""}
+        <div class="row" style="margin-top:6px;">
+          ${s.resume_id ? `<button type="button" data-action="resume" class="btn-secondary">Resume</button>` : ""}
+          <button type="button" data-action="delete" class="btn-danger" ${canDelete ? "" : "disabled"}>Delete</button>
+        </div>
         ${s.exit_reason ? `<div class="item-meta">reason: ${escapeHtml(s.exit_reason)}</div>` : ""}
       `;
       if (s.resume_id) {
@@ -334,9 +338,49 @@
           await resumeSession(s);
         });
       }
+      const deleteBtn = li.querySelector('[data-action="delete"]');
+      deleteBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await deleteSession(s);
+      });
       li.addEventListener("click", () => attachSession(s.session_id));
       sessionsList.appendChild(li);
     }
+  }
+
+  async function deleteSession(session) {
+    const sessionID = (session && session.session_id) || "";
+    if (!sessionID) {
+      return;
+    }
+    if (session.status === "running") {
+      alert("cannot delete running session");
+      return;
+    }
+    if (!window.confirm(`Delete session ${sessionID.slice(0, 8)}?`)) {
+      return;
+    }
+    const resp = await api(`/api/sessions/${encodeURIComponent(sessionID)}`, {
+      method: "DELETE",
+    });
+    if (!resp.ok) {
+      alert(await resp.text());
+      return;
+    }
+    if (state.selectedSessionID === sessionID) {
+      state.selectedSessionID = "";
+      state.pendingFirstOutputSessionID = "";
+      currentSessionLabel.textContent = "Session: (none)";
+      term.reset();
+      term.scrollToBottom();
+    }
+    for (const [eventID, approval] of state.approvals.entries()) {
+      if (approval.session_id === sessionID) {
+        state.approvals.delete(eventID);
+      }
+    }
+    renderApprovals();
+    await fetchSessions();
   }
 
   async function resumeSession(source) {
