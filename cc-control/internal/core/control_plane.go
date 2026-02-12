@@ -438,6 +438,82 @@ func (cp *ControlPlane) DeleteSession(actor, sessionID string) error {
 	return nil
 }
 
+func (cp *ControlPlane) StopAndDeleteSession(actor, sessionID string, graceMS, killAfterMS int) error {
+	cp.mu.RLock()
+	sess, ok := cp.sessions[sessionID]
+	if !ok {
+		cp.mu.RUnlock()
+		return errors.New("session not found")
+	}
+	serverID := sess.ServerID
+	status := sess.Status
+	conn := cp.agentConns[serverID]
+	cp.mu.RUnlock()
+
+	if status == SessionStarting || status == SessionRunning || status == SessionStopping {
+		if conn == nil {
+			return errors.New("server offline")
+		}
+		if graceMS <= 0 {
+			graceMS = cp.cfg.DefaultGraceMS
+		}
+		if killAfterMS <= 0 {
+			killAfterMS = cp.cfg.DefaultKillMS
+		}
+		payload, _ := json.Marshal(map[string]any{
+			"grace_ms":      graceMS,
+			"kill_after_ms": killAfterMS,
+			"signal":        "SIGTERM",
+		})
+		msg := NewEnvelope("stop_session", serverID, sessionID)
+		msg.Data = payload
+		if err := conn.Send(msg); err != nil {
+			return err
+		}
+		cp.audit.Log(AuditEvent{
+			Actor:     actor,
+			ServerID:  serverID,
+			SessionID: sessionID,
+			Kind:      "stop_session",
+			Meta: map[string]any{
+				"grace_ms":      graceMS,
+				"kill_after_ms": killAfterMS,
+			},
+		})
+	}
+
+	cp.mu.Lock()
+	sess, ok = cp.sessions[sessionID]
+	if !ok {
+		cp.mu.Unlock()
+		return errors.New("session not found")
+	}
+	delete(cp.sessions, sessionID)
+	delete(cp.sessionEvents, sessionID)
+	delete(cp.sessionHubs, sessionID)
+	for sub := range cp.subscribers {
+		if sub.AttachedSession == sessionID {
+			sub.AttachedSession = ""
+		}
+	}
+	cp.mu.Unlock()
+
+	if cp.detector != nil {
+		cp.detector.Clear(sessionID)
+	}
+	cp.resumeDetector.Clear(sessionID)
+	cp.audit.Log(AuditEvent{
+		Actor:     actor,
+		ServerID:  sess.ServerID,
+		SessionID: sessionID,
+		Kind:      "delete_session",
+		Meta: map[string]any{
+			"stop_requested": status == SessionStarting || status == SessionRunning || status == SessionStopping,
+		},
+	})
+	return nil
+}
+
 func (cp *ControlPlane) HandlePTYOut(serverID, sessionID string, seq uint64, dataB64 string) {
 	raw, err := base64.StdEncoding.DecodeString(dataB64)
 	if err != nil {

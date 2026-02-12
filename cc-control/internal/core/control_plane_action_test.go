@@ -153,3 +153,42 @@ func TestDeleteSession_RejectsActiveSession(t *testing.T) {
 		t.Fatal("expected delete active session to fail")
 	}
 }
+
+func TestStopAndDeleteSession_RunningSendsStopAndRemoves(t *testing.T) {
+	cp, conn, sessionID, _ := setupActionTestControlPlane(t, "Do you want to continue? [y/N]")
+	cp.mu.Lock()
+	cp.sessions[sessionID].Status = SessionRunning
+	cp.sessionHubs[sessionID] = newSessionHub(1024)
+	cp.mu.Unlock()
+
+	if err := cp.StopAndDeleteSession("ui:test", sessionID, 0, 0); err != nil {
+		t.Fatalf("stop and delete failed: %v", err)
+	}
+	if len(conn.msgs) == 0 || conn.msgs[len(conn.msgs)-1].Type != "stop_session" {
+		t.Fatalf("expected stop_session message before deletion, got %#v", conn.msgs)
+	}
+
+	cp.mu.RLock()
+	_, hasSession := cp.sessions[sessionID]
+	_, hasEvents := cp.sessionEvents[sessionID]
+	_, hasHub := cp.sessionHubs[sessionID]
+	cp.mu.RUnlock()
+	if hasSession || hasEvents || hasHub {
+		t.Fatalf("session artifacts should be removed: session=%v events=%v hub=%v", hasSession, hasEvents, hasHub)
+	}
+}
+
+func TestStopAndDeleteSession_ExitedDeletesDirectly(t *testing.T) {
+	cp, conn, sessionID, _ := setupActionTestControlPlane(t, "Do you want to continue? [y/N]")
+	cp.mu.Lock()
+	cp.sessions[sessionID].Status = SessionExited
+	cp.sessionHubs[sessionID] = newSessionHub(1024)
+	cp.mu.Unlock()
+
+	if err := cp.StopAndDeleteSession("ui:test", sessionID, 0, 0); err != nil {
+		t.Fatalf("stop and delete failed: %v", err)
+	}
+	if len(conn.msgs) != 0 {
+		t.Fatalf("exited session should not send stop message, got %#v", conn.msgs)
+	}
+}

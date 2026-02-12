@@ -90,7 +90,9 @@ Base URL：`http://127.0.0.1:18080`
 ### 7) 删除会话
 
 - `DELETE /api/sessions/{session_id}`
-- 仅允许删除非运行中的会话（`starting/running/stopping` 会返回 `409`，请先 stop）。
+- 删除语义等价于 `Stop + Deletion`：
+  - 若会话处于 `starting/running/stopping`，服务端会先发送 stop，再立即删除会话记录；
+  - 若会话已结束/错误，直接删除会话记录。
 - 成功返回：`200 {"ok": true}`
 
 ---

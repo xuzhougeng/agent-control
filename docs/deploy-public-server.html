@@ -178,6 +178,8 @@ RestartSec=3
 WantedBy=multi-user.target
 ```
 
+**可选**：若需 UI 上的 Pending Approvals（根据终端输出自动检测审批提示并弹出 Approve/Reject），在 `ExecStart` 中增加 `-enable-prompt-detection`；默认不开启，用户可直接在终端里输入 y/n 或 Enter/Esc 完成交互。
+
 防火墙只放行该端口：
 
 ```bash
@@ -351,6 +353,8 @@ systemctl daemon-reload
 systemctl enable --now cc-control
 ```
 
+**可选**：若需 Pending Approvals 自动检测，在 `ExecStart` 中增加 `-enable-prompt-detection`（默认不开启）。
+
 ### B.4 Nginx 反向代理 + TLS
 
 ```bash
@@ -493,7 +497,7 @@ openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
 
 ### B'.2 cc-control 与 B 相同
 
-与方案 B 的 B.1～B.3 一致：cc-control 监听 `127.0.0.1:18080`，由 Nginx 反向代理。
+与方案 B 的 B.1～B.3 一致：cc-control 监听 `127.0.0.1:18080`，由 Nginx 反向代理。可选参数（如 `-enable-prompt-detection`）同 B.3。
 
 ### B'.3 Nginx 使用自签名证书
 

@@ -12,7 +12,7 @@ flowchart LR
     CC <--> A2["cc-agent"]
 ```
 
-- `cc-control/`: control plane (REST + WS + audit + prompt detection)
+- `cc-control/`: control plane (REST + WS + audit + optional prompt detection)
 - `cc-agent/`: per-server agent (WS outbound, PTY spawn/stream/input)
 - `ui/`: static browser UI (`xterm.js`)
 - `app/AgentControlMac/`: macOS/iOS native client
@@ -71,8 +71,8 @@ Use UI token: `admin-dev-token`.
 - Create session on selected server
 - PTY stream to xterm.js and input roundtrip
 - Resize + stop session (TERM then KILL)
-- Prompt detection (`approve/reject`, `(y/n)`, etc.) with global pending queue
-- Approve/Reject actions mapped to `y\n` / `n\n`
+- Optional prompt detection (`approve/reject`, `(y/n)`, etc.) to emit `approval_needed` events (**off by default**; enable via `-enable-prompt-detection`)
+- Approve/Reject actions (when `awaiting_approval=true`) mapped to `y\n` / `n\n` (or Enter/Esc for menu prompts)
 - JSONL audit log (`cc-control/audit.jsonl`)
 
 ## Security Baseline (MVP)

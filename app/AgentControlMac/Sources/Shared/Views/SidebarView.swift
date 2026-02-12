@@ -106,7 +106,6 @@ struct SidebarView: View {
         Button("Delete", role: .destructive) {
             Task { await appState.deleteSession(session.sessionID) }
         }
-        .disabled(session.isRunning)
     }
 }
 
