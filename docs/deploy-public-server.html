@@ -1,3 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deployment Guide - Agent Control</title>
+    <meta name="description" content="Step-by-step guide to deploying Agent Control in production environments.">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <style>
+        .doc-content {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+            color: #d4d4d4;
+        }
+        .doc-content h1, .doc-content h2, .doc-content h3 {
+            color: #fff;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        .doc-content h1 { font-size: 2.5rem; border-bottom: 1px solid #333; padding-bottom: 1rem; }
+        .doc-content h2 { font-size: 1.8rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem; }
+        .doc-content h3 { font-size: 1.4rem; color: #fff; margin-top: 1.5rem; }
+        .doc-content p { line-height: 1.7; margin-bottom: 1.2rem; }
+        .doc-content code { background: #2d2d2d; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; color: #e06c75; }
+        .doc-content pre { background: #1e1e1e; padding: 1rem; border-radius: 8px; overflow-x: auto; margin-bottom: 1.5rem; border: 1px solid #333; }
+        .doc-content pre code { background: none; color: inherit; padding: 0; }
+        .doc-content table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+        .doc-content th, .doc-content td { padding: 0.75rem; border: 1px solid #333; text-align: left; }
+        .doc-content th { background: #252525; color: #fff; }
+        .doc-content a { color: #3b82f6; text-decoration: none; }
+        .doc-content a:hover { text-decoration: underline; }
+        .doc-content ul { padding-left: 1.5rem; margin-bottom: 1.5rem; }
+        .doc-content li { margin-bottom: 0.5rem; }
+        .mermaid { background: #000; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; text-align: center; }
+        .back-link { display: inline-flex; align-items: center; color: #888; margin-bottom: 2rem; font-weight: 500; }
+        .back-link:hover { color: #fff; text-decoration: none; }
+        .back-link i { margin-right: 0.5rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <a href="index.html" style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-network-wired"></i> Agent Control
+                </a>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html#features">Features</a></li>
+                    <li><a href="index.html#architecture">Architecture</a></li>
+                    <li><a href="deploy-public-server.html" style="color: #fff;">Docs</a></li>
+                    <li><a href="https://github.com/xuzhougeng/agent-control" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <div class="doc-content" id="content">
+        <a href="index.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Home</a>
+        <div id="markdown-body">
+            <!-- Loading content... -->
+        </div>
+    </div>
+
+    <footer>
+        <div class="social-links">
+            <a href="https://github.com/xuzhougeng/agent-control"><i class="fab fa-github"></i></a>
+        </div>
+        <p>&copy; 2026 Agent Control. MIT License.</p>
+    </footer>
+
+    <!-- Hidden markdown content source -->
+    <script type="text/markdown" id="markdown-source">
 # 公网服务器部署方案
 
 将 `cc-control` 部署到具有公网 IP 的服务器，`cc-agent` 部署到内网机器（可出站但无公网 IP）。
@@ -552,3 +629,43 @@ curl -v https://cc.example.com/api/servers
 # 检查防火墙
 ufw status
 ```
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        
+        // Configure marked with highlight.js
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    return hljs.highlight(code, { language: lang }).value;
+                }
+                return hljs.highlightAuto(code).value;
+            },
+            breaks: true
+        });
+
+        // Initialize mermaid
+        mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { darkMode: true, background: '#000000', primaryColor: '#2563eb' } });
+
+        // Render markdown
+        const markdownSource = document.getElementById('markdown-source').textContent;
+        const contentDiv = document.getElementById('markdown-body');
+        contentDiv.innerHTML = marked.parse(markdownSource);
+
+        // Render mermaid diagrams
+        const mermaidBlocks = contentDiv.querySelectorAll('.language-mermaid');
+        mermaidBlocks.forEach(async (block, index) => {
+            const graphDefinition = block.textContent;
+            const newDiv = document.createElement('div');
+            newDiv.className = 'mermaid';
+            newDiv.textContent = graphDefinition;
+            block.parentNode.replaceWith(newDiv);
+        });
+        
+        mermaid.run();
+    </script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Control - The Missing Link for Claude Code</title>
+    <meta name="description" content="A single unified control interface for managing Claude Code, Codex, and Gemini sessions.">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-network-wired"></i> Agent Control
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#architecture">Architecture</a></li>
+                    <li><a href="deploy-public-server.html">Docs</a></li>
+                    <li><a href="https://github.com/xuzhougeng/agent-control" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Orchestrate Your AI Agents.</h1>
+            <p>The centralized control plane for Claude Code. Manage sessions across multiple servers, securely and effortlessly.</p>
+            <div class="hero-buttons">
+                <a href="deploy-public-server.html" class="btn btn-primary">Get Started</a>
+                <a href="https://github.com/xuzhougeng/agent-control" class="btn btn-secondary">Star on GitHub</a>
+            </div>
+        </div>
+        
+        <div class="terminal-window">
+            <div class="terminal-header">
+                <div class="dot red"></div>
+                <div class="dot yellow"></div>
+                <div class="dot green"></div>
+            </div>
+            <div class="terminal-body">
+                <div class="comment"># Start the control plane</div>
+                <div class="command">
+                    <span class="prompt">$</span>
+                    <span class="cmd-text">./cc-control -addr :18080</span>
+                </div>
+                <div class="comment"># Connect an agent securely</div>
+                <div class="command">
+                    <span class="prompt">$</span>
+                    <span class="cmd-text">./cc-agent -control-url wss://api.ac.dev</span>
+                </div>
+                <div class="comment"># Agent connected. Ready to code.</div>
+                <div class="command">
+                    <span class="prompt">$</span>
+                    <span class="cmd-text blinking-cursor">_</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="features">
+        <h2 class="section-title">Why Agent Control?</h2>
+        <div class="grid">
+            <div class="card">
+                <div class="card-icon"><i class="fas fa-server"></i></div>
+                <h3>Multi-Server</h3>
+                <p>One dashboard to rule them all. Manage diverse environments from a single pane of glass.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="fas fa-lock"></i></div>
+                <h3>Secure by Design</h3>
+                <p>Outbound-only WebSocket connections. No inbound ports. Zero Trust architecture ready.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="fas fa-terminal"></i></div>
+                <h3>Real-time PTY</h3>
+                <p>Full xterm.js integration. It feels like SSH, but smarter and web-native.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="fas fa-history"></i></div>
+                <h3>Audit Trails</h3>
+                <p>Every command, every output. Full JSONL logging for compliance and replay.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="fas fa-mobile-alt"></i></div>
+                <h3>Native Apps</h3>
+                <p>Control your agents on the go with dedicated macOS and iOS applications.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="fas fa-code-branch"></i></div>
+                <h3>Open Source</h3>
+                <p>MIT Licensed. Hackable. Deploy it on your own infrastructure.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="architecture" class="architecture">
+        <div class="container">
+            <h2 class="section-title">Architecture</h2>
+            <div class="mermaid-wrapper">
+                <div class="mermaid">
+    flowchart LR
+        subgraph Clients
+            Browser["Browser UI"]
+            App["Native App"]
+        end
+    
+        subgraph Control["Control Plane"]
+            CC["cc-control"]
+        end
+    
+        subgraph Agents
+            A1["Agent 1"]
+            A2["Agent 2"]
+        end
+    
+        Clients -->|"REST/WS"| CC
+        CC <-->|"Secure WS"| A1
+        CC <-->|"Secure WS"| A2
+        
+        style Clients fill:#111,stroke:#333,color:#fff
+        style Control fill:#111,stroke:#333,color:#fff
+        style Agents fill:#111,stroke:#333,color:#fff
+        style CC fill:#2563eb,stroke:#1d4ed8,color:#fff
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="social-links">
+            <a href="https://github.com/xuzhougeng/agent-control"><i class="fab fa-github"></i></a>
+            <a href="#"><i class="fab fa-twitter"></i></a>
+            <a href="#"><i class="fab fa-discord"></i></a>
+        </div>
+        <p>&copy; 2026 Agent Control. MIT License.</p>
+    </footer>
+
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'dark', themeVariables: { darkMode: true, background: '#000000', primaryColor: '#2563eb', lineColor: '#666' } });
+    </script>
+</body>
+</html>
