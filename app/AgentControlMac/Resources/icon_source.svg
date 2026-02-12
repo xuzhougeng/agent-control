@@ -1,0 +1,85 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background: Deep Space / Void -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2b32b2;stop-opacity:1" /> <!-- Deep Blue -->
+      <stop offset="100%" style="stop-color:#1488cc;stop-opacity:1" /> <!-- Lighter Blue -->
+    </linearGradient>
+    
+    <!-- Glass Container Gradient -->
+    <linearGradient id="glassGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.4" />
+      <stop offset="50%" style="stop-color:#ffffff;stop-opacity:0.1" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0.2" />
+    </linearGradient>
+
+    <!-- AI Core Gradient (Fluid Energy) -->
+    <radialGradient id="aiCoreGradient" cx="50%" cy="50%" r="50%" fx="30%" fy="30%">
+      <stop offset="0%" style="stop-color:#ff9a9e;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#fecfef;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a18cd1;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Shadow for depth -->
+    <filter id="dropShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="20" result="blur"/>
+      <feOffset in="blur" dx="0" dy="20" result="offsetBlur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.5" result="offsetColor"/>
+      <feComposite in="offsetColor" in2="offsetBlur" operator="in" result="offsetBlur"/>
+      <feBlend in="SourceGraphic" in2="offsetBlur" mode="normal"/>
+    </filter>
+
+    <!-- Inner Glow for the AI Core -->
+    <filter id="coreGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10" result="coloredBlur"/>
+      <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background Squircle -->
+  <rect x="50" y="50" width="924" height="924" rx="220" ry="220" fill="url(#bgGradient)" />
+  
+  <!-- Subtle Grid Overlay (Optional, keep it very faint) -->
+  <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+    <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.05"/>
+  </pattern>
+  <rect x="50" y="50" width="924" height="924" rx="220" ry="220" fill="url(#grid)" />
+
+  <!-- Main Composition: Suspended Core in a Glass Frame -->
+  <g transform="translate(512, 512)">
+      
+      <!-- Back Element (Orbit/Structure) -->
+      <ellipse cx="0" cy="80" rx="300" ry="100" fill="none" stroke="#ffffff" stroke-width="4" opacity="0.2" transform="rotate(-15)"/>
+      <ellipse cx="0" cy="80" rx="300" ry="100" fill="none" stroke="#ffffff" stroke-width="4" opacity="0.2" transform="rotate(45)"/>
+
+      <!-- The AI Core (The "Brain") -->
+      <!-- A smooth, organic shape representing intelligence -->
+      <circle cx="0" cy="0" r="160" fill="url(#aiCoreGradient)" filter="url(#coreGlow)" />
+      
+      <!-- Highlighting on the Core to make it look 3D/Glossy -->
+      <path d="M -80,-80 Q 0,-140 80,-80 T 120,0" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+      
+      <!-- The Glass Enclosure (The "Control/Container") -->
+      <!-- Representing the software managing the AI -->
+      <g filter="url(#dropShadow)">
+          <rect x="-240" y="-240" width="480" height="480" rx="60" ry="60" 
+                fill="url(#glassGradient)" 
+                stroke="#ffffff" stroke-width="2" stroke-opacity="0.5" />
+          
+          <!-- Glass Reflections -->
+          <path d="M -240,-240 L -60,-240 L -240,-60 Z" fill="#ffffff" opacity="0.1" />
+      </g>
+      
+      <!-- Interface Elements on the Glass (HUD style, minimal) -->
+      <!-- Top Left Dot -->
+      <circle cx="-200" cy="-200" r="10" fill="#ffffff" opacity="0.8" />
+      <!-- Top Right Dot -->
+      <circle cx="200" cy="-200" r="10" fill="#ffffff" opacity="0.8" />
+      <!-- Bottom Bar -->
+      <rect x="-100" y="200" width="200" height="8" rx="4" fill="#ffffff" opacity="0.6" />
+
+  </g>
+</svg>
