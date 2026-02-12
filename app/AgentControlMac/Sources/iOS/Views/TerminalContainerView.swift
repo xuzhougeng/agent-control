@@ -3,6 +3,7 @@ import SwiftTerm
 
 struct TerminalContainerView: View {
     @EnvironmentObject var appState: AppState
+    @State private var isKeyboardVisible = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -10,21 +11,17 @@ struct TerminalContainerView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Keybar visible when keyboard is hidden; keyboard's inputAccessoryView takes over when keyboard is up
-            TerminalKeybar(appState: appState)
-
-            HStack(spacing: 8) {
-                Text(appState.selectedSessionID.map { "Session: \(String($0.prefix(8)))" } ?? "Session: (none)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                Spacer()
-                Text("\(appState.terminalBridge.currentCols)×\(appState.terminalBridge.currentRows)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
+            if !isKeyboardVisible {
+                TerminalKeybar(appState: appState)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color(uiColor: .secondarySystemBackground))
+        }
+        .animation(.easeInOut(duration: 0.18), value: isKeyboardVisible)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isKeyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            isKeyboardVisible = false
         }
     }
 }
@@ -33,6 +30,9 @@ struct TerminalContainerView: View {
 
 private struct TerminalKeybar: View {
     let appState: AppState
+    private let keyTextColor = Color(red: 0.36, green: 0.79, blue: 0.98)
+    private let keyBackground = Color.white.opacity(0.08)
+    private let keyStroke = Color.white.opacity(0.08)
 
     var body: some View {
         VStack(spacing: 8) {
@@ -41,8 +41,9 @@ private struct TerminalKeybar: View {
                 keyButton("/", bytes: [0x2f])
                 keyButton("Esc", bytes: [0x1b])
                 keyButton("Tab", bytes: [0x09])
-                keyButton("Ctrl-C", bytes: [0x03])
+                keyButton("^C", bytes: [0x03])
             }
+            .frame(maxWidth: .infinity)
             HStack(spacing: 8) {
                 keyButton("Enter", bytes: [0x0d])
                 keyButton("\u{25B2}", bytes: [0x1b, 0x5b, 0x41]) // Up
@@ -50,10 +51,20 @@ private struct TerminalKeybar: View {
                 keyButton("\u{25C0}", bytes: [0x1b, 0x5b, 0x44]) // Left
                 keyButton("\u{25B6}", bytes: [0x1b, 0x5b, 0x43]) // Right
             }
+            .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color(uiColor: .tertiarySystemBackground))
+        .background(
+            RoundedRectangle(cornerRadius: 0, style: .continuous)
+                .fill(Color(red: 0.06, green: 0.08, blue: 0.16).opacity(0.92))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 0, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .padding(.bottom, 2)
     }
 
     private var dismissButton: some View {
@@ -64,9 +75,16 @@ private struct TerminalKeybar: View {
                 .font(.system(size: 15, weight: .semibold))
                 .frame(minWidth: 28)
         }
+        .buttonStyle(.plain)
+        .foregroundColor(keyTextColor)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color(uiColor: .systemFill))
+        .frame(maxWidth: .infinity)
+        .background(keyBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(keyStroke, lineWidth: 1)
+        )
         .cornerRadius(6)
     }
 
@@ -82,10 +100,17 @@ private struct TerminalKeybar: View {
         Button(label) {
             appState.sendTerminalInput(Data(bytes))
         }
+        .buttonStyle(.plain)
+        .foregroundColor(keyTextColor)
         .font(.system(size: 13, weight: .medium, design: .monospaced))
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color(uiColor: .systemFill))
+        .frame(maxWidth: .infinity)
+        .background(keyBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(keyStroke, lineWidth: 1)
+        )
         .cornerRadius(6)
     }
 }
@@ -101,7 +126,9 @@ private final class KeybarAccessoryView: UIView {
         self.appState = appState
         super.init(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: Self.accessoryHeight))
         autoresizingMask = .flexibleWidth
-        backgroundColor = .tertiarySystemBackground
+        backgroundColor = UIColor(red: 0.06, green: 0.08, blue: 0.16, alpha: 0.92)
+        layer.borderWidth = 1
+        layer.borderColor = UIColor(white: 1, alpha: 0.08).cgColor
         setupButtons()
     }
 
@@ -116,16 +143,18 @@ private final class KeybarAccessoryView: UIView {
         let firstRow = UIStackView()
         firstRow.axis = .horizontal
         firstRow.spacing = 8
+        firstRow.distribution = .fillEqually
         firstRow.translatesAutoresizingMaskIntoConstraints = false
 
         let secondRow = UIStackView()
         secondRow.axis = .horizontal
         secondRow.spacing = 8
+        secondRow.distribution = .fillEqually
         secondRow.translatesAutoresizingMaskIntoConstraints = false
 
         var dismissCfg = UIButton.Configuration.filled()
-        dismissCfg.baseBackgroundColor = .systemFill
-        dismissCfg.baseForegroundColor = .label
+        dismissCfg.baseBackgroundColor = UIColor(white: 1, alpha: 0.08)
+        dismissCfg.baseForegroundColor = UIColor(red: 0.36, green: 0.79, blue: 0.98, alpha: 1)
         dismissCfg.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
         dismissCfg.cornerStyle = .medium
         dismissCfg.image = UIImage(systemName: "keyboard.chevron.compact.down")
@@ -139,7 +168,7 @@ private final class KeybarAccessoryView: UIView {
         firstRow.addArrangedSubview(makeKeyButton("/", bytes: [0x2f]))
         firstRow.addArrangedSubview(makeKeyButton("Esc", bytes: [0x1b]))
         firstRow.addArrangedSubview(makeKeyButton("Tab", bytes: [0x09]))
-        firstRow.addArrangedSubview(makeKeyButton("Ctrl-C", bytes: [0x03]))
+        firstRow.addArrangedSubview(makeKeyButton("^C", bytes: [0x03]))
 
         secondRow.addArrangedSubview(makeKeyButton("Enter", bytes: [0x0d]))
         secondRow.addArrangedSubview(makeKeyButton("\u{25B2}", bytes: [0x1b, 0x5b, 0x41]))
@@ -155,7 +184,7 @@ private final class KeybarAccessoryView: UIView {
 
         NSLayoutConstraint.activate([
             column.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            column.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -10),
+            column.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             column.topAnchor.constraint(equalTo: topAnchor, constant: 6),
             column.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
         ])
@@ -163,8 +192,8 @@ private final class KeybarAccessoryView: UIView {
 
     private func makeKeyButton(_ label: String, bytes: [UInt8]) -> UIButton {
         var cfg = UIButton.Configuration.filled()
-        cfg.baseBackgroundColor = .systemFill
-        cfg.baseForegroundColor = .label
+        cfg.baseBackgroundColor = UIColor(white: 1, alpha: 0.08)
+        cfg.baseForegroundColor = UIColor(red: 0.36, green: 0.79, blue: 0.98, alpha: 1)
         cfg.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
         cfg.cornerStyle = .medium
         cfg.title = label

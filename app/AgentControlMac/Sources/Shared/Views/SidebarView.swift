@@ -80,6 +80,12 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        #if os(iOS)
+        .refreshable {
+            await appState.fetchServers()
+            await appState.fetchSessions()
+        }
+        #endif
         .navigationTitle("Agent Control")
         .toolbar {
             ToolbarItem {
