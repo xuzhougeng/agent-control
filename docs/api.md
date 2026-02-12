@@ -85,7 +85,7 @@ Base URL：`http://127.0.0.1:18080`
 ### 6) 查询会话事件
 
 - `GET /api/sessions/{session_id}/events`
-- 返回 `events`，包括 `approval_needed` 与 resolved 状态。
+- 返回 `events`。如果启用了 `cc-control -enable-prompt-detection`，可能会出现 `approval_needed`（以及对应的 resolved 状态）；否则通常为空或仅包含非 approval 类事件（如未来扩展）。
 
 ### 7) 删除会话
 
@@ -165,7 +165,8 @@ Base URL：`http://127.0.0.1:18080`
 - `reject`
 - `stop`
 
-`event_id` 可选；即使传入旧值，服务端会按当前 pending approval 处理。
+`event_id` 可选；即使传入旧值，服务端会按当前 pending approval 处理。  
+注意：`approve/reject` 仅在 `awaiting_approval=true`（通常意味着启用了 `-enable-prompt-detection` 且命中了 prompt）时有效，否则会返回 `no pending approval`。
 
 #### `resize`
 
@@ -194,8 +195,8 @@ Base URL：`http://127.0.0.1:18080`
 2. 连接 `/ws/client`。  
 3. 发送 `attach` 到该 session。  
 4. 发送 `term_in`（例如 `create file approve_click_fix_case\r`）。  
-5. 收到 `event.kind=approval_needed` 后，发送 `action.kind=approve`。  
-6. 监听 `session_update.awaiting_approval=false` 作为审批完成信号。  
+5. 如果启用了 `-enable-prompt-detection` 且收到 `event.kind=approval_needed`，再发送 `action.kind=approve`（或 `reject`）。  
+6. 否则：直接通过 `term_in` 手动发送按键（例如 Enter / y / n / Esc 等）完成交互。
 
 ---
 

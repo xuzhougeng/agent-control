@@ -82,6 +82,7 @@ else
     -agent-token "$AGENT_TOKEN" \
     -ui-token "$UI_TOKEN" \
     -audit-path "$AUDIT_PATH" \
+    -enable-prompt-detection \
     >"$CONTROL_LOG" 2>&1 &
   CONTROL_PID="$!"
 fi

@@ -15,12 +15,14 @@ bash scripts/cc-agent/test-all.sh
   - disallowed cwd is rejected by agent policy (`reject_cwd`)
 - `test-e2e-approve-click-fix-case.sh`: full e2e check for approval flow with command
   `create file approve_click_fix_case\r`:
+  - starts `cc-control` with `-enable-prompt-detection` (required for `approval_needed`)
   - waits for `approval_needed`
   - sends `action: approve` (same as UI click path)
   - asserts `awaiting_approval=false` and event resolved
 - `test-e2e-approve-existing-control.sh`: same e2e check, but connects to an already
   running `cc-control` and reuses an existing online agent
   (`USE_EXISTING_CONTROL=1`, `USE_EXISTING_AGENT=1`).
+  - make sure the existing `cc-control` was started with `-enable-prompt-detection`
   - auto-discovers `PORT` / `UI_TOKEN` / `AGENT_TOKEN` from running `cc-control`
     process args when possible
   - auto-selects an online `SERVER_ID` if not provided

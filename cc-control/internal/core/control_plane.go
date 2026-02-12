@@ -28,6 +28,10 @@ type Config struct {
 	DefaultGraceMS    int
 	DefaultKillMS     int
 	ApprovalBroadcast string // "all" or "attached"
+	// EnablePromptDetection enables regex-based prompt detection on PTY output to
+	// emit "approval_needed" session events. Disabled by default because it's
+	// heuristic and may miss prompts depending on the AI CLI/terminal formatting.
+	EnablePromptDetection bool
 }
 
 type Subscriber struct {
@@ -94,6 +98,10 @@ func NewControlPlane(cfg Config) (*ControlPlane, error) {
 	if err != nil {
 		return nil, err
 	}
+	var detector *PromptDetector
+	if cfg.EnablePromptDetection {
+		detector = NewPromptDetector()
+	}
 	cp := &ControlPlane{
 		cfg:            cfg,
 		servers:        make(map[string]*Server),
@@ -102,7 +110,7 @@ func NewControlPlane(cfg Config) (*ControlPlane, error) {
 		sessionHubs:    make(map[string]*SessionHub),
 		agentConns:     make(map[string]AgentSender),
 		subscribers:    make(map[*Subscriber]struct{}),
-		detector:       NewPromptDetector(),
+		detector:       detector,
 		resumeDetector: NewResumeDetector(),
 		audit:          audit,
 		limiter:        NewRateLimiter(cfg.RateLimitPerMin, cfg.RateWindow),
@@ -417,7 +425,9 @@ func (cp *ControlPlane) DeleteSession(actor, sessionID string) error {
 	}
 	cp.mu.Unlock()
 
-	cp.detector.Clear(sessionID)
+	if cp.detector != nil {
+		cp.detector.Clear(sessionID)
+	}
 	cp.resumeDetector.Clear(sessionID)
 	cp.audit.Log(AuditEvent{
 		Actor:     actor,
@@ -470,7 +480,7 @@ func (cp *ControlPlane) HandlePTYOut(serverID, sessionID string, seq uint64, dat
 	if becameRunning || resumeUpdated {
 		cp.broadcastSessionUpdate(sessionID)
 	}
-	if awaiting {
+	if awaiting || cp.detector == nil {
 		return
 	}
 	matched, excerpt := cp.detector.Feed(sessionID, raw)
@@ -503,7 +513,9 @@ func (cp *ControlPlane) createApprovalEvent(sessionID, serverID, excerpt string)
 
 	// Clear the detector buffer so the same prompt text sitting in the ring
 	// buffer won't re-trigger a new approval on the next pty_out chunk.
-	cp.detector.Clear(sessionID)
+	if cp.detector != nil {
+		cp.detector.Clear(sessionID)
+	}
 
 	body, _ := json.Marshal(ev)
 	msg := NewEnvelope("event", serverID, sessionID)
@@ -539,7 +551,9 @@ func (cp *ControlPlane) HandlePTYExit(serverID, sessionID string, exit PTYExit) 
 	sess.PendingEventID = ""
 	cp.mu.Unlock()
 
-	cp.detector.Clear(sessionID)
+	if cp.detector != nil {
+		cp.detector.Clear(sessionID)
+	}
 	cp.resumeDetector.Clear(sessionID)
 	cp.broadcastSessionUpdate(sessionID)
 	cp.audit.Log(AuditEvent{
@@ -613,7 +627,9 @@ func (cp *ControlPlane) HandleAgentError(serverID, sessionID, message string) {
 	out.DataB64 = base64.StdEncoding.EncodeToString([]byte(note))
 	cp.broadcastToAttached(sessionID, out)
 
-	cp.detector.Clear(sessionID)
+	if cp.detector != nil {
+		cp.detector.Clear(sessionID)
+	}
 	cp.resumeDetector.Clear(sessionID)
 	cp.broadcastSessionUpdate(sessionID)
 	cp.audit.Log(AuditEvent{

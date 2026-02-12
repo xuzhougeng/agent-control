@@ -59,13 +59,15 @@ sequenceDiagram
     CP-->>UI: session 列表更新
     UI->>CP: WS /ws/client attach(session_id)
     CP-->>UI: term_out (回放 + 实时)
-    UI->>CP: term_in / action(approve)
-    CP->>Agent: pty_in("y\n")
+    UI->>CP: term_in（手动按键）/ action(approve|reject)（可选）
+    CP->>Agent: pty_in("y\\n"/"n\\n"/Enter/Esc)（可选）
     UI->>CP: POST /api/sessions/{id}/stop
     CP->>Agent: stop_session
     Agent-->>CP: pty_exit
     CP-->>UI: session_update(exited)
 ```
+
+> 说明：`approval_needed`/Pending Approvals 属于 **启发式 prompt detection**（`cc-control -enable-prompt-detection`），默认关闭；关闭时不会自动产生 Pending Approvals，但终端交互（`term_in`）仍可正常使用。
 
 ## 部署拓扑：直连（方案 A）
 

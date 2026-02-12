@@ -17,13 +17,14 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})))
 	var (
-		addr            = flag.String("addr", ":18080", "http listen address")
-		uiDir           = flag.String("ui-dir", "../ui", "static ui directory")
-		agentToken      = flag.String("agent-token", getenv("AGENT_TOKEN", "agent-dev-token"), "agent bearer token")
-		uiToken         = flag.String("ui-token", getenv("UI_TOKEN", "admin-dev-token"), "ui bearer token")
-		auditPath       = flag.String("audit-path", "./audit.jsonl", "audit jsonl path")
-		ringBufferBytes = flag.Int("ring-buffer-bytes", 128*1024, "session ring buffer size")
-		offlineAfterSec = flag.Int("offline-after-sec", 20, "mark server offline if no heartbeat")
+		addr                 = flag.String("addr", ":18080", "http listen address")
+		uiDir                = flag.String("ui-dir", "../ui", "static ui directory")
+		agentToken           = flag.String("agent-token", getenv("AGENT_TOKEN", "agent-dev-token"), "agent bearer token")
+		uiToken              = flag.String("ui-token", getenv("UI_TOKEN", "admin-dev-token"), "ui bearer token")
+		auditPath            = flag.String("audit-path", "./audit.jsonl", "audit jsonl path")
+		ringBufferBytes      = flag.Int("ring-buffer-bytes", 128*1024, "session ring buffer size")
+		offlineAfterSec      = flag.Int("offline-after-sec", 20, "mark server offline if no heartbeat")
+		enablePromptDetection = flag.Bool("enable-prompt-detection", false, "enable heuristic prompt detection to emit approval_needed events (default: off)")
 	)
 	flag.Parse()
 
@@ -37,6 +38,7 @@ func main() {
 		DefaultGraceMS:    4000,
 		DefaultKillMS:     9000,
 		ApprovalBroadcast: "all",
+		EnablePromptDetection: *enablePromptDetection,
 	})
 	if err != nil {
 		slog.Error("init control plane failed", "err", err)
