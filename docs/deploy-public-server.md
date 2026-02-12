@@ -3,6 +3,8 @@
 将 `cc-control` 部署到具有公网 IP 的服务器，`cc-agent` 部署到内网机器（可出站但无公网 IP）。
 Agent 主动向 Control Plane 发起 WebSocket 出站连接，无需内网开放入站端口。
 
+> 提示：文档中的可执行文件路径均为示例占位符，请替换为你自己的安装路径，不要在共享文档中暴露本机真实路径。
+
 ## 方案选择
 
 | 方案 | 适用场景 | 需要 |
@@ -114,7 +116,7 @@ ufw enable
   -agent-token "$AGENT_TOKEN" \
   -server-id srv-gpu-01 \
   -allow-root /home/deploy/repos \
-  -claude-path /usr/local/bin/claude
+  -claude-path /path/to/ai-cli
 ```
 
 Systemd 服务文件 `/etc/systemd/system/cc-agent.service`：
@@ -135,13 +137,26 @@ ExecStart=/opt/cc-agent/cc-agent \
   -agent-token ${AGENT_TOKEN} \
   -server-id ${SERVER_ID} \
   -allow-root /home/deploy/repos \
-  -claude-path /usr/local/bin/claude
+  -claude-path /path/to/ai-cli
 EnvironmentFile=/opt/cc-agent/.env
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
+```
+
+可执行文件示例（按需选择其一）：
+
+```bash
+# OpenCode
+-claude-path /path/to/opencode
+
+# Codex
+-claude-path /path/to/codex
+
+# Gemini CLI
+-claude-path /path/to/gemini
 ```
 
 ### A.5 验证
@@ -338,7 +353,7 @@ ExecStart=/opt/cc-agent/cc-agent \
   -agent-token ${AGENT_TOKEN} \
   -server-id ${SERVER_ID} \
   -allow-root /home/deploy/repos \
-  -claude-path /usr/local/bin/claude
+  -claude-path /path/to/ai-cli
 EnvironmentFile=/opt/cc-agent/.env
 Restart=always
 RestartSec=5
@@ -454,7 +469,7 @@ ufw enable
   -agent-token "$AGENT_TOKEN" \
   -server-id srv-gpu-01 \
   -allow-root /home/deploy/repos \
-  -claude-path /usr/local/bin/claude
+  -claude-path /path/to/ai-cli
 ```
 
 Systemd 示例：

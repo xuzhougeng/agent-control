@@ -1,6 +1,6 @@
-# Agent Control (Claude Code Control Plane MVP)
+# Agent Control (AI Agent Control Plane MVP)
 
-Minimal multi-server controller for launching and managing `claude-code` sessions.
+Minimal multi-server controller for launching and managing AI coding tool sessions (for example: Claude Code, Codex, Gemini CLI, OpenCode).
 
 ## Layout
 
@@ -43,7 +43,20 @@ go run ./cmd/cc-agent \
   -agent-token agent-dev-token \
   -server-id srv-local \
   -allow-root /path/to/repo \
-  -claude-path /absolute/path/to/claude-code
+  -claude-path /path/to/ai-cli
+```
+
+Example executable paths (use your own environment values):
+
+```bash
+# OpenCode
+-claude-path /path/to/opencode
+
+# Codex
+-claude-path /path/to/codex
+
+# Gemini CLI
+-claude-path /path/to/gemini
 ```
 
 3. Open browser:
@@ -65,7 +78,7 @@ Use UI token: `admin-dev-token`.
 ## Security Baseline (MVP)
 
 - Agent-side cwd whitelist (`-allow-root`)
-- Command fixed to `claude-code` (control emits fixed cmd)
+- Runtime executable configurable via `-claude-path` (supports different AI CLIs)
 - Env allowlist/prefix on agent (`-env-allow-keys`, `-env-allow-prefix`)
 - Separate agent/UI bearer tokens
 - Basic per-token rate limiting on control plane
