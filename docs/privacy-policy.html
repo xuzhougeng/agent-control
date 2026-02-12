@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — CC Remote</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .policy { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem; }
+        .policy h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+        .policy .updated { color: var(--text-secondary, #a1a1aa); font-size: 0.9rem; margin-bottom: 2rem; }
+        .policy h2 { font-size: 1.2rem; margin: 2rem 0 0.75rem; }
+        .policy p { margin: 0 0 1rem; }
+        .policy ul { margin: 0 0 1rem; padding-left: 1.5rem; }
+        .policy li { margin-bottom: 0.5rem; }
+        .policy a { color: var(--accent-color, #3b82f6); }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">CC Remote</div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="deploy-public-server.html">Docs</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main class="policy">
+        <h1>Privacy Policy — CC Remote</h1>
+        <p class="updated"><strong>Last updated:</strong> February 2025</p>
+
+        <p>CC Remote ("the App") is an iOS client for connecting to your own cc-control server. This policy describes what data the App uses and where it stays.</p>
+
+        <h2>Data the App Uses</h2>
+        <ul>
+            <li><strong>Server URL</strong> — The base URL of your cc-control server that you enter in Settings. It is stored only on your device (iOS UserDefaults).</li>
+            <li><strong>UI Token</strong> — The authentication token you enter in Settings. It is stored only in your device's Keychain and is used only when communicating with the server URL you configured.</li>
+            <li><strong>Terminal and session data</strong> — All terminal input/output and session state are exchanged only between the App and your cc-control server. We do not have access to this data.</li>
+        </ul>
+
+        <h2>What We Do Not Do</h2>
+        <ul>
+            <li>We do not collect, store, or transmit your data to any third party or to our own servers.</li>
+            <li>The App does not include analytics, advertising, or other SDKs that collect personal data.</li>
+            <li>We do not have access to your server URL, token, or any content you type in the terminal.</li>
+        </ul>
+
+        <h2>Your Server</h2>
+        <p>You are responsible for the privacy and security of your cc-control server and any data processed there. The App only connects to the server you configure; it does not send data elsewhere.</p>
+
+        <h2>Changes</h2>
+        <p>We may update this policy from time to time. The "Last updated" date at the top will be revised when we do. Continued use of the App after changes constitutes acceptance of the updated policy.</p>
+
+        <h2>Contact</h2>
+        <p>For questions about this policy or the App, use the support link provided in the App Store listing (e.g. the project repository or documentation site).</p>
+    </main>
+</body>
+</html>
