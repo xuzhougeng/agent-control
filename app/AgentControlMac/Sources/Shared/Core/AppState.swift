@@ -26,6 +26,8 @@ final class AppState: ObservableObject {
     private var wasBackgrounded = false
     /// Some configs are valid syntactically but cannot be used on current platform.
     private var shouldAutoConnect = true
+    /// Startup race guard: replay resize until PTY is fully ready.
+    private var resizeReplayTask: Task<Void, Never>?
 
     var pendingApprovals: [SessionEvent] {
         approvals.values.filter { !$0.resolved }.sorted { $0.tsMS > $1.tsMS }
@@ -46,6 +48,7 @@ final class AppState: ObservableObject {
                 self.terminalBridge.prepareForAttach()
                 self.wsClient.sendAttach(sessionID: sid)
                 self.sendResize(cols: self.terminalBridge.currentCols, rows: self.terminalBridge.currentRows)
+                self.scheduleResizeReplay(sessionID: sid)
             }
         }
         guard !didStart else { return }
@@ -64,6 +67,7 @@ final class AppState: ObservableObject {
     /// Call when the app moves to background (iOS) to gracefully disconnect WS.
     func pause() {
         wasBackgrounded = true
+        resizeReplayTask?.cancel()
         wsClient.disconnect(reconnect: false)
     }
 
@@ -226,6 +230,7 @@ final class AppState: ObservableObject {
         terminalBridge.prepareForAttach()
         wsClient.sendAttach(sessionID: sessionID)
         sendResize(cols: terminalBridge.currentCols, rows: terminalBridge.currentRows)
+        scheduleResizeReplay(sessionID: sessionID)
     }
 
     func sendTerminalInput(_ bytes: Data) {
@@ -240,6 +245,28 @@ final class AppState: ObservableObject {
 
     func sendAction(sessionID: String, kind: String) {
         wsClient.sendAction(sessionID: sessionID, kind: kind)
+    }
+
+    private func scheduleResizeReplay(sessionID: String) {
+        resizeReplayTask?.cancel()
+        let retryDelaysNS: [UInt64] = [
+            0,
+            250_000_000,
+            500_000_000,
+            1_000_000_000,
+            2_000_000_000,
+        ]
+        resizeReplayTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for delay in retryDelaysNS {
+                if delay > 0 {
+                    try? await Task.sleep(nanoseconds: delay)
+                }
+                guard !Task.isCancelled else { return }
+                guard self.selectedSessionID == sessionID else { return }
+                self.sendResize(cols: self.terminalBridge.currentCols, rows: self.terminalBridge.currentRows)
+            }
+        }
     }
 
     // MARK: - WS message handler
@@ -282,8 +309,10 @@ final class AppState: ObservableObject {
             // Debounce: coalesce rapid updates into a single REST fetch
             debouncedFetchSessions()
 
-        case .attachOK:
-            break
+        case .attachOK(let sessionID):
+            if sessionID == selectedSessionID {
+                scheduleResizeReplay(sessionID: sessionID)
+            }
 
         case .error(let sessionID, let message):
             print("[ws] error session=\(sessionID): \(message)")

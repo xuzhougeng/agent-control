@@ -37,16 +37,41 @@ struct SwiftTermView: NSViewRepresentable {
         tv.nativeBackgroundColor = NSColor(red: 0.043, green: 0.063, blue: 0.125, alpha: 1)
         tv.nativeForegroundColor = .white
         appState.terminalBridge.terminalView = tv
+        DispatchQueue.main.async {
+            context.coordinator.syncTerminalSize(from: tv)
+        }
         return tv
     }
 
-    func updateNSView(_ nsView: TerminalView, context: Context) {}
+    func updateNSView(_ nsView: TerminalView, context: Context) {
+        context.coordinator.syncTerminalSize(from: nsView)
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(appState: appState) }
 
     final class Coordinator: NSObject, TerminalViewDelegate {
         let appState: AppState
+        private var lastSyncedSize: CGSize?
+
         init(appState: AppState) { self.appState = appState }
+
+        private func applyTerminalSize(cols: Int, rows: Int) {
+            guard cols > 0, rows > 0 else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                let size = CGSize(width: cols, height: rows)
+                guard self.lastSyncedSize != size else { return }
+                self.lastSyncedSize = size
+                self.appState.terminalBridge.currentCols = cols
+                self.appState.terminalBridge.currentRows = rows
+                self.appState.sendResize(cols: cols, rows: rows)
+            }
+        }
+
+        func syncTerminalSize(from source: TerminalView) {
+            let terminal = source.getTerminal()
+            applyTerminalSize(cols: terminal.cols, rows: terminal.rows)
+        }
 
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
             let bytes = Data(data)
@@ -63,12 +88,7 @@ struct SwiftTermView: NSViewRepresentable {
         func setTerminalTitle(source: TerminalView, title: String) {}
 
         func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                appState.terminalBridge.currentCols = newCols
-                appState.terminalBridge.currentRows = newRows
-                appState.sendResize(cols: newCols, rows: newRows)
-            }
+            applyTerminalSize(cols: newCols, rows: newRows)
         }
 
         func clipboardCopy(source: TerminalView, content: Data) {
