@@ -121,3 +121,35 @@ func TestHandleClientAction_StaleEventIDStillExecutesCurrentPending(t *testing.T
 		t.Fatalf("menu approve should send Enter for current pending event, got %q", got)
 	}
 }
+
+func TestDeleteSession_RemovesExitedSessionData(t *testing.T) {
+	cp, _, sessionID, _ := setupActionTestControlPlane(t, "Do you want to continue? [y/N]")
+	cp.mu.Lock()
+	cp.sessions[sessionID].Status = SessionExited
+	cp.sessionHubs[sessionID] = newSessionHub(1024)
+	cp.mu.Unlock()
+
+	if err := cp.DeleteSession("ui:test", sessionID); err != nil {
+		t.Fatalf("delete session failed: %v", err)
+	}
+
+	cp.mu.RLock()
+	_, hasSession := cp.sessions[sessionID]
+	_, hasEvents := cp.sessionEvents[sessionID]
+	_, hasHub := cp.sessionHubs[sessionID]
+	cp.mu.RUnlock()
+	if hasSession || hasEvents || hasHub {
+		t.Fatalf("session artifacts should be removed: session=%v events=%v hub=%v", hasSession, hasEvents, hasHub)
+	}
+}
+
+func TestDeleteSession_RejectsActiveSession(t *testing.T) {
+	cp, _, sessionID, _ := setupActionTestControlPlane(t, "Do you want to continue? [y/N]")
+	cp.mu.Lock()
+	cp.sessions[sessionID].Status = SessionRunning
+	cp.mu.Unlock()
+
+	if err := cp.DeleteSession("ui:test", sessionID); err == nil {
+		t.Fatal("expected delete active session to fail")
+	}
+}

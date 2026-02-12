@@ -396,6 +396,38 @@ func (cp *ControlPlane) StopSession(actor, sessionID string, graceMS, killAfterM
 	return nil
 }
 
+func (cp *ControlPlane) DeleteSession(actor, sessionID string) error {
+	cp.mu.Lock()
+	sess, ok := cp.sessions[sessionID]
+	if !ok {
+		cp.mu.Unlock()
+		return errors.New("session not found")
+	}
+	if sess.Status == SessionStarting || sess.Status == SessionRunning || sess.Status == SessionStopping {
+		cp.mu.Unlock()
+		return errors.New("session still active; stop first")
+	}
+	delete(cp.sessions, sessionID)
+	delete(cp.sessionEvents, sessionID)
+	delete(cp.sessionHubs, sessionID)
+	for sub := range cp.subscribers {
+		if sub.AttachedSession == sessionID {
+			sub.AttachedSession = ""
+		}
+	}
+	cp.mu.Unlock()
+
+	cp.detector.Clear(sessionID)
+	cp.resumeDetector.Clear(sessionID)
+	cp.audit.Log(AuditEvent{
+		Actor:     actor,
+		ServerID:  sess.ServerID,
+		SessionID: sessionID,
+		Kind:      "delete_session",
+	})
+	return nil
+}
+
 func (cp *ControlPlane) HandlePTYOut(serverID, sessionID string, seq uint64, dataB64 string) {
 	raw, err := base64.StdEncoding.DecodeString(dataB64)
 	if err != nil {

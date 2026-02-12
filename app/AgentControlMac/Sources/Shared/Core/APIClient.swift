@@ -102,6 +102,10 @@ final class APIClient {
         _ = try await request("/api/sessions/\(sessionID)/stop", method: "POST", body: body)
     }
 
+    func deleteSession(_ sessionID: String) async throws {
+        _ = try await request("/api/sessions/\(sessionID)", method: "DELETE")
+    }
+
     func fetchEvents(_ sessionID: String) async throws -> [[String: Any]] {
         let data = try await request("/api/sessions/\(sessionID)/events")
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

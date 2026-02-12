@@ -210,6 +210,18 @@ final class AppState: ObservableObject {
         } catch { print("[api] stopSession: \(error)") }
     }
 
+    func deleteSession(_ sessionID: String) async {
+        do {
+            try await apiClient.deleteSession(sessionID)
+            if selectedSessionID == sessionID {
+                selectedSessionID = nil
+                terminalBridge.clear()
+            }
+            approvals = approvals.filter { $0.value.sessionID != sessionID }
+            await fetchSessions()
+        } catch { print("[api] deleteSession: \(error)") }
+    }
+
     /// Coalesce rapid session_update pushes: wait 1s of silence before firing REST fetch.
     private func debouncedFetchSessions() {
         sessionRefreshTask?.cancel()

@@ -87,6 +87,12 @@ Base URL：`http://127.0.0.1:18080`
 - `GET /api/sessions/{session_id}/events`
 - 返回 `events`，包括 `approval_needed` 与 resolved 状态。
 
+### 7) 删除会话
+
+- `DELETE /api/sessions/{session_id}`
+- 仅允许删除非运行中的会话（`starting/running/stopping` 会返回 `409`，请先 stop）。
+- 成功返回：`200 {"ok": true}`
+
 ---
 
 ## WebSocket API（客户端）

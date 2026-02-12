@@ -134,6 +134,20 @@ func (s *Server) handleSessionSubroutes(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	case r.Method == http.MethodDelete && action == "":
+		actor := "ui:" + extractToken(r)
+		if err := s.CP.DeleteSession(actor, sessionID); err != nil {
+			code := http.StatusInternalServerError
+			if strings.Contains(err.Error(), "not found") {
+				code = http.StatusNotFound
+			}
+			if strings.Contains(err.Error(), "still active") {
+				code = http.StatusConflict
+			}
+			http.Error(w, err.Error(), code)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	case r.Method == http.MethodGet && action == "events":
 		events := s.CP.GetSessionEvents(sessionID)
 		writeJSON(w, http.StatusOK, map[string]any{"events": events})
