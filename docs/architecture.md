@@ -104,3 +104,42 @@ flowchart TB
     A1 -->|"wss:// (outbound)"| Nginx
     A2 -->|"wss:// (outbound)"| Nginx
 ```
+
+## 依赖与技术栈
+
+各子项目使用的依赖库如下，便于后续开发与升级。
+
+### 前端（ui/）
+
+- **技术**：原生 HTML/CSS/JavaScript，无构建工具，无 `package.json`。
+- **运行时依赖**（通过 CDN 引入，见 `ui/index.html`）：
+  - **xterm.js** — 终端模拟（`xterm/lib/xterm.js`、`xterm/css/xterm.css`）
+  - **xterm-addon-fit** — 终端自适应窗口大小（`xterm-addon-fit/lib/xterm-addon-fit.js`）
+
+### 控制面（cc-control/）
+
+- **语言**：Go 1.25
+- **依赖**（`cc-control/go.mod`）：
+
+| 依赖 | 用途 |
+|------|------|
+| `github.com/google/uuid` | 生成 session_id 等唯一标识 |
+| `github.com/gorilla/websocket` | WebSocket 服务端（/ws/agent、/ws/client） |
+
+### Agent 节点（cc-agent/）
+
+- **语言**：Go 1.25
+- **依赖**（`cc-agent/go.mod`）：
+
+| 依赖 | 用途 |
+|------|------|
+| `github.com/creack/pty` | 创建 PTY，与 shell/子进程交互 |
+| `github.com/gorilla/websocket` | 出站 WebSocket 连接控制面 |
+
+### macOS / iOS 客户端（app/AgentControlMac/）
+
+- **语言**：Swift，Xcode 项目 + Swift Package Manager
+- **直接依赖**（SPM）：
+  - **SwiftTerm**（`migueldeicaza/SwiftTerm`）— 终端渲染与输入，macOS 用 `NSViewRepresentable`，iOS 用 `UIViewRepresentable`
+- **传递依赖**（`Package.resolved` 中）：
+  - **swift-argument-parser** — 由 SwiftTerm 引入
