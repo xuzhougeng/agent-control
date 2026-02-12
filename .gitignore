@@ -37,7 +37,8 @@ cc-control/cc-control
 
 # macOS app (XcodeGen + Xcode); 正式目录为 app/AgentControlMac，macos/ 为历史误提交
 macos/
-app/AgentControlMac/AgentControlMac.xcodeproj/
+# XcodeGen 生成，以 project.yml 为唯一来源；clone 后执行 xcodegen
+app/AgentControlMac/AgentControl.xcodeproj/
 app/**/DerivedData/
 app/**/.build/
 app/**/*.app
