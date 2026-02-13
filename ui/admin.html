@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code Control Plane - Admin</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-title-row">
+      <h1>Claude Code Control Plane</h1>
+    </div>
+  </header>
+
+  <main class="page-body">
+    <div class="page-header">
+      <h2>Admin</h2>
+      <p class="page-subtitle">Verify admin token to generate tenant IDs.</p>
+    </div>
+
+    <section class="sidebar-card">
+      <label for="adminTokenInput">admin token</label>
+      <input id="adminTokenInput" type="password" placeholder="admin-dev-token">
+      <div class="admin-actions">
+        <button id="adminVerifyBtn" class="btn-primary" type="button">Verify Token</button>
+      </div>
+      <div id="adminGateMessage" class="admin-message"></div>
+    </section>
+
+    <section id="adminContent" class="sidebar-card" hidden>
+      <h2>Tenant Token</h2>
+      <div class="admin-actions">
+        <button id="adminGenerateBtn" class="btn-primary" type="button">Generate Tenant Token</button>
+        <button id="adminCopyTokenBtn" class="btn-secondary" type="button" disabled>Copy Token</button>
+        <button id="adminListTenantsBtn" class="btn-secondary" type="button">List Tenant Tokens</button>
+      </div>
+      <div id="adminMessage" class="admin-message"></div>
+      <div id="adminResult" class="admin-result">(no token generated)</div>
+      <ul id="adminTenantList" class="admin-tokens-list" hidden></ul>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

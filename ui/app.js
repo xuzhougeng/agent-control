@@ -13,10 +13,39 @@
     return btoa(bin);
   };
 
+  const adminTokenCacheKey = "admin_token_cache";
+
+  function loadAdminTokenCache() {
+    try {
+      const raw = localStorage.getItem(adminTokenCacheKey);
+      if (!raw) {
+        return new Map();
+      }
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") {
+        return new Map();
+      }
+      const map = new Map();
+      for (const [tokenID, token] of Object.entries(parsed)) {
+        if (tokenID && typeof token === "string") {
+          map.set(tokenID, token);
+        }
+      }
+      return map;
+    } catch (_err) {
+      return new Map();
+    }
+  }
+
   const state = {
     token: localStorage.getItem("ui_token") || "admin-dev-token",
     adminToken: localStorage.getItem("admin_token") || "admin-dev-token",
-    sidebarPanel: localStorage.getItem("sidebar_panel") || "control",
+    tenantToken: localStorage.getItem("tenant_token") || "",
+    tenantID: localStorage.getItem("tenant_id") || "",
+    adminVerified: false,
+    tenantVerified: false,
+    adminVerifyInFlight: false,
+    tenantVerifyInFlight: false,
     selectedServerID: "",
     selectedSessionID: "",
     pendingFirstOutputSessionID: "",
@@ -25,23 +54,35 @@
     sessions: [],
     servers: [],
     lastGeneratedToken: null,
-    adminTokens: [],
+    lastTenantTokens: null,
+    adminTenantTokens: [],
+    selectedAdminTokenID: "",
+    adminTokenSecrets: loadAdminTokenCache(),
   };
 
   const tokenInput = document.getElementById("tokenInput");
   const saveTokenBtn = document.getElementById("saveTokenBtn");
   const adminTokenInput = document.getElementById("adminTokenInput");
-  const adminTypeSelect = document.getElementById("adminTypeSelect");
-  const adminRoleSelect = document.getElementById("adminRoleSelect");
-  const adminTenantInput = document.getElementById("adminTenantInput");
-  const adminNameInput = document.getElementById("adminNameInput");
   const adminGenerateBtn = document.getElementById("adminGenerateBtn");
-  const adminListTokensBtn = document.getElementById("adminListTokensBtn");
   const adminCopyTokenBtn = document.getElementById("adminCopyTokenBtn");
-  const adminUseUiTokenBtn = document.getElementById("adminUseUiTokenBtn");
+  const adminListTenantsBtn = document.getElementById("adminListTenantsBtn");
   const adminMessage = document.getElementById("adminMessage");
   const adminResult = document.getElementById("adminResult");
-  const adminTokensList = document.getElementById("adminTokensList");
+  const adminTenantList = document.getElementById("adminTenantList");
+  const adminVerifyBtn = document.getElementById("adminVerifyBtn");
+  const adminGateMessage = document.getElementById("adminGateMessage");
+  const adminContent = document.getElementById("adminContent");
+  const tenantTokenInput = document.getElementById("tenantTokenInput");
+  const tenantRoleSelect = document.getElementById("tenantRoleSelect");
+  const tenantTenantInput = document.getElementById("tenantTenantInput");
+  const tenantGenerateBtn = document.getElementById("tenantGenerateBtn");
+  const tenantCopyUiTokenBtn = document.getElementById("tenantCopyUiTokenBtn");
+  const tenantCopyAgentTokenBtn = document.getElementById("tenantCopyAgentTokenBtn");
+  const tenantMessage = document.getElementById("tenantMessage");
+  const tenantResult = document.getElementById("tenantResult");
+  const tenantVerifyBtn = document.getElementById("tenantVerifyBtn");
+  const tenantGateMessage = document.getElementById("tenantGateMessage");
+  const tenantContent = document.getElementById("tenantContent");
   const serversList = document.getElementById("serversList");
   const sessionsList = document.getElementById("sessionsList");
   const approvalList = document.getElementById("approvalList");
@@ -53,41 +94,67 @@
   const currentSessionLabel = document.getElementById("currentSessionLabel");
   const sidebarToggleBtn = document.getElementById("sidebarToggleBtn");
   const sidebarBackdrop = document.getElementById("sidebarBackdrop");
-  const tabControlBtn = document.getElementById("tabControlBtn");
-  const tabAdminBtn = document.getElementById("tabAdminBtn");
-  const sidebarPanelControl = document.getElementById("sidebarPanelControl");
-  const sidebarPanelAdmin = document.getElementById("sidebarPanelAdmin");
   const mobileMedia = window.matchMedia("(max-width: 900px)");
   let mobileKeyboardOpen = false;
 
-  tokenInput.value = state.token;
-  adminTokenInput.value = state.adminToken;
+  const isControllerPage = Boolean(document.getElementById("terminal"));
+  const isAdminPage = Boolean(adminVerifyBtn);
+  const isTenantPage = Boolean(tenantVerifyBtn);
 
-  const term = new Terminal({
-    cursorBlink: true,
-    convertEol: true,
-    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-    fontSize: 14,
-    lineHeight: 1.2,
-    theme: { background: "#0b1020" },
-  });
-  const fitAddon = new FitAddon.FitAddon();
-  term.loadAddon(fitAddon);
-  term.open(document.getElementById("terminal"));
-  fitAddon.fit();
-  window.addEventListener("resize", () => { fitAddon.fit(); sendResize(); });
-  new ResizeObserver(() => { fitAddon.fit(); sendResize(); }).observe(document.getElementById("terminal"));
+  if (tokenInput) {
+    tokenInput.value = state.token;
+  }
+  if (adminTokenInput) {
+    adminTokenInput.value = state.adminToken;
+  }
+  if (tenantTokenInput) {
+    tenantTokenInput.value = state.tenantToken;
+  }
+  if (tenantTenantInput) {
+    tenantTenantInput.value = state.tenantID;
+  }
+
+  let term = null;
+  let fitAddon = null;
+  if (isControllerPage) {
+    term = new Terminal({
+      cursorBlink: true,
+      convertEol: true,
+      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontSize: 14,
+      lineHeight: 1.2,
+      theme: { background: "#0b1020" },
+    });
+    fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById("terminal"));
+    fitAddon.fit();
+    window.addEventListener("resize", () => {
+      fitAddon.fit();
+      sendResize();
+    });
+    new ResizeObserver(() => {
+      fitAddon.fit();
+      sendResize();
+    }).observe(document.getElementById("terminal"));
+  }
 
   function isMobileViewport() {
     return mobileMedia.matches;
   }
 
   function syncTerminalLayout() {
+    if (!fitAddon) {
+      return;
+    }
     fitAddon.fit();
     sendResize();
   }
 
   function handleMobileViewportChange() {
+    if (!isControllerPage) {
+      return;
+    }
     if (!isMobileViewport()) {
       mobileKeyboardOpen = false;
       return;
@@ -111,6 +178,9 @@
   }
 
   function toggleSidebar(open) {
+    if (!sidebarToggleBtn || !sidebarBackdrop) {
+      return;
+    }
     const nextOpen = typeof open === "boolean" ? open : !document.body.classList.contains("sidebar-open");
     document.body.classList.toggle("sidebar-open", nextOpen);
     sidebarToggleBtn.setAttribute("aria-expanded", String(nextOpen));
@@ -124,21 +194,10 @@
     }
   }
 
-  function setSidebarPanel(panelName) {
-    const panel = panelName === "admin" ? "admin" : "control";
-    state.sidebarPanel = panel;
-    localStorage.setItem("sidebar_panel", panel);
-
-    const controlActive = panel === "control";
-    tabControlBtn.classList.toggle("active", controlActive);
-    tabAdminBtn.classList.toggle("active", !controlActive);
-    tabControlBtn.setAttribute("aria-selected", String(controlActive));
-    tabAdminBtn.setAttribute("aria-selected", String(!controlActive));
-    sidebarPanelControl.classList.toggle("active", controlActive);
-    sidebarPanelAdmin.classList.toggle("active", !controlActive);
-  }
-
   function initializeApprovalDetails() {
+    if (!approvalDetails) {
+      return;
+    }
     const saved = localStorage.getItem("approval_collapsed");
     if (saved === "1") {
       approvalDetails.removeAttribute("open");
@@ -155,110 +214,149 @@
     approvalDetails.setAttribute("open", "");
   }
 
-  initializeApprovalDetails();
-  toggleSidebar(false);
-  setSidebarPanel(state.sidebarPanel);
+  if (isControllerPage) {
+    initializeApprovalDetails();
+    toggleSidebar(false);
+    sidebarToggleBtn.addEventListener("click", () => toggleSidebar());
+    sidebarBackdrop.addEventListener("click", () => toggleSidebar(false));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && document.body.classList.contains("sidebar-open")) {
+        toggleSidebar(false);
+      }
+    });
+    mobileMedia.addEventListener("change", () => {
+      if (!isMobileViewport()) {
+        toggleSidebar(false);
+      }
+      syncTerminalLayout();
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", handleMobileViewportChange);
+    }
+    approvalDetails.addEventListener("toggle", () => {
+      localStorage.setItem("approval_collapsed", approvalDetails.open ? "0" : "1");
+      setTimeout(syncTerminalLayout, 0);
+    });
 
-  sidebarToggleBtn.addEventListener("click", () => toggleSidebar());
-  tabControlBtn.addEventListener("click", () => setSidebarPanel("control"));
-  tabAdminBtn.addEventListener("click", () => setSidebarPanel("admin"));
-  sidebarBackdrop.addEventListener("click", () => toggleSidebar(false));
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && document.body.classList.contains("sidebar-open")) {
-      toggleSidebar(false);
-    }
-  });
-  mobileMedia.addEventListener("change", () => {
-    if (!isMobileViewport()) {
-      toggleSidebar(false);
-    }
-    syncTerminalLayout();
-  });
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", handleMobileViewportChange);
+    term.onData((data) => {
+      console.log("[xterm] onData len=%d session=%s", data.length, state.selectedSessionID);
+      sendWS({
+        type: "term_in",
+        session_id: state.selectedSessionID,
+        data_b64: bytesToB64(data),
+      });
+    });
   }
-  approvalDetails.addEventListener("toggle", () => {
-    localStorage.setItem("approval_collapsed", approvalDetails.open ? "0" : "1");
-    setTimeout(syncTerminalLayout, 0);
-  });
 
-  term.onData((data) => {
-    console.log("[xterm] onData len=%d session=%s", data.length, state.selectedSessionID);
-    sendWS({
-      type: "term_in",
-      session_id: state.selectedSessionID,
-      data_b64: bytesToB64(data),
+  if (isAdminPage) {
+    setAdminVerified(false, "Enter admin token to continue.");
+    if (adminTokenInput.value.trim()) {
+      verifyAdminToken();
+    }
+  }
+
+  if (isTenantPage) {
+    setTenantVerified(false, "Enter tenant id + token to continue.");
+    if (tenantTokenInput.value.trim() && tenantTenantInput.value.trim()) {
+      verifyTenantToken();
+    }
+  }
+
+  if (isControllerPage) {
+    saveTokenBtn.addEventListener("click", () => {
+      applyUIToken(tokenInput.value.trim());
     });
-  });
 
-  saveTokenBtn.addEventListener("click", () => {
-    applyUIToken(tokenInput.value.trim());
-  });
+    document.getElementById("refreshServersBtn").addEventListener("click", fetchServers);
+    document.getElementById("refreshSessionsBtn").addEventListener("click", fetchSessions);
 
-  adminTypeSelect.addEventListener("change", syncAdminRoleState);
-  adminGenerateBtn.addEventListener("click", createAdminToken);
-  adminListTokensBtn.addEventListener("click", () => listAdminTokens());
-  adminCopyTokenBtn.addEventListener("click", copyGeneratedToken);
-  adminUseUiTokenBtn.addEventListener("click", () => {
-    const generated = state.lastGeneratedToken;
-    if (!generated || generated.type !== "ui" || !generated.token) {
-      return;
-    }
-    applyUIToken(generated.token);
-    setAdminMessage("Generated UI token is now active.");
-  });
-  syncAdminRoleState();
-  renderAdminResult(null);
-  renderAdminTokens();
-
-  document.getElementById("refreshServersBtn").addEventListener("click", fetchServers);
-  document.getElementById("refreshSessionsBtn").addEventListener("click", fetchSessions);
-
-  document.getElementById("newSessionBtn").addEventListener("click", async () => {
-    if (!state.selectedServerID) {
-      alert("select a server first");
-      return;
-    }
-    const cwd = cwdInput.value.trim();
-    if (!cwd) {
-      alert("cwd is required");
-      return;
-    }
-    const resumeID = resumeInput.value.trim();
-    const env = parseEnv(envInput.value);
-    const body = {
-      server_id: state.selectedServerID,
-      cwd,
-      env,
-      cols: term.cols,
-      rows: term.rows,
-    };
-    if (resumeID) {
-      body.resume_id = resumeID;
-    }
-    const resp = await api("/api/sessions", {
-      method: "POST",
-      body: JSON.stringify(body),
+    document.getElementById("newSessionBtn").addEventListener("click", async () => {
+      if (!state.selectedServerID) {
+        alert("select a server first");
+        return;
+      }
+      const cwd = cwdInput.value.trim();
+      if (!cwd) {
+        alert("cwd is required");
+        return;
+      }
+      const resumeID = resumeInput.value.trim();
+      const env = parseEnv(envInput.value);
+      const body = {
+        server_id: state.selectedServerID,
+        cwd,
+        env,
+        cols: term.cols,
+        rows: term.rows,
+      };
+      if (resumeID) {
+        body.resume_id = resumeID;
+      }
+      const resp = await api("/api/sessions", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        alert(await resp.text());
+        return;
+      }
+      const session = await resp.json();
+      await fetchSessions();
+      attachSession(session.session_id);
     });
-    if (!resp.ok) {
-      alert(await resp.text());
-      return;
-    }
-    const session = await resp.json();
-    await fetchSessions();
-    attachSession(session.session_id);
-  });
 
-  bindScrollButton("scrollUp", -1);
-  bindScrollButton("scrollDown", 1);
-  document.getElementById("keyTab").addEventListener("click", () => sendQuickKey("\t"));
-  document.getElementById("keyEsc").addEventListener("click", () => sendQuickKey("\u001b"));
-  document.getElementById("keyCtrlC").addEventListener("click", () => sendQuickKey("\u0003"));
-  document.getElementById("keyUp").addEventListener("click", () => sendQuickKey("\x1b[A"));
-  document.getElementById("keyDown").addEventListener("click", () => sendQuickKey("\x1b[B"));
-  document.getElementById("keyRight").addEventListener("click", () => sendQuickKey("\x1b[C"));
-  document.getElementById("keyLeft").addEventListener("click", () => sendQuickKey("\x1b[D"));
-  document.getElementById("keyEnter").addEventListener("click", () => sendQuickKey("\r"));
+    bindScrollButton("scrollUp", -1);
+    bindScrollButton("scrollDown", 1);
+    document.getElementById("keyTab").addEventListener("click", () => sendQuickKey("\t"));
+    document.getElementById("keyEsc").addEventListener("click", () => sendQuickKey("\u001b"));
+    document.getElementById("keyCtrlC").addEventListener("click", () => sendQuickKey("\u0003"));
+    document.getElementById("keyUp").addEventListener("click", () => sendQuickKey("\x1b[A"));
+    document.getElementById("keyDown").addEventListener("click", () => sendQuickKey("\x1b[B"));
+    document.getElementById("keyRight").addEventListener("click", () => sendQuickKey("\x1b[C"));
+    document.getElementById("keyLeft").addEventListener("click", () => sendQuickKey("\x1b[D"));
+    document.getElementById("keyEnter").addEventListener("click", () => sendQuickKey("\r"));
+  }
+
+  if (isAdminPage) {
+    adminVerifyBtn.addEventListener("click", verifyAdminToken);
+    adminTokenInput.addEventListener("input", () => {
+      if (state.adminVerified) {
+        setAdminVerified(false, "Token changed. Please verify again.");
+      } else {
+        setGateMessage(adminGateMessage, "");
+      }
+    });
+    adminGenerateBtn.addEventListener("click", createAdminToken);
+    adminCopyTokenBtn.addEventListener("click", copyGeneratedToken);
+    adminListTenantsBtn.addEventListener("click", () => {
+      listAdminTenantTokens();
+    });
+    renderAdminResult(null);
+    renderAdminTenantTokens();
+    updateAdminCopyState();
+  }
+
+  if (isTenantPage) {
+    tenantVerifyBtn.addEventListener("click", verifyTenantToken);
+    tenantTokenInput.addEventListener("input", () => {
+      if (state.tenantVerified) {
+        setTenantVerified(false, "Token changed. Please verify again.");
+      } else {
+        setGateMessage(tenantGateMessage, "");
+      }
+    });
+    tenantTenantInput.addEventListener("input", () => {
+      if (state.tenantVerified) {
+        setTenantVerified(false, "Tenant changed. Please verify again.");
+      } else {
+        setGateMessage(tenantGateMessage, "");
+      }
+    });
+    tenantGenerateBtn.addEventListener("click", createTenantTokens);
+    tenantCopyUiTokenBtn.addEventListener("click", () => copyTenantToken("ui"));
+    tenantCopyAgentTokenBtn.addEventListener("click", () => copyTenantToken("agent"));
+    renderTenantResult(null);
+  }
 
   function bindScrollButton(buttonID, pageDelta) {
     const button = document.getElementById(buttonID);
@@ -502,6 +600,9 @@
   }
 
   function renderApprovals() {
+    if (!approvalList || !approvalCount) {
+      return;
+    }
     approvalList.innerHTML = "";
     const values = Array.from(state.approvals.values()).sort((a, b) => b.ts_ms - a.ts_ms);
     let pendingCount = 0;
@@ -533,6 +634,9 @@
 
   const wsStatusEl = document.getElementById("wsStatus");
   function setWSStatus(connected) {
+    if (!wsStatusEl) {
+      return;
+    }
     if (connected) {
       wsStatusEl.textContent = "WS: connected";
       wsStatusEl.className = "badge badge-online";
@@ -543,6 +647,9 @@
   }
 
   function connectWS() {
+    if (!isControllerPage) {
+      return;
+    }
     const scheme = window.location.protocol === "https:" ? "wss" : "ws";
     const url = `${scheme}://${window.location.host}/ws/client?token=${encodeURIComponent(state.token)}`;
     console.log("[ws] connecting", url);
@@ -578,6 +685,9 @@
   }
 
   function reconnectWS() {
+    if (!isControllerPage) {
+      return;
+    }
     if (state.ws) {
       state.ws.onclose = null;
       state.ws.close();
@@ -662,7 +772,7 @@
   }
 
   function sendResize() {
-    if (!state.selectedSessionID) {
+    if (!state.selectedSessionID || !term) {
       return;
     }
     sendWS({
@@ -684,20 +794,116 @@
 
   function applyUIToken(token) {
     state.token = token || "";
-    tokenInput.value = state.token;
+    if (tokenInput) {
+      tokenInput.value = state.token;
+    }
     localStorage.setItem("ui_token", state.token);
-    reconnectWS();
-    refreshAll();
-  }
-
-  function syncAdminRoleState() {
-    const isUI = adminTypeSelect.value === "ui";
-    adminRoleSelect.disabled = !isUI;
+    if (isControllerPage) {
+      reconnectWS();
+      refreshAll();
+    }
   }
 
   function setAdminMessage(message, isError = false) {
     adminMessage.textContent = message || "";
     adminMessage.classList.toggle("error", isError);
+  }
+
+  function setTenantMessage(message, isError = false) {
+    tenantMessage.textContent = message || "";
+    tenantMessage.classList.toggle("error", isError);
+  }
+
+  function setGateMessage(el, message, isError = false) {
+    if (!el) {
+      return;
+    }
+    el.textContent = message || "";
+    el.classList.toggle("error", isError);
+  }
+
+  function setAdminVerified(verified, message = "", isError = false) {
+    state.adminVerified = verified;
+    adminContent.hidden = !verified;
+    adminVerifyBtn.textContent = verified ? "Re-Verify Token" : "Verify Token";
+    setGateMessage(adminGateMessage, message, isError);
+    if (adminListTenantsBtn) {
+      adminListTenantsBtn.disabled = !verified;
+    }
+    if (!verified) {
+      setAdminMessage("");
+      adminCopyTokenBtn.disabled = true;
+      state.lastGeneratedToken = null;
+      state.adminTenantTokens = [];
+      state.selectedAdminTokenID = "";
+      if (adminTenantList) {
+        adminTenantList.hidden = true;
+      }
+      renderAdminResult(null);
+      renderAdminTenantTokens();
+      updateAdminCopyState();
+    }
+  }
+
+  function setTenantVerified(verified, message = "", isError = false) {
+    state.tenantVerified = verified;
+    tenantContent.hidden = !verified;
+    tenantVerifyBtn.textContent = verified ? "Re-Verify Token" : "Verify Token";
+    setGateMessage(tenantGateMessage, message, isError);
+    if (!verified) {
+      setTenantMessage("");
+      tenantCopyUiTokenBtn.disabled = true;
+      tenantCopyAgentTokenBtn.disabled = true;
+      state.lastTenantTokens = null;
+      renderTenantResult(null);
+    }
+  }
+
+  function persistAdminTokenCache() {
+    try {
+      const payload = {};
+      for (const [tokenID, token] of state.adminTokenSecrets) {
+        payload[tokenID] = token;
+      }
+      localStorage.setItem(adminTokenCacheKey, JSON.stringify(payload));
+    } catch (_err) {
+      // ignore storage errors
+    }
+  }
+
+  function cacheAdminToken(tokenID, token) {
+    if (!tokenID || !token) {
+      return;
+    }
+    state.adminTokenSecrets.set(tokenID, token);
+    persistAdminTokenCache();
+  }
+
+  function getCachedAdminToken(tokenID) {
+    if (!tokenID) {
+      return "";
+    }
+    return state.adminTokenSecrets.get(tokenID) || "";
+  }
+
+  function updateAdminCopyState() {
+    if (!adminCopyTokenBtn) {
+      return;
+    }
+    const selectedToken = getCachedAdminToken(state.selectedAdminTokenID);
+    const latestToken = state.lastGeneratedToken && state.lastGeneratedToken.token;
+    if (state.selectedAdminTokenID) {
+      adminCopyTokenBtn.disabled = !selectedToken;
+      return;
+    }
+    adminCopyTokenBtn.disabled = !latestToken;
+  }
+
+  function formatTenantTokenClipboard(tenantID, tokenLabel, tokenValue) {
+    const safeTenant = tenantID || "-";
+    const safeToken = tokenValue || "";
+    const label = tokenLabel || "token";
+    return `tenant_id: ${safeTenant}\n${label}: ${safeToken}`;
   }
 
   function normalizeValue(value, fallback = "-") {
@@ -736,20 +942,14 @@
     const header = document.createElement("div");
     header.className = "admin-result-header";
     const title = document.createElement("strong");
-    title.textContent = "Latest Generated Token";
-    const typeBadge = document.createElement("span");
-    typeBadge.className = "badge";
-    typeBadge.textContent = normalizeValue(data.type);
+    title.textContent = "Latest Tenant Token";
     header.appendChild(title);
-    header.appendChild(typeBadge);
 
     const fields = document.createElement("div");
     fields.className = "admin-field-list";
+    fields.appendChild(makeAdminFieldRow("tenant", data.tenant_id, { mono: true }));
     fields.appendChild(makeAdminFieldRow("token", data.token, { mono: true }));
     fields.appendChild(makeAdminFieldRow("token_id", data.token_id, { mono: true }));
-    fields.appendChild(makeAdminFieldRow("tenant", data.tenant_id, { mono: true }));
-    fields.appendChild(makeAdminFieldRow("role", data.role));
-    fields.appendChild(makeAdminFieldRow("name", data.name));
     fields.appendChild(makeAdminFieldRow("created", formatTime(data.created_at_ms)));
 
     card.appendChild(header);
@@ -757,23 +957,30 @@
     adminResult.appendChild(card);
   }
 
-  function renderAdminTokens() {
-    adminTokensList.innerHTML = "";
-    if (!state.adminTokens.length) {
-      const li = document.createElement("li");
-      li.className = "admin-token-item";
-      li.textContent = "(no tokens)";
-      adminTokensList.appendChild(li);
+  function renderAdminTenantTokens() {
+    if (!adminTenantList) {
       return;
     }
-    for (const rec of state.adminTokens) {
+    adminTenantList.innerHTML = "";
+    if (!state.adminTenantTokens.length) {
+      const li = document.createElement("li");
+      li.className = "admin-token-item list-empty";
+      li.textContent = "(no tenant tokens)";
+      adminTenantList.appendChild(li);
+      return;
+    }
+    for (const rec of state.adminTenantTokens) {
       const li = document.createElement("li");
       li.className = "admin-token-item";
+      const tokenID = rec.token_id || "";
+      if (tokenID && tokenID === state.selectedAdminTokenID) {
+        li.classList.add("selected");
+      }
 
       const head = document.createElement("div");
       head.className = "admin-token-head";
       const id = document.createElement("strong");
-      id.textContent = rec.token_id ? rec.token_id.slice(0, 8) : "(unknown)";
+      id.textContent = rec.tenant_id ? rec.tenant_id.slice(0, 8) : "(unknown)";
       const status = document.createElement("span");
       status.className = rec.revoked ? "badge badge-offline" : "badge badge-online";
       status.textContent = rec.revoked ? "revoked" : "active";
@@ -782,15 +989,32 @@
 
       const fields = document.createElement("div");
       fields.className = "admin-field-list";
-      fields.appendChild(makeAdminFieldRow("type", rec.type));
-      fields.appendChild(makeAdminFieldRow("role", rec.role));
       fields.appendChild(makeAdminFieldRow("tenant", rec.tenant_id, { mono: true }));
       fields.appendChild(makeAdminFieldRow("token_id", rec.token_id, { mono: true }));
       fields.appendChild(makeAdminFieldRow("created", formatTime(rec.created_at_ms)));
-      fields.appendChild(makeAdminFieldRow("name", rec.name));
 
       li.appendChild(head);
       li.appendChild(fields);
+
+      if (tokenID) {
+        li.addEventListener("click", (event) => {
+          if (event.target && event.target.closest && event.target.closest("button")) {
+            return;
+          }
+          state.selectedAdminTokenID = state.selectedAdminTokenID === tokenID ? "" : tokenID;
+          renderAdminTenantTokens();
+          updateAdminCopyState();
+        });
+        li.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            state.selectedAdminTokenID = state.selectedAdminTokenID === tokenID ? "" : tokenID;
+            renderAdminTenantTokens();
+            updateAdminCopyState();
+          }
+        });
+        li.tabIndex = 0;
+      }
 
       if (!rec.revoked && rec.token_id) {
         const actions = document.createElement("div");
@@ -803,8 +1027,43 @@
         actions.appendChild(revokeBtn);
         li.appendChild(actions);
       }
-      adminTokensList.appendChild(li);
+      adminTenantList.appendChild(li);
     }
+  }
+
+  function renderTenantResult(data) {
+    tenantResult.innerHTML = "";
+    if (!data) {
+      const empty = document.createElement("div");
+      empty.className = "admin-result-empty";
+      empty.textContent = "(no token generated)";
+      tenantResult.appendChild(empty);
+      return;
+    }
+    const card = document.createElement("div");
+    card.className = "admin-result-card";
+
+    const header = document.createElement("div");
+    header.className = "admin-result-header";
+    const title = document.createElement("strong");
+    title.textContent = "Latest Tenant Tokens";
+    header.appendChild(title);
+
+    const fields = document.createElement("div");
+    fields.className = "admin-field-list";
+    fields.appendChild(makeAdminFieldRow("tenant", data.tenant_id, { mono: true }));
+    fields.appendChild(makeAdminFieldRow("revoked", data.revoked_count));
+    fields.appendChild(makeAdminFieldRow("ui_token", data.ui && data.ui.token, { mono: true }));
+    fields.appendChild(makeAdminFieldRow("ui_token_id", data.ui && data.ui.token_id, { mono: true }));
+    fields.appendChild(makeAdminFieldRow("ui_role", data.ui && data.ui.role));
+    fields.appendChild(makeAdminFieldRow("ui_created", formatTime(data.ui && data.ui.created_at_ms)));
+    fields.appendChild(makeAdminFieldRow("agent_token", data.agent && data.agent.token, { mono: true }));
+    fields.appendChild(makeAdminFieldRow("agent_token_id", data.agent && data.agent.token_id, { mono: true }));
+    fields.appendChild(makeAdminFieldRow("agent_created", formatTime(data.agent && data.agent.created_at_ms)));
+
+    card.appendChild(header);
+    card.appendChild(fields);
+    tenantResult.appendChild(card);
   }
 
   function formatTime(ts) {
@@ -819,29 +1078,113 @@
     }
   }
 
+  async function verifyAdminToken() {
+    const token = adminTokenInput.value.trim();
+    if (!token) {
+      setAdminVerified(false, "Admin token is required.", true);
+      return;
+    }
+    if (state.adminVerifyInFlight) {
+      return;
+    }
+    state.adminVerifyInFlight = true;
+    adminVerifyBtn.disabled = true;
+    adminContent.hidden = true;
+    setGateMessage(adminGateMessage, "Verifying...");
+    state.adminToken = token;
+    localStorage.setItem("admin_token", state.adminToken);
+    let resp;
+    try {
+      resp = await adminApi("/admin/verify");
+    } catch (err) {
+      setAdminVerified(false, `Request failed: ${String(err)}`, true);
+      adminVerifyBtn.disabled = false;
+      state.adminVerifyInFlight = false;
+      return;
+    }
+    if (!resp.ok) {
+      const msg = (await resp.text()) || "Unauthorized.";
+      setAdminVerified(false, msg, true);
+      adminVerifyBtn.disabled = false;
+      state.adminVerifyInFlight = false;
+      return;
+    }
+    setAdminVerified(true, "Verified.");
+    adminVerifyBtn.disabled = false;
+    state.adminVerifyInFlight = false;
+  }
+
+  async function verifyTenantToken() {
+    const token = tenantTokenInput.value.trim();
+    if (!token) {
+      setTenantVerified(false, "Tenant token is required.", true);
+      return;
+    }
+    const tenantID = tenantTenantInput.value.trim();
+    if (!tenantID) {
+      setTenantVerified(false, "Tenant id is required.", true);
+      return;
+    }
+    if (state.tenantVerifyInFlight) {
+      return;
+    }
+    state.tenantVerifyInFlight = true;
+    tenantVerifyBtn.disabled = true;
+    tenantContent.hidden = true;
+    setGateMessage(tenantGateMessage, "Verifying...");
+    state.tenantToken = token;
+    localStorage.setItem("tenant_token", state.tenantToken);
+    state.tenantID = tenantID;
+    localStorage.setItem("tenant_id", state.tenantID);
+    let resp;
+    try {
+      resp = await tenantApi("/tenant/verify", {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: tenantID }),
+      });
+    } catch (err) {
+      setTenantVerified(false, `Request failed: ${String(err)}`, true);
+      tenantVerifyBtn.disabled = false;
+      state.tenantVerifyInFlight = false;
+      return;
+    }
+    if (!resp.ok) {
+      const msg = (await resp.text()) || "Unauthorized.";
+      setTenantVerified(false, msg, true);
+      tenantVerifyBtn.disabled = false;
+      state.tenantVerifyInFlight = false;
+      return;
+    }
+    let body = {};
+    try {
+      body = await resp.json();
+    } catch (_err) {
+      body = {};
+    }
+    if (body && body.tenant_id && tenantTenantInput.value.trim() !== body.tenant_id) {
+      tenantTenantInput.value = body.tenant_id;
+    }
+    setTenantVerified(true, "Verified.");
+    tenantVerifyBtn.disabled = false;
+    state.tenantVerifyInFlight = false;
+  }
+
   async function createAdminToken() {
     const token = adminTokenInput.value.trim();
     if (!token) {
       setAdminMessage("Admin token is required.", true);
       return;
     }
+    if (!state.adminVerified) {
+      setAdminMessage("Verify admin token first.", true);
+      return;
+    }
     const payload = {
-      type: adminTypeSelect.value,
+      type: "tenant",
     };
-    if (payload.type === "ui") {
-      payload.role = adminRoleSelect.value;
-    }
-    const tenantID = adminTenantInput.value.trim();
-    if (tenantID) {
-      payload.tenant_id = tenantID;
-    }
-    const name = adminNameInput.value.trim();
-    if (name) {
-      payload.name = name;
-    }
     state.adminToken = token;
     localStorage.setItem("admin_token", state.adminToken);
-    setAdminMessage("Generating token...");
+    setAdminMessage("Generating tenant token...");
     let resp;
     try {
       resp = await adminApi("/admin/tokens", {
@@ -858,31 +1201,76 @@
     }
     const result = await resp.json();
     state.lastGeneratedToken = result;
-    if (result.tenant_id) {
-      adminTenantInput.value = result.tenant_id;
-    }
-    adminCopyTokenBtn.disabled = !result.token;
-    adminUseUiTokenBtn.disabled = !(result.type === "ui" && result.token);
+    cacheAdminToken(result.token_id, result.token);
+    state.selectedAdminTokenID = "";
     renderAdminResult(result);
+    if (adminTenantList && !adminTenantList.hidden) {
+      await listAdminTenantTokens(false);
+    } else {
+      renderAdminTenantTokens();
+    }
+    updateAdminCopyState();
     setAdminMessage("Token generated.");
   }
 
-  async function listAdminTokens(showLoading = true) {
+  async function copyGeneratedToken() {
+    let token = "";
+    let label = "Token";
+    let tenantID = "";
+    if (state.selectedAdminTokenID) {
+      token = getCachedAdminToken(state.selectedAdminTokenID);
+      if (!token) {
+        setAdminMessage("Selected token not available locally.", true);
+        return;
+      }
+      const selected = state.adminTenantTokens.find((rec) => rec.token_id === state.selectedAdminTokenID);
+      tenantID = selected ? selected.tenant_id : "";
+      if (!tenantID) {
+        setAdminMessage("Selected tenant id not available.", true);
+        return;
+      }
+      label = "Selected token";
+    } else {
+      token = state.lastGeneratedToken && state.lastGeneratedToken.token;
+      if (!token) {
+        return;
+      }
+      tenantID = state.lastGeneratedToken && state.lastGeneratedToken.tenant_id;
+      if (!tenantID) {
+        setAdminMessage("Tenant id not available for latest token.", true);
+        return;
+      }
+    }
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      setAdminMessage("Clipboard not available. Copy token from the result box.", true);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(formatTenantTokenClipboard(tenantID, "token", token));
+      setAdminMessage(`${label} copied (tenant + token).`);
+    } catch (_err) {
+      setAdminMessage("Copy failed. Copy token from the result box.", true);
+    }
+  }
+
+  async function listAdminTenantTokens(showLoading = true) {
     const token = adminTokenInput.value.trim();
     if (!token) {
       setAdminMessage("Admin token is required.", true);
       return;
     }
+    if (!state.adminVerified) {
+      setAdminMessage("Verify admin token first.", true);
+      return;
+    }
     state.adminToken = token;
     localStorage.setItem("admin_token", state.adminToken);
-    const tenantID = adminTenantInput.value.trim();
-    const path = tenantID ? `/admin/tokens?tenant_id=${encodeURIComponent(tenantID)}` : "/admin/tokens";
     if (showLoading) {
-      setAdminMessage("Loading tokens...");
+      setAdminMessage("Loading tenant tokens...");
     }
     let resp;
     try {
-      resp = await adminApi(path);
+      resp = await adminApi("/admin/tokens");
     } catch (err) {
       setAdminMessage(`Request failed: ${String(err)}`, true);
       return;
@@ -893,34 +1281,25 @@
     }
     const body = await resp.json();
     const tokens = Array.isArray(body.tokens) ? body.tokens : [];
-    tokens.sort((a, b) => Number(b.created_at_ms || 0) - Number(a.created_at_ms || 0));
-    state.adminTokens = tokens;
-    renderAdminTokens();
-    setAdminMessage(`Loaded ${tokens.length} token(s).`);
-  }
-
-  async function copyGeneratedToken() {
-    const token = state.lastGeneratedToken && state.lastGeneratedToken.token;
-    if (!token) {
-      return;
+    const tenants = tokens.filter((rec) => rec.type === "tenant");
+    tenants.sort((a, b) => Number(b.created_at_ms || 0) - Number(a.created_at_ms || 0));
+    state.adminTenantTokens = tenants;
+    if (adminTenantList) {
+      adminTenantList.hidden = false;
     }
-    if (!navigator.clipboard || !navigator.clipboard.writeText) {
-      setAdminMessage("Clipboard not available. Copy token from the result box.", true);
-      return;
+    if (state.selectedAdminTokenID && !tenants.some((rec) => rec.token_id === state.selectedAdminTokenID)) {
+      state.selectedAdminTokenID = "";
     }
-    try {
-      await navigator.clipboard.writeText(token);
-      setAdminMessage("Token copied to clipboard.");
-    } catch (_err) {
-      setAdminMessage("Copy failed. Copy token from the result box.", true);
-    }
+    renderAdminTenantTokens();
+    updateAdminCopyState();
+    setAdminMessage(`Loaded ${tenants.length} tenant token(s).`);
   }
 
   async function revokeAdminToken(tokenID) {
     if (!tokenID) {
       return;
     }
-    if (!window.confirm(`Revoke token ${tokenID.slice(0, 8)}?`)) {
+    if (!window.confirm(`Revoke tenant token ${tokenID.slice(0, 8)}?`)) {
       return;
     }
     const token = adminTokenInput.value.trim();
@@ -944,18 +1323,92 @@
       setAdminMessage(await resp.text(), true);
       return;
     }
-    for (const rec of state.adminTokens) {
+    for (const rec of state.adminTenantTokens) {
       if (rec.token_id === tokenID) {
         rec.revoked = true;
       }
     }
-    renderAdminTokens();
+    renderAdminTenantTokens();
     setAdminMessage("Token revoked.");
+  }
+
+  async function createTenantTokens() {
+    const token = tenantTokenInput.value.trim();
+    if (!token) {
+      setTenantMessage("Tenant token is required.", true);
+      return;
+    }
+    if (!state.tenantVerified) {
+      setTenantMessage("Verify tenant token first.", true);
+      return;
+    }
+    const payload = {
+      role: tenantRoleSelect.value,
+    };
+    const tenantID = tenantTenantInput.value.trim();
+    if (!tenantID) {
+      setTenantMessage("Tenant id is required.", true);
+      return;
+    }
+    payload.tenant_id = tenantID;
+    state.tenantToken = token;
+    localStorage.setItem("tenant_token", state.tenantToken);
+    setTenantMessage("Generating tokens...");
+    let resp;
+    try {
+      resp = await tenantApi("/tenant/tokens", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      setTenantMessage(`Request failed: ${String(err)}`, true);
+      return;
+    }
+    if (!resp.ok) {
+      setTenantMessage(await resp.text(), true);
+      return;
+    }
+    const result = await resp.json();
+    state.lastTenantTokens = result;
+    if (result.tenant_id) {
+      tenantTenantInput.value = result.tenant_id;
+    }
+    tenantCopyUiTokenBtn.disabled = !(result.ui && result.ui.token);
+    tenantCopyAgentTokenBtn.disabled = !(result.agent && result.agent.token);
+    renderTenantResult(result);
+    setTenantMessage("Tokens generated.");
+  }
+
+  async function copyTenantToken(kind) {
+    const result = state.lastTenantTokens || {};
+    const token = kind === "agent" ? result.agent && result.agent.token : result.ui && result.ui.token;
+    if (!token) {
+      return;
+    }
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      setTenantMessage("Clipboard not available. Copy token from the result box.", true);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(token);
+      setTenantMessage(`${kind === "agent" ? "Agent" : "UI"} token copied to clipboard.`);
+    } catch (_err) {
+      setTenantMessage("Copy failed. Copy token from the result box.", true);
+    }
   }
 
   function api(path, init = {}) {
     const headers = new Headers(init.headers || {});
     headers.set("Authorization", `Bearer ${state.token}`);
+    if (init.body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    return fetch(path, { ...init, headers });
+  }
+
+  function tenantApi(path, init = {}) {
+    const headers = new Headers(init.headers || {});
+    headers.set("Authorization", `Bearer ${state.tenantToken}`);
     if (init.body && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
@@ -997,6 +1450,8 @@
       .replaceAll("'", "&#039;");
   }
 
-  connectWS();
-  refreshAll();
+  if (isControllerPage) {
+    connectWS();
+    refreshAll();
+  }
 })();

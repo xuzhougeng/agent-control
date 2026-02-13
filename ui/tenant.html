@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code Control Plane - Tenant</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-title-row">
+      <h1>Claude Code Control Plane</h1>
+    </div>
+  </header>
+
+  <main class="page-body">
+    <div class="page-header">
+      <h2>Tenant</h2>
+      <p class="page-subtitle">Verify tenant id + token to generate UI + Agent tokens.</p>
+    </div>
+
+    <section class="sidebar-card">
+      <label for="tenantTenantInput">tenant id (username)</label>
+      <input id="tenantTenantInput" type="text" placeholder="tenant-id">
+      <label for="tenantTokenInput">tenant token (password)</label>
+      <input id="tenantTokenInput" type="password" placeholder="tenant-token">
+      <div class="admin-actions">
+        <button id="tenantVerifyBtn" class="btn-primary" type="button">Verify Token</button>
+      </div>
+      <div id="tenantGateMessage" class="admin-message"></div>
+    </section>
+
+    <section id="tenantContent" class="sidebar-card" hidden>
+      <h2>Tenant Tokens</h2>
+      <label for="tenantRoleSelect">ui role</label>
+      <select id="tenantRoleSelect">
+        <option value="viewer">viewer</option>
+        <option value="operator">operator</option>
+        <option value="owner" selected>owner</option>
+      </select>
+      <div class="admin-actions">
+        <button id="tenantGenerateBtn" class="btn-primary" type="button">Generate UI + Agent</button>
+        <button id="tenantCopyUiTokenBtn" class="btn-secondary" type="button" disabled>Copy UI Token</button>
+        <button id="tenantCopyAgentTokenBtn" class="btn-secondary" type="button" disabled>Copy Agent Token</button>
+      </div>
+      <div id="tenantMessage" class="admin-message"></div>
+      <div id="tenantResult" class="admin-result">(no token generated)</div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

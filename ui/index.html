@@ -32,11 +32,6 @@
 
   <main>
     <aside id="sidebar">
-      <div class="sidebar-tabs" role="tablist" aria-label="Sidebar panels">
-        <button id="tabControlBtn" class="sidebar-tab active" type="button" role="tab" aria-controls="sidebarPanelControl" aria-selected="true">Control</button>
-        <button id="tabAdminBtn" class="sidebar-tab" type="button" role="tab" aria-controls="sidebarPanelAdmin" aria-selected="false">Admin</button>
-      </div>
-
       <div id="sidebarPanelControl" class="sidebar-panel active">
         <section class="sidebar-card">
           <div class="section-header">
@@ -63,38 +58,6 @@
             <button id="refreshSessionsBtn" type="button">Refresh</button>
           </div>
           <ul id="sessionsList"></ul>
-        </section>
-      </div>
-
-      <div id="sidebarPanelAdmin" class="sidebar-panel">
-        <section class="sidebar-card">
-          <h2>Admin Tokens</h2>
-          <label for="adminTokenInput">admin token</label>
-          <input id="adminTokenInput" type="password" placeholder="admin-dev-token">
-          <label for="adminTypeSelect">token type</label>
-          <select id="adminTypeSelect">
-            <option value="ui" selected>ui</option>
-            <option value="agent">agent</option>
-          </select>
-          <label for="adminRoleSelect">ui role</label>
-          <select id="adminRoleSelect">
-            <option value="viewer">viewer</option>
-            <option value="operator">operator</option>
-            <option value="owner" selected>owner</option>
-          </select>
-          <label for="adminTenantInput">tenant id (optional)</label>
-          <input id="adminTenantInput" type="text" placeholder="auto-generate if empty">
-          <label for="adminNameInput">name (optional)</label>
-          <input id="adminNameInput" type="text" placeholder="tenant-a-ui">
-          <div class="admin-actions">
-            <button id="adminGenerateBtn" class="btn-primary" type="button">Generate Token</button>
-            <button id="adminListTokensBtn" class="btn-secondary" type="button">List Tokens</button>
-            <button id="adminCopyTokenBtn" class="btn-secondary" type="button" disabled>Copy Token</button>
-            <button id="adminUseUiTokenBtn" class="btn-secondary" type="button" disabled>Use As UI Token</button>
-          </div>
-          <div id="adminMessage" class="admin-message"></div>
-          <div id="adminResult" class="admin-result">(no token generated)</div>
-          <ul id="adminTokensList" class="admin-tokens-list"></ul>
         </section>
       </div>
     </aside>
