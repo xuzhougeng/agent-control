@@ -31,13 +31,31 @@ On first launch both apps connect to `http://127.0.0.1:18080` with token `admin-
 | Field    | Description                                   |
 |----------|-----------------------------------------------|
 | Base URL | HTTP(S) address of the `cc-control` server    |
-| UI Token | Bearer token created via Admin API            |
+| UI Token | Bearer token created via Tenant API           |
 
 The token is stored in the platform Keychain; the URL in UserDefaults.
 
-### Getting a UI Token (Admin API)
+### Getting a UI Token (Tenant API)
 
-If `cc-control` is running with `-admin-token`, create a UI token:
+If `cc-control` is running with `-admin-token`, create a tenant token first, then generate UI/Agent tokens:
+
+```bash
+# Admin: create tenant token
+curl -X POST http://127.0.0.1:18080/admin/tokens \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"tenant"}'
+
+# Tenant: create UI + Agent tokens
+curl -X POST http://127.0.0.1:18080/tenant/tokens \
+  -H "Authorization: Bearer <TENANT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"role":"owner"}'
+```
+
+The UI token is returned in the `ui.token` field.
+
+For legacy compatibility, you can still create UI tokens directly via Admin API:
 
 ```bash
 curl -X POST http://127.0.0.1:18080/admin/tokens \

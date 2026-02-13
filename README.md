@@ -35,26 +35,25 @@ go run ./cmd/cc-control \
   -offline-after-sec 30
 ```
 
-2. Create token via web
+2. Create tokens via web
 
-Open `http://127.0.0.1:18080`, then use the left sidebar `Admin` tab.
+Open `http://127.0.0.1:18080/admin` to manage tokens.
 
-2.1 Create Tenant UI token
+2.1 Create Tenant token (admin)
 
 - Fill `admin token` (for example `admin-dev-token`).
-- Set `token type = ui`.
-- Set `ui role = owner` (or `viewer/operator` as needed).
+- Set `token type = tenant`.
 - Leave `tenant id` empty to auto-create a new tenant.
 - Click `Generate Token`.
-- Save the generated `token` (UI login token) and `tenant` (tenant id).
-- Optional: click `Use As UI Token` to switch current UI login directly.
+- Save the generated `token` (tenant token) and `tenant` (tenant id).
 
-2.2 Create Tenant Agent token
+2.2 Tenant generates UI + Agent tokens
 
-- Keep the same `tenant id` from 2.1.
-- Set `token type = agent`.
-- Click `Generate Token`.
-- Save the generated `token` as `-agent-token` for `cc-agent`.
+- In `Tenant Tokens`, paste the tenant token from 2.1.
+- Set `ui role = owner` (or `viewer/operator` as needed).
+- Optional: fill `tenant id` (must match the tenant token).
+- Click `Generate UI + Agent`.
+- Save the generated UI token and agent token.
 
 2.3 Optional management
 
@@ -64,57 +63,59 @@ Open `http://127.0.0.1:18080`, then use the left sidebar `Admin` tab.
 
 3. Create token via CLI.
 
-3.1 UI token
+3.1 Tenant token (admin)
 
 ```bash
-# Tenant: create UI token (owner role), response includes tenant_id
+# Admin: create tenant token
 curl -X POST http://127.0.0.1:18080/admin/tokens \
   -H "Authorization: Bearer admin-dev-token" \
   -H "Content-Type: application/json" \
-  -d '{"type":"ui","role":"owner"}'
+  -d '{"type":"tenant"}'
 ```
 
-Example Tenant UI token response:
+Example Tenant token response:
 
 ```json
 {
   "created_at_ms": 1770964695390,
-  "role": "owner",
+  "role": "",
   "tenant_id": "<tenant-a-id>",
-  "token": "<tenant-a-ui-token>",
-  "token_id": "<tenant-a-ui-token-id>",
-  "type": "ui"
+  "token": "<tenant-a-tenant-token>",
+  "token_id": "<tenant-a-tenant-token-id>",
+  "type": "tenant"
 }
 ```
 
-- `token`: use this as the UI login token for Tenant.
-- `tenant_id`: must be reused when creating Tenant agent tokens.
-
-3.2 Agent Token
+3.2 Tenant UI + Agent tokens
 
 ```bash
-# Tenant: create Agent token with the same tenant_id
-curl -X POST http://127.0.0.1:18080/admin/tokens \
-  -H "Authorization: Bearer admin-dev-token" \
+# Tenant: create UI + Agent tokens (owner role)
+curl -X POST http://127.0.0.1:18080/tenant/tokens \
+  -H "Authorization: Bearer <tenant-a-tenant-token>" \
   -H "Content-Type: application/json" \
-  -d '{"type":"agent","tenant_id":"<tenant-a-id>"}'
+  -d '{"role":"owner"}'
 ```
 
-Example Tenant A Agent token response:
+Example Tenant token response:
 
 ```json
 {
-  "created_at_ms": 1770964737109,
-  "role": "",
   "tenant_id": "<tenant-a-id>",
-  "token": "<tenant-a-agent-token>",
-  "token_id": "<tenant-a-agent-token-id>",
-  "type": "agent"
+  "ui": {
+    "token": "<tenant-a-ui-token>",
+    "token_id": "<tenant-a-ui-token-id>",
+    "role": "owner"
+  },
+  "agent": {
+    "token": "<tenant-a-agent-token>",
+    "token_id": "<tenant-a-agent-token-id>"
+  }
 }
 ```
 
-- `token`: use this as `-agent-token` when starting Tenant A `cc-agent`.
-- `token` is returned in plaintext only once; if leaked, revoke and re-issue immediately.
+- `ui.token`: use this as the UI login token for Tenant.
+- `agent.token`: use this as `-agent-token` when starting Tenant A `cc-agent`.
+- Token is returned in plaintext only once; if leaked, revoke and re-issue immediately.
 
 4. Start one `cc-agent` for Tenant A.
 
@@ -140,24 +141,22 @@ Example executable values for `-claude-path`:
 
 `http://127.0.0.1:18080`
 
-Use the sidebar `Admin` panel (optional) to create tokens from UI:
+Open `http://127.0.0.1:18080/admin` (optional) to create tokens from UI:
 
-- Fill `admin token`.
-- Choose `token type` (`ui` or `agent`), plus `ui role` when type is `ui`.
-- (Optional) keep/reuse `tenant id` to issue matching UI + Agent tokens for one tenant.
-- Click `Generate Token`.
-- Click `List Tokens` to query existing tokens (supports optional tenant filter).
-- Click `Revoke` in the token list to revoke a token by `token_id`.
+- Admin section: create tenant tokens and manage issued tokens.
+- Tenant page (`/tenant`): generate UI + Agent tokens with the tenant token.
 - For a generated UI token, click `Use As UI Token` to switch current UI login quickly.
 
-Or login with the Tenant A UI token returned by `/admin/tokens` (curl flow above).
+Or login with the Tenant A UI token returned by `/tenant/tokens` (curl flow above).
 
 ## Token Model (Latest)
 
-- Recommended: use `-admin-token` + `POST /admin/tokens` for multi-tenant tokens.
+- Recommended: use `-admin-token` to create a tenant token, then use `POST /tenant/tokens` to issue UI + Agent tokens.
+- Tenant token is only for `/tenant/tokens`, not for UI/WS.
 - UI token roles: `viewer` / `operator` / `owner`.
 - Legacy compatibility: `-ui-token` and `-agent-token` are still accepted and seeded into a default tenant.
-- Admin-generated tokens are in-memory; restart clears them unless you reseed at startup.
+- Tokens are in-memory by default; restart clears them unless you reseed.
+- Use `-token-db ./tokens.db` (or `TOKEN_DB`) to persist tokens across restarts.
 
 ## Deployment Modes
 
