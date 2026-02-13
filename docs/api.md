@@ -14,6 +14,7 @@ UI Token 可通过两种方式传递：
 
 - HTTP：`Authorization: Bearer <token>`
 - WebSocket：`ws://host:port/ws/client?token=<token>`（也支持 Authorization header）
+  - 如果 Control Plane 走 TLS，请使用 `wss://host/ws/client?token=<token>`
 
 UI Token 具备角色权限：
 
@@ -183,6 +184,7 @@ Base URL：`http://127.0.0.1:18080`
 连接：
 
 - `ws://127.0.0.1:18080/ws/client?token=<UI_TOKEN>`
+- TLS 场景：`wss://cc.example.com/ws/client?token=<UI_TOKEN>`
 
 统一消息封包（Envelope）：
 

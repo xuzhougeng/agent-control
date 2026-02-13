@@ -45,12 +45,17 @@
                 <div class="comment"># Start the control plane</div>
                 <div class="command">
                     <span class="prompt">$</span>
-                    <span class="cmd-text">./cc-control -addr :18080</span>
+                    <span class="cmd-text">./cc-control -addr :18080 -admin-token $ADMIN_TOKEN</span>
+                </div>
+                <div class="comment"># Issue tenant tokens via Admin API</div>
+                <div class="command">
+                    <span class="prompt">$</span>
+                    <span class="cmd-text">curl -X POST https://api.ac.dev/admin/tokens</span>
                 </div>
                 <div class="comment"># Connect an agent securely</div>
                 <div class="command">
                     <span class="prompt">$</span>
-                    <span class="cmd-text">./cc-agent -control-url wss://api.ac.dev</span>
+                    <span class="cmd-text">./cc-agent -control-url wss://api.ac.dev/ws/agent</span>
                 </div>
                 <div class="comment"># Agent connected. Ready to code.</div>
                 <div class="command">

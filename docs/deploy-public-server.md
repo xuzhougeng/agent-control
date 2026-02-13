@@ -587,7 +587,93 @@ systemctl enable --now cc-agent"
 done
 ```
 
-## 5. 故障排查
+## 5. 旧版本破坏性升级（legacy token -> admin token）
+
+适用于旧部署仍使用 `-ui-token/-agent-token`，且你接受短暂中断与 token 轮换。
+
+### 5.1 备份当前运行文件
+
+```bash
+TS=$(date +%Y%m%d-%H%M%S)
+mkdir -p ~/cc-upgrade-backup/$TS
+sudo cp /opt/cc-control/cc-control ~/cc-upgrade-backup/$TS/cc-control.bin.bak
+sudo cp /etc/systemd/system/cc-control.service ~/cc-upgrade-backup/$TS/cc-control.service.bak
+sudo cp /opt/cc-control/.env ~/cc-upgrade-backup/$TS/cc-control.env.bak
+```
+
+### 5.2 升级二进制并切换到 admin-token 启动
+
+`/etc/systemd/system/cc-control.service` 的核心参数建议切到：
+
+```ini
+ExecStart=/opt/cc-control/cc-control \
+  -addr 127.0.0.1:18080 \
+  -ui-dir /opt/cc-control/ui \
+  -admin-token ${ADMIN_TOKEN} \
+  -audit-path /opt/cc-control/audit.jsonl \
+  -offline-after-sec 30
+```
+
+`/opt/cc-control/.env`：
+
+```bash
+ADMIN_TOKEN=<your-admin-token>
+```
+
+重启：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl reset-failed cc-control || true
+sudo systemctl restart cc-control
+curl -sS http://127.0.0.1:18080/api/healthz
+```
+
+### 5.3 签发新 UI/Agent Token
+
+```bash
+# 先创建 UI token 并记下 tenant_id
+curl -X POST https://<control-host>/admin/tokens \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"ui","role":"owner"}'
+
+# 再为同 tenant_id 创建 Agent token
+curl -X POST https://<control-host>/admin/tokens \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"agent","tenant_id":"<tenant_id>"}'
+```
+
+说明：
+- Admin API 签发的 token 为内存态，`cc-control` 重启后需重新签发或外部持久化管理。
+- 切换后如果看到 `/api/servers` 为空，通常是 agent 还在用旧 token。
+
+### 5.4 逐台重启 agent（使用新 Agent token）
+
+```bash
+/opt/cc-agent/cc-agent \
+  -control-url wss://<control-host>/ws/agent \
+  -agent-token "<new-agent-token>" \
+  -server-id srv-gpu-01 \
+  -allow-root /home/deploy/repos \
+  -claude-path /path/to/ai-cli
+```
+
+若是自签名 TLS，加 `-tls-skip-verify`。
+
+### 5.5 回滚（可选）
+
+```bash
+TS=<backup-ts>
+sudo cp ~/cc-upgrade-backup/$TS/cc-control.bin.bak /opt/cc-control/cc-control
+sudo cp ~/cc-upgrade-backup/$TS/cc-control.service.bak /etc/systemd/system/cc-control.service
+sudo cp ~/cc-upgrade-backup/$TS/cc-control.env.bak /opt/cc-control/.env
+sudo systemctl daemon-reload
+sudo systemctl restart cc-control
+```
+
+## 6. 故障排查
 
 ```bash
 # 检查 control 是否在监听
