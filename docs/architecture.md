@@ -30,6 +30,7 @@ flowchart TB
 - UI 角色：`viewer` / `operator` / `owner`。
 - `admin_token` 用于生成/撤销 tenant token。
 - `tenant_token` 用于该租户自助签发 UI/Agent token（每次生成会刷新旧 token）。
+- token 默认内存态；可通过 `-token-db` / `TOKEN_DB` 持久化到 SQLite 以跨重启保留。
 
 ## 组件与目录
 
@@ -134,6 +135,7 @@ flowchart TB
 |------|------|
 | `github.com/google/uuid` | 生成 session_id 等唯一标识 |
 | `github.com/gorilla/websocket` | WebSocket 服务端（/ws/agent、/ws/client） |
+| `modernc.org/sqlite` | SQLite 驱动（`-token-db` 持久化 token） |
 
 ### Agent 节点（cc-agent/）
 

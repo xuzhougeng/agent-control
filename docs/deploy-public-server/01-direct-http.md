@@ -43,6 +43,8 @@ echo "ADMIN_TOKEN=$ADMIN_TOKEN"
   -offline-after-sec 30
 ```
 
+可选：如需 token 持久化，增加 `-token-db /opt/cc-control/tokens.db`（或在 `.env` 设置 `TOKEN_DB=/opt/cc-control/tokens.db`）。未设置时 token 仅内存，重启需重新签发。
+
 Systemd（可选）`/etc/systemd/system/cc-control.service`：
 
 ```ini

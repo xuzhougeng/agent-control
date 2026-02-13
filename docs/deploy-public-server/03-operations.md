@@ -117,7 +117,7 @@ curl -X POST https://<control-host>/tenant/tokens \
 ```
 
 说明：
-- token 为内存态，`cc-control` 重启后需重新签发或外部管理。
+- token 默认内存态；如需跨重启保留，可启动时配置 `-token-db <path>` 或 `TOKEN_DB=<path>`（SQLite）。
 - 切换后 `servers` 为空通常是 agent 仍使用旧 token。
 
 ### 4.4 逐台重启 agent

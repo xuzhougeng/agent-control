@@ -126,6 +126,8 @@ echo "ADMIN_TOKEN=$ADMIN_TOKEN"
   -offline-after-sec 30
 ```
 
+可选：如需 token 持久化，增加 `-token-db /opt/cc-control/tokens.db`（或在 `.env` 设置 `TOKEN_DB=/opt/cc-control/tokens.db`）。未设置时 token 仅内存，重启需重新签发。
+
 Systemd（可选）`/etc/systemd/system/cc-control.service`：
 
 ```ini
@@ -313,7 +315,11 @@ WantedBy=multi-user.target
 
 ```bash
 ADMIN_TOKEN=<your-admin-token>
+# optional: persist tokens across restarts
+TOKEN_DB=/opt/cc-control/tokens.db
 ```
+
+可选：如需 token 持久化，可设置 `TOKEN_DB`（或在 `ExecStart` 中添加 `-token-db /opt/cc-control/tokens.db`）。未设置时 token 仅内存，重启需重新签发。
 
 ```bash
 useradd -r -s /sbin/nologin cc
@@ -650,7 +656,7 @@ curl -X POST https://<control-host>/admin/tokens \
 ```
 
 说明：
-- token 为内存态，`cc-control` 重启后需重新签发或外部管理。
+- token 默认内存态；如需跨重启保留，可启动时配置 `-token-db <path>` 或 `TOKEN_DB=<path>`（SQLite）。
 - 切换后 `servers` 为空通常是 agent 仍使用旧 token。
 
 ### 4.4 逐台重启 agent

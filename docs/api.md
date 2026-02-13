@@ -32,6 +32,21 @@ UI Token 具备角色权限：
 
 Base URL：`http://127.0.0.1:18080`
 
+### 0) 校验 token
+
+- `GET /admin/verify` 或 `POST /admin/verify`
+- Header：`Authorization: Bearer <ADMIN_TOKEN>`
+- 响应：
+
+```json
+{
+  "ok": true,
+  "token_id": "uuid",
+  "type": "admin",
+  "tenant_id": ""
+}
+```
+
 ### 1) 创建 token
 
 - `POST /admin/tokens`
@@ -97,6 +112,21 @@ Base URL：`http://127.0.0.1:18080`
 ## Tenant API（自助签发 UI/Agent Token）
 
 Base URL：`http://127.0.0.1:18080`
+
+### 0) 校验 token
+
+- `GET /tenant/verify` 或 `POST /tenant/verify`
+- Header：`Authorization: Bearer <TENANT_TOKEN>`
+- 响应：
+
+```json
+{
+  "ok": true,
+  "token_id": "uuid",
+  "type": "tenant",
+  "tenant_id": "uuid"
+}
+```
 
 ### 1) 生成 UI + Agent token（自动撤销旧 token）
 

@@ -58,7 +58,11 @@ WantedBy=multi-user.target
 
 ```bash
 ADMIN_TOKEN=<your-admin-token>
+# optional: persist tokens across restarts
+TOKEN_DB=/opt/cc-control/tokens.db
 ```
+
+可选：如需 token 持久化，可设置 `TOKEN_DB`（或在 `ExecStart` 中添加 `-token-db /opt/cc-control/tokens.db`）。未设置时 token 仅内存，重启需重新签发。
 
 ```bash
 useradd -r -s /sbin/nologin cc
