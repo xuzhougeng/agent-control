@@ -36,11 +36,6 @@ jobs:
             pkg: ./cmd/cc-agent
             goos: darwin
             goarch: arm64
-          - component: cc-agent
-            dir: cc-agent
-            pkg: ./cmd/cc-agent
-            goos: windows
-            goarch: amd64
           - component: cc-control
             dir: cc-control
             pkg: ./cmd/cc-control
@@ -61,11 +56,6 @@ jobs:
             pkg: ./cmd/cc-control
             goos: darwin
             goarch: arm64
-          - component: cc-control
-            dir: cc-control
-            pkg: ./cmd/cc-control
-            goos: windows
-            goarch: amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
