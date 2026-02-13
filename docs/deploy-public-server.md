@@ -160,6 +160,13 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
+`/opt/cc-agent/.env`（权限 600）：
+
+```bash
+AGENT_TOKEN=<agent-token-from-admin-api>
+SERVER_ID=srv-gpu-01
+```
+
 可执行文件示例（按需选择其一）：
 
 ```bash
@@ -571,7 +578,7 @@ ExecStart=/opt/cc-agent/cc-agent \
 for host in gpu01 gpu02 gpu03; do
   scp cc-agent $host:/opt/cc-agent/
   ssh $host "cat > /opt/cc-agent/.env << EOF
-AGENT_TOKEN=<token>
+AGENT_TOKEN=<agent-token-from-admin-api>
 SERVER_ID=srv-$host
 EOF
 chmod 600 /opt/cc-agent/.env
