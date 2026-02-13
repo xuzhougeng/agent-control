@@ -54,10 +54,8 @@ scp -r ../ui root@1.2.3.4:/opt/cc-control/ui
 ### A.2 生成 Token
 
 ```bash
-AGENT_TOKEN=$(openssl rand -hex 32)
-UI_TOKEN=$(openssl rand -hex 32)
-echo "AGENT_TOKEN=$AGENT_TOKEN"
-echo "UI_TOKEN=$UI_TOKEN"
+ADMIN_TOKEN=$(openssl rand -hex 32)
+echo "ADMIN_TOKEN=$ADMIN_TOKEN"
 ```
 
 ### A.3 公网服务器：启动 cc-control
@@ -68,8 +66,7 @@ echo "UI_TOKEN=$UI_TOKEN"
 /opt/cc-control/cc-control \
   -addr 0.0.0.0:18080 \
   -ui-dir /opt/cc-control/ui \
-  -agent-token "$AGENT_TOKEN" \
-  -ui-token "$UI_TOKEN" \
+  -admin-token "$ADMIN_TOKEN" \
   -audit-path /opt/cc-control/audit.jsonl \
   -offline-after-sec 30
 ```
@@ -89,8 +86,7 @@ WorkingDirectory=/opt/cc-control
 ExecStart=/opt/cc-control/cc-control \
   -addr 0.0.0.0:18080 \
   -ui-dir /opt/cc-control/ui \
-  -agent-token ${AGENT_TOKEN} \
-  -ui-token ${UI_TOKEN} \
+  -admin-token ${ADMIN_TOKEN} \
   -audit-path /opt/cc-control/audit.jsonl \
   -offline-after-sec 30
 EnvironmentFile=/opt/cc-control/.env
@@ -102,6 +98,22 @@ WantedBy=multi-user.target
 ```
 
 **可选**：若需 UI 上的 Pending Approvals（根据终端输出自动检测审批提示并弹出 Approve/Reject），在 `ExecStart` 中增加 `-enable-prompt-detection`；默认不开启，用户可直接在终端里输入 y/n 或 Enter/Esc 完成交互。
+
+### A.3.1 生成 UI/Agent Token（Admin API）
+
+```bash
+# UI token（owner 角色），返回 tenant_id
+curl -X POST http://1.2.3.4:18080/admin/tokens \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"ui","role":"owner"}'
+
+# Agent token（绑定上一步 tenant_id）
+curl -X POST http://1.2.3.4:18080/admin/tokens \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"agent","tenant_id":"<tenant_id>"}'
+```
 
 防火墙只放行该端口：
 
@@ -115,7 +127,7 @@ ufw enable
 ```bash
 /opt/cc-agent/cc-agent \
   -control-url ws://1.2.3.4:18080/ws/agent \
-  -agent-token "$AGENT_TOKEN" \
+  -agent-token "<agent-token>" \
   -server-id srv-gpu-01 \
   -allow-root /home/deploy/repos \
   -claude-path /path/to/ai-cli
@@ -169,7 +181,7 @@ journalctl -u cc-agent -f
 
 # 浏览器访问
 http://1.2.3.4:18080
-# 输入 UI_TOKEN 登录
+# 输入 UI token 登录
 ```
 
 ### A.6 安全注意事项
@@ -226,10 +238,8 @@ scp -r ../ui root@1.2.3.4:/opt/cc-control/ui
 ### B.2 生成 Token
 
 ```bash
-AGENT_TOKEN=$(openssl rand -hex 32)
-UI_TOKEN=$(openssl rand -hex 32)
-echo "AGENT_TOKEN=$AGENT_TOKEN"
-echo "UI_TOKEN=$UI_TOKEN"
+ADMIN_TOKEN=$(openssl rand -hex 32)
+echo "ADMIN_TOKEN=$ADMIN_TOKEN"
 ```
 
 ### B.3 cc-control Systemd 服务
@@ -249,8 +259,7 @@ WorkingDirectory=/opt/cc-control
 ExecStart=/opt/cc-control/cc-control \
   -addr 127.0.0.1:18080 \
   -ui-dir /opt/cc-control/ui \
-  -agent-token ${AGENT_TOKEN} \
-  -ui-token ${UI_TOKEN} \
+  -admin-token ${ADMIN_TOKEN} \
   -audit-path /opt/cc-control/audit.jsonl \
   -offline-after-sec 30
 EnvironmentFile=/opt/cc-control/.env
@@ -264,8 +273,7 @@ WantedBy=multi-user.target
 `/opt/cc-control/.env`（权限 600）：
 
 ```bash
-AGENT_TOKEN=<your-agent-token>
-UI_TOKEN=<your-ui-token>
+ADMIN_TOKEN=<your-admin-token>
 ```
 
 ```bash
@@ -277,6 +285,22 @@ systemctl enable --now cc-control
 ```
 
 **可选**：若需 Pending Approvals 自动检测，在 `ExecStart` 中增加 `-enable-prompt-detection`（默认不开启）。
+
+### B.3.1 生成 UI/Agent Token（Admin API）
+
+```bash
+# UI token（owner 角色），返回 tenant_id
+curl -X POST https://cc.example.com/admin/tokens \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"ui","role":"owner"}'
+
+# Agent token（绑定上一步 tenant_id）
+curl -X POST https://cc.example.com/admin/tokens \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"agent","tenant_id":"<tenant_id>"}'
+```
 
 ### B.4 Nginx 反向代理 + TLS
 
@@ -369,7 +393,7 @@ WantedBy=multi-user.target
 `/opt/cc-agent/.env`（权限 600）：
 
 ```bash
-AGENT_TOKEN=<same-agent-token-as-control>
+AGENT_TOKEN=<agent-token-from-admin-api>
 SERVER_ID=srv-gpu-01
 ```
 
@@ -383,7 +407,7 @@ systemctl enable --now cc-agent
 
 ```bash
 journalctl -u cc-agent -f
-# 浏览器: https://cc.example.com  用 UI_TOKEN 登录
+# 浏览器: https://cc.example.com  用 UI token 登录
 ```
 
 ---
@@ -420,7 +444,7 @@ openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
 
 ### B'.2 cc-control 与 B 相同
 
-与方案 B 的 B.1～B.3 一致：cc-control 监听 `127.0.0.1:18080`，由 Nginx 反向代理。可选参数（如 `-enable-prompt-detection`）同 B.3。
+与方案 B 的 B.1～B.3 一致：cc-control 监听 `127.0.0.1:18080`，由 Nginx 反向代理（使用 `-admin-token`）。可选参数（如 `-enable-prompt-detection`）同 B.3。
 
 ### B'.3 Nginx 使用自签名证书
 
@@ -470,7 +494,7 @@ ufw enable
 /opt/cc-agent/cc-agent \
   -control-url wss://1.2.3.4/ws/agent \
   -tls-skip-verify \
-  -agent-token "$AGENT_TOKEN" \
+  -agent-token "<agent-token>" \
   -server-id srv-gpu-01 \
   -allow-root /home/deploy/repos \
   -claude-path /path/to/ai-cli
@@ -491,7 +515,7 @@ ExecStart=/opt/cc-agent/cc-agent \
 
 ### B'.5 验证
 
-- 浏览器访问 `https://1.2.3.4`，会提示证书不受信任，手动「继续访问」后用 UI_TOKEN 登录。
+- 浏览器访问 `https://1.2.3.4`，会提示证书不受信任，手动「继续访问」后用 UI token 登录。
 - 内网机器：`journalctl -u cc-agent -f` 确认连接成功。
 
 **注意**：`-tls-skip-verify` 仅适用于受控环境（如自签名或内网）。在公网对不可信服务器不要开启，以免中间人攻击。
@@ -512,16 +536,16 @@ ExecStart=/opt/cc-agent/cc-agent \
      - 方案 A：`http://公网IP:18080`（如 `http://1.2.3.4:18080`）
      - 方案 B：`https://域名`（如 `https://cc.example.com`）
      - 方案 B'：`https://公网IP`，必须勾选 **Skip TLS verification**（macOS 无证书信任弹窗，需在客户端跳过校验）
-   - **UI Token**：与 `cc-control -ui-token` 一致
+   - **UI Token**：由 Admin API 生成的 UI token
 3. 点击 **Save & Reconnect**
 
 详细说明见 [app/AgentControlMac/README.md](../app/AgentControlMac/README.md)。
 
 ### 2.2 浏览器
 
-- 方案 A：`http://公网IP:18080`，输入 UI_TOKEN 登录
-- 方案 B：`https://域名`，输入 UI_TOKEN 登录
-- 方案 B'：`https://公网IP`，先接受自签名证书警告，再输入 UI_TOKEN
+- 方案 A：`http://公网IP:18080`，输入 UI token 登录
+- 方案 B：`https://域名`，输入 UI token 登录
+- 方案 B'：`https://公网IP`，先接受自签名证书警告，再输入 UI token
 
 ---
 

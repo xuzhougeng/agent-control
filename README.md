@@ -17,7 +17,8 @@ flowchart LR
 - `ui/`: static browser UI (`xterm.js`)
 - `app/AgentControlMac/`: macOS/iOS native client
 
-架构详图与部署拓扑见 **`docs/architecture.md`**（Mermaid）。
+For detailed architecture diagrams and deployment topologies, see **`docs/architecture.md`** (Mermaid).
+
 
 ## Quick Start
 
@@ -30,8 +31,27 @@ cd cc-control
 go run ./cmd/cc-control \
   -addr :18080 \
   -ui-dir ../ui \
+  -admin-token admin-dev-token \
   -agent-token agent-dev-token \
-  -ui-token admin-dev-token
+  -ui-token ui-dev-token
+```
+
+Note: `-agent-token` / `-ui-token` are legacy single-tenant tokens. If provided, they are seeded into a default tenant. For multi-tenant usage, create tokens via the admin API (see below).
+
+Create multi-tenant tokens via admin API:
+
+```bash
+# Create UI token (owner role) and get tenant_id
+curl -X POST http://127.0.0.1:18080/admin/tokens \
+  -H "Authorization: Bearer admin-dev-token" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"ui","role":"owner"}'
+
+# Create Agent token for the same tenant_id
+curl -X POST http://127.0.0.1:18080/admin/tokens \
+  -H "Authorization: Bearer admin-dev-token" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"agent","tenant_id":"<tenant_id>"}'
 ```
 
 2. Start one agent on a server:
@@ -40,7 +60,7 @@ go run ./cmd/cc-control \
 cd cc-agent
 go run ./cmd/cc-agent \
   -control-url ws://127.0.0.1:18080/ws/agent \
-  -agent-token agent-dev-token \
+  -agent-token <agent-token> \
   -server-id srv-local \
   -allow-root /path/to/repo \
   -claude-path /path/to/ai-cli
@@ -63,7 +83,7 @@ Example executable paths (use your own environment values):
 
 `http://127.0.0.1:18080`
 
-Use UI token: `admin-dev-token`.
+Use UI token from admin API (role-based).
 
 ## What Works
 
@@ -80,12 +100,13 @@ Use UI token: `admin-dev-token`.
 - Agent-side cwd whitelist (`-allow-root`)
 - Runtime executable configurable via `-claude-path` (supports different AI CLIs)
 - Env allowlist/prefix on agent (`-env-allow-keys`, `-env-allow-prefix`)
-- Separate agent/UI bearer tokens
+- Separate agent/UI bearer tokens with tenant isolation
+- UI token roles: `viewer` / `operator` / `owner`
+- Admin token for token issuance/revocation
 - Basic per-token rate limiting on control plane
 
 ## Docs
 
-- **架构（Mermaid）**: `docs/architecture.md`
+- Architecture: `docs/architecture.md`
 - API reference (REST + WS): `docs/api.md`
 - Public deployment guide: `docs/deploy-public-server.md`
-

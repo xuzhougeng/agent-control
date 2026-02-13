@@ -24,6 +24,12 @@ flowchart TB
     CC <-->|"WS /ws/agent\n(Agent Token)"| A2
 ```
 
+## 多用户隔离（匿名租户）
+
+- `agent_token` 与 `ui_token` 均绑定 `tenant_id`，中心服务器只按 tenant 维度隔离，不关心真实身份。
+- UI 角色：`viewer` / `operator` / `owner`。
+- `admin_token` 用于生成/撤销 token。
+
 ## 组件与目录
 
 ```mermaid

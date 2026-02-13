@@ -23,7 +23,7 @@ Select the **AgentControlMac** scheme (macOS) or **AgentControliOS** scheme (iOS
 
 ## Configuration
 
-On first launch both apps connect to `http://127.0.0.1:18080` with token `admin-dev-token`.
+On first launch both apps connect to `http://127.0.0.1:18080` with token `admin-dev-token` (legacy single-tenant mode).
 
 **macOS**: Change in **Settings** (Cmd+,).
 **iOS**: Tap the **gear icon** in the toolbar.
@@ -31,9 +31,20 @@ On first launch both apps connect to `http://127.0.0.1:18080` with token `admin-
 | Field    | Description                                   |
 |----------|-----------------------------------------------|
 | Base URL | HTTP(S) address of the `cc-control` server    |
-| UI Token | Bearer token matching `cc-control -ui-token`  |
+| UI Token | Bearer token created via Admin API            |
 
 The token is stored in the platform Keychain; the URL in UserDefaults.
+
+### Getting a UI Token (Admin API)
+
+If `cc-control` is running with `-admin-token`, create a UI token:
+
+```bash
+curl -X POST http://127.0.0.1:18080/admin/tokens \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"ui","role":"owner"}'
+```
 
 ### Connecting to a Remote Server
 

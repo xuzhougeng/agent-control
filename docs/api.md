@@ -10,10 +10,85 @@
 
 ## 鉴权
 
-UI Token（默认 `admin-dev-token`）可通过两种方式传递：
+UI Token 可通过两种方式传递：
 
 - HTTP：`Authorization: Bearer <token>`
 - WebSocket：`ws://host:port/ws/client?token=<token>`（也支持 Authorization header）
+
+UI Token 具备角色权限：
+
+- `viewer`：只读
+- `operator`：可创建/停止会话，发送终端输入与动作
+- `owner`：包含 `operator` 权限 + 删除会话
+
+> Admin Token 仅用于管理接口（见下文），不用于 UI/WS。
+> 所有请求均按 token 所属 `tenant_id` 隔离，跨租户资源会返回 `not found`。
+
+---
+
+## Admin API（Token 管理）
+
+Base URL：`http://127.0.0.1:18080`
+
+### 1) 创建 token
+
+- `POST /admin/tokens`
+- Header：`Authorization: Bearer <ADMIN_TOKEN>`
+- 请求体：
+
+```json
+{
+  "type": "ui|agent",
+  "tenant_id": "optional",
+  "role": "viewer|operator|owner (ui only)",
+  "name": "optional"
+}
+```
+
+- 响应（仅返回一次明文 token）：
+
+```json
+{
+  "token": "plain-text",
+  "token_id": "uuid",
+  "tenant_id": "uuid",
+  "type": "ui|agent",
+  "role": "viewer|operator|owner",
+  "created_at_ms": 1730000000000
+}
+```
+
+### 2) 撤销 token
+
+- `POST /admin/tokens/{token_id}/revoke`
+- Header：`Authorization: Bearer <ADMIN_TOKEN>`
+- 响应：
+
+```json
+{"ok": true}
+```
+
+### 3) 列出 token
+
+- `GET /admin/tokens?tenant_id=...`
+- Header：`Authorization: Bearer <ADMIN_TOKEN>`
+- 响应：
+
+```json
+{
+  "tokens": [
+    {
+      "token_id": "uuid",
+      "tenant_id": "uuid",
+      "type": "ui|agent|admin",
+      "role": "viewer|operator|owner",
+      "created_at_ms": 1730000000000,
+      "revoked": false,
+      "name": "optional"
+    }
+  ]
+}
+```
 
 ---
 
@@ -33,6 +108,7 @@ Base URL：`http://127.0.0.1:18080`
 ### 2) 查询服务器
 
 - `GET /api/servers`
+- 角色要求：`viewer` 及以上
 - 响应：
 
 ```json
@@ -51,10 +127,12 @@ Base URL：`http://127.0.0.1:18080`
 
 - `GET /api/sessions`
 - 可选过滤：`GET /api/sessions?server_id=srv-local`
+- 角色要求：`viewer` 及以上
 
 ### 4) 创建会话
 
 - `POST /api/sessions`
+- 角色要求：`operator` 及以上
 - 请求体：
 
 ```json
@@ -73,6 +151,7 @@ Base URL：`http://127.0.0.1:18080`
 ### 5) 停止会话
 
 - `POST /api/sessions/{session_id}/stop`
+- 角色要求：`operator` 及以上
 - 请求体（可空）：
 
 ```json
@@ -85,11 +164,13 @@ Base URL：`http://127.0.0.1:18080`
 ### 6) 查询会话事件
 
 - `GET /api/sessions/{session_id}/events`
+- 角色要求：`viewer` 及以上
 - 返回 `events`。如果启用了 `cc-control -enable-prompt-detection`，可能会出现 `approval_needed`（以及对应的 resolved 状态）；否则通常为空或仅包含非 approval 类事件（如未来扩展）。
 
 ### 7) 删除会话
 
 - `DELETE /api/sessions/{session_id}`
+- 角色要求：`owner`
 - 删除语义等价于 `Stop + Deletion`：
   - 若会话处于 `starting/running/stopping`，服务端会先发送 stop，再立即删除会话记录；
   - 若会话已结束/错误，直接删除会话记录。
@@ -136,6 +217,7 @@ Base URL：`http://127.0.0.1:18080`
 #### `term_in`
 
 向终端写入输入（Base64）。
+角色要求：`operator` 及以上
 
 ```json
 {
@@ -150,6 +232,7 @@ Base URL：`http://127.0.0.1:18080`
 #### `action`
 
 审批/拒绝/停止动作。
+角色要求：`operator` 及以上
 
 ```json
 {
@@ -171,6 +254,7 @@ Base URL：`http://127.0.0.1:18080`
 注意：`approve/reject` 仅在 `awaiting_approval=true`（通常意味着启用了 `-enable-prompt-detection` 且命中了 prompt）时有效，否则会返回 `no pending approval`。
 
 #### `resize`
+角色要求：`operator` 及以上
 
 ```json
 {
