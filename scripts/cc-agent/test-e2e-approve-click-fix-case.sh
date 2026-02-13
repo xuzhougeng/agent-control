@@ -85,6 +85,11 @@ else
     -enable-prompt-detection \
     >"$CONTROL_LOG" 2>&1 &
   CONTROL_PID="$!"
+  sleep 0.5
+  if ! kill -0 "$CONTROL_PID" 2>/dev/null; then
+    echo "[cc-agent][e2e] cc-control exited during startup"
+    print_logs_and_exit 1
+  fi
 fi
 
 if [[ "$USE_EXISTING_AGENT" == "1" ]]; then
@@ -107,6 +112,11 @@ else
     -claude-path "$CLAUDE_PATH" \
     >"$AGENT_LOG" 2>&1 &
   AGENT_PID="$!"
+  sleep 0.5
+  if ! kill -0 "$AGENT_PID" 2>/dev/null; then
+    echo "[cc-agent][e2e] cc-agent exited during startup"
+    print_logs_and_exit 1
+  fi
 fi
 
 set +e

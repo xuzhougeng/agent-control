@@ -32,7 +32,9 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-PS_OUTPUT="$(ps -ax -o pid= -o command=)"
+# `ps` may be restricted in hardened/sandboxed environments.
+# Keep auto-discovery best-effort and fall back to explicit args/env.
+PS_OUTPUT="$(ps -ax -o pid= -o command= 2>/dev/null || true)"
 
 # Auto-discover cc-control runtime flags from process list:
 #   -addr, -ui-token, -agent-token
@@ -244,6 +246,11 @@ fi
 if [[ -z "$AGENT_TOKEN" ]]; then
   echo "no online server and AGENT_TOKEN not discovered; set AGENT_TOKEN or bring an agent online" >&2
   exit 1
+fi
+
+if [[ -z "$ALLOW_ROOT_ENV_RAW" ]]; then
+  ALLOW_ROOT_ENV_RAW="$ROOT_DIR"
+  echo "[cc-agent][auto] ALLOW_ROOT not set; using repo root: ${ALLOW_ROOT_ENV_RAW}"
 fi
 
 SERVER_ID_AUTO="${SERVER_ID_INPUT:-srv-e2e-auto-$(date +%s)}"

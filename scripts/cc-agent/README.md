@@ -6,6 +6,12 @@
 bash scripts/cc-agent/test-all.sh
 ```
 
+Run with e2e approve check:
+
+```bash
+RUN_E2E_APPROVE=1 bash scripts/cc-agent/test-all.sh
+```
+
 ## Scripts
 
 - `test-unit.sh`: runs `go test` in `cc-agent`.
@@ -28,7 +34,9 @@ bash scripts/cc-agent/test-all.sh
   - auto-selects an online `SERVER_ID` if not provided
   - if no online server is available, it auto-starts a temporary agent (when
     `AGENT_TOKEN` is available)
+  - if `ALLOW_ROOT` is unset in that branch, defaults to repo root
 - `test-all.sh`: runs unit + integration in sequence.
+  - set `RUN_E2E_APPROVE=1` to include approve e2e.
 
 ## Useful env overrides
 

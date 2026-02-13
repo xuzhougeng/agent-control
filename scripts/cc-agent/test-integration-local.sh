@@ -55,6 +55,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if command -v lsof >/dev/null 2>&1; then
+  if lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "port ${PORT} already in use; set PORT to another value" >&2
+    exit 1
+  fi
+fi
+
 echo "[cc-agent][integration] logs: ${TMP_DIR}"
 echo "[cc-agent][integration] starting cc-control on :${PORT}"
 go -C "$ROOT_DIR/cc-control" run ./cmd/cc-control \
@@ -65,6 +72,11 @@ go -C "$ROOT_DIR/cc-control" run ./cmd/cc-control \
   -audit-path "$AUDIT_PATH" \
   >"$CONTROL_LOG" 2>&1 &
 CONTROL_PID="$!"
+sleep 0.5
+if ! kill -0 "$CONTROL_PID" 2>/dev/null; then
+  echo "[cc-agent][integration] cc-control exited during startup"
+  print_logs_and_exit 1
+fi
 
 echo "[cc-agent][integration] starting cc-agent (server_id=${SERVER_ID})"
 go -C "$ROOT_DIR/cc-agent" run ./cmd/cc-agent \
@@ -75,6 +87,11 @@ go -C "$ROOT_DIR/cc-agent" run ./cmd/cc-agent \
   -claude-path "$CLAUDE_PATH" \
   >"$AGENT_LOG" 2>&1 &
 AGENT_PID="$!"
+sleep 0.5
+if ! kill -0 "$AGENT_PID" 2>/dev/null; then
+  echo "[cc-agent][integration] cc-agent exited during startup"
+  print_logs_and_exit 1
+fi
 
 set +e
 python3 - "$CONTROL_URL" "$UI_TOKEN" "$SERVER_ID" "$ALLOW_ROOT" "$HEARTBEAT_WAIT_SEC" <<'PY'
