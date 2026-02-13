@@ -16,9 +16,10 @@ type TokenType string
 type TokenRole string
 
 const (
-	TokenTypeUI    TokenType = "ui"
-	TokenTypeAgent TokenType = "agent"
-	TokenTypeAdmin TokenType = "admin"
+	TokenTypeUI     TokenType = "ui"
+	TokenTypeAgent  TokenType = "agent"
+	TokenTypeAdmin  TokenType = "admin"
+	TokenTypeTenant TokenType = "tenant"
 )
 
 const (
@@ -53,7 +54,7 @@ func NewStore() *Store {
 
 func ParseType(v string) (TokenType, bool) {
 	switch TokenType(v) {
-	case TokenTypeUI, TokenTypeAgent, TokenTypeAdmin:
+	case TokenTypeUI, TokenTypeAgent, TokenTypeAdmin, TokenTypeTenant:
 		return TokenType(v), true
 	default:
 		return "", false
@@ -189,6 +190,33 @@ func (s *Store) RevokeToken(tokenID string) bool {
 	return true
 }
 
+func (s *Store) RevokeTokensByTenant(tenantID string, types ...TokenType) int {
+	if tenantID == "" || len(types) == 0 {
+		return 0
+	}
+	typeSet := make(map[TokenType]struct{}, len(types))
+	for _, tt := range types {
+		typeSet[tt] = struct{}{}
+	}
+	count := 0
+	s.mu.Lock()
+	for _, rec := range s.byID {
+		if rec.TenantID != tenantID {
+			continue
+		}
+		if _, ok := typeSet[rec.Type]; !ok {
+			continue
+		}
+		if rec.Revoked {
+			continue
+		}
+		rec.Revoked = true
+		count++
+	}
+	s.mu.Unlock()
+	return count
+}
+
 func (s *Store) ListTokens(tenantID string) []TokenRecord {
 	s.mu.RLock()
 	out := make([]TokenRecord, 0, len(s.byID))
@@ -210,7 +238,7 @@ func HashToken(token string) string {
 
 func validType(tt TokenType) bool {
 	switch tt {
-	case TokenTypeUI, TokenTypeAgent, TokenTypeAdmin:
+	case TokenTypeUI, TokenTypeAgent, TokenTypeAdmin, TokenTypeTenant:
 		return true
 	default:
 		return false

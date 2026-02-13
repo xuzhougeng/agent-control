@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -49,6 +50,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/sessions/", s.withUIAuth(s.handleSessionSubroutes))
 	mux.HandleFunc("/admin/tokens", s.withAdminAuth(s.handleAdminTokens))
 	mux.HandleFunc("/admin/tokens/", s.withAdminAuth(s.handleAdminTokenSubroutes))
+	mux.HandleFunc("/tenant/tokens", s.withTenantAuth(s.handleTenantTokens))
 	mux.HandleFunc("/api/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
@@ -88,6 +90,22 @@ func (s *Server) withAdminAuth(next authedHandler) http.HandlerFunc {
 		}
 		rec, ok := s.Tokens.Lookup(token)
 		if !ok || rec.Revoked || rec.Type != auth.TokenTypeAdmin {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r, rec)
+	}
+}
+
+func (s *Server) withTenantAuth(next authedHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := extractToken(r)
+		if token == "" || s.Tokens == nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		rec, ok := s.Tokens.Lookup(token)
+		if !ok || rec.Revoked || rec.Type != auth.TokenTypeTenant || !s.CP.RateAllow("tenant:"+rec.TokenID) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -257,6 +275,74 @@ func (s *Server) handleAdminTokens(w http.ResponseWriter, r *http.Request, _ *au
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleTenantTokens(w http.ResponseWriter, r *http.Request, rec *auth.TokenRecord) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if rec.TenantID == "" {
+		http.Error(w, "tenant token missing tenant_id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		TenantID  string `json:"tenant_id"`
+		Role      string `json:"role"`
+		UIName    string `json:"ui_name"`
+		AgentName string `json:"agent_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	tenantID := strings.TrimSpace(req.TenantID)
+	if tenantID == "" {
+		tenantID = rec.TenantID
+	}
+	if tenantID != rec.TenantID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	role := auth.RoleOwner
+	if strings.TrimSpace(req.Role) != "" {
+		var roleOK bool
+		role, roleOK = auth.ParseRole(strings.TrimSpace(req.Role))
+		if !roleOK {
+			http.Error(w, "invalid role", http.StatusBadRequest)
+			return
+		}
+	}
+
+	revoked := s.Tokens.RevokeTokensByTenant(tenantID, auth.TokenTypeUI, auth.TokenTypeAgent)
+	uiPlain, uiRec, err := s.Tokens.CreateToken(auth.TokenTypeUI, role, tenantID, strings.TrimSpace(req.UIName))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	agentPlain, agentRec, err := s.Tokens.CreateToken(auth.TokenTypeAgent, "", tenantID, strings.TrimSpace(req.AgentName))
+	if err != nil {
+		_ = s.Tokens.RevokeToken(uiRec.TokenID)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"tenant_id":     tenantID,
+		"revoked_count": revoked,
+		"ui": map[string]any{
+			"token":         uiPlain,
+			"token_id":      uiRec.TokenID,
+			"type":          uiRec.Type,
+			"role":          uiRec.Role,
+			"created_at_ms": uiRec.CreatedAtMS,
+		},
+		"agent": map[string]any{
+			"token":         agentPlain,
+			"token_id":      agentRec.TokenID,
+			"type":          agentRec.Type,
+			"created_at_ms": agentRec.CreatedAtMS,
+		},
+	})
 }
 
 func (s *Server) handleAdminTokenSubroutes(w http.ResponseWriter, r *http.Request, _ *auth.TokenRecord) {
