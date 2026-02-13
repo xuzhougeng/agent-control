@@ -1,30 +1,27 @@
 # Agent Control (AI Agent Control Plane MVP)
 
-Minimal multi-server controller for launching and managing AI coding tool sessions (for example: Claude Code, Codex, Gemini CLI, OpenCode).
+Multi-server control plane for AI coding runtimes (Claude Code, Codex, Gemini CLI, OpenCode).
 
 ## Layout
 
 ```mermaid
 flowchart LR
-    Browser["Browser"] --> CC["cc-control"]
+    Browser["Browser UI"] --> CC["cc-control"]
     App["macOS/iOS App"] --> CC
     CC <--> A1["cc-agent"]
     CC <--> A2["cc-agent"]
 ```
 
-- `cc-control/`: control plane (REST + WS + audit + optional prompt detection)
-- `cc-agent/`: per-server agent (WS outbound, PTY spawn/stream/input)
+- `cc-control/`: control plane (`REST + WS + audit + token management + optional prompt detection`)
+- `cc-agent/`: per-server agent (`WS outbound + PTY spawn/stream/input`)
 - `ui/`: static browser UI (`xterm.js`)
-- `app/AgentControlMac/`: macOS/iOS native client
+- `app/AgentControlMac/`: native macOS/iOS client
 
-For detailed architecture diagrams and deployment topologies, see **`docs/architecture.md`** (Mermaid).
+## Quick Start (Current Version)
 
+For production deployment (including TLS), use `docs/deploy-public-server.md`.
 
-## Quick Start
-
-Only for test, for depolyment see `docs/deploy-public-server.md`.
-
-1. Start control plane:
+1. Start `cc-control` with an admin token.
 
 ```bash
 cd cc-control
@@ -32,29 +29,27 @@ go run ./cmd/cc-control \
   -addr :18080 \
   -ui-dir ../ui \
   -admin-token admin-dev-token \
-  -agent-token agent-dev-token \
-  -ui-token ui-dev-token
+  -audit-path ./audit.jsonl \
+  -offline-after-sec 30
 ```
 
-Note: `-agent-token` / `-ui-token` are legacy single-tenant tokens. If provided, they are seeded into a default tenant. For multi-tenant usage, create tokens via the admin API (see below).
-
-Create multi-tenant tokens via admin API:
+2. Create UI/Agent tokens via Admin API.
 
 ```bash
-# Create UI token (owner role) and get tenant_id
+# Create UI token (owner role). Save both token and tenant_id from response.
 curl -X POST http://127.0.0.1:18080/admin/tokens \
   -H "Authorization: Bearer admin-dev-token" \
   -H "Content-Type: application/json" \
   -d '{"type":"ui","role":"owner"}'
 
-# Create Agent token for the same tenant_id
+# Create Agent token for the same tenant_id.
 curl -X POST http://127.0.0.1:18080/admin/tokens \
   -H "Authorization: Bearer admin-dev-token" \
   -H "Content-Type: application/json" \
   -d '{"type":"agent","tenant_id":"<tenant_id>"}'
 ```
 
-2. Start one agent on a server:
+3. Start one `cc-agent`.
 
 ```bash
 cd cc-agent
@@ -66,47 +61,62 @@ go run ./cmd/cc-agent \
   -claude-path /path/to/ai-cli
 ```
 
-Example executable paths (use your own environment values):
+Example executable values for `-claude-path`:
 
 ```bash
-# OpenCode
--claude-path /path/to/opencode
-
-# Codex
--claude-path /path/to/codex
-
-# Gemini CLI
--claude-path /path/to/gemini
+/path/to/opencode
+/path/to/codex
+/path/to/gemini
 ```
 
-3. Open browser:
+4. Open browser UI:
 
 `http://127.0.0.1:18080`
 
-Use UI token from admin API (role-based).
+Login with the UI token returned by `/admin/tokens`.
 
-## What Works
+## Token Model (Latest)
+
+- Recommended: use `-admin-token` + `POST /admin/tokens` for multi-tenant tokens.
+- UI token roles: `viewer` / `operator` / `owner`.
+- Legacy compatibility: `-ui-token` and `-agent-token` are still accepted and seeded into a default tenant.
+- Admin-generated tokens are in-memory; restart clears them unless you reseed at startup.
+
+## Deployment Modes
+
+- Direct HTTP (`ws://`): fast testing in trusted networks.
+- Nginx + TLS (Let's Encrypt): recommended for production with domain.
+- Nginx + self-signed TLS (`wss://<ip>`): no domain but encrypted transport.
+
+Full guide: `docs/deploy-public-server.md`
+
+## Upgrade Note (Breaking Allowed)
+
+- If you migrate from legacy `-ui-token/-agent-token` to admin-token mode, switch `cc-control` to `-admin-token` first.
+- Then issue fresh UI/Agent tokens via `POST /admin/tokens` and restart agents with the new agent token.
+- During cutover, `servers` may appear empty until agents reconnect with new token.
+- For self-signed TLS, agent must add `-tls-skip-verify`.
+
+## Current Capabilities
 
 - Server register + heartbeat online/offline
-- Create session on selected server
-- PTY stream to xterm.js and input roundtrip
-- Resize + stop session (TERM then KILL)
-- Optional prompt detection (`approve/reject`, `(y/n)`, etc.) to emit `approval_needed` events (**off by default**; enable via `-enable-prompt-detection`)
-- Approve/Reject actions (when `awaiting_approval=true`) mapped to `y\n` / `n\n` (or Enter/Esc for menu prompts)
+- Session create/attach/resize/stop/delete
+- PTY streaming to UI/App and input roundtrip
+- Optional prompt detection (`-enable-prompt-detection`, default off)
+- Approve/Reject action routing (`y/n`, Enter/Esc patterns)
 - JSONL audit log (`cc-control/audit.jsonl`)
+- Token issue/list/revoke admin API with tenant isolation
 
 ## Security Baseline (MVP)
 
 - Agent-side cwd whitelist (`-allow-root`)
-- Runtime executable configurable via `-claude-path` (supports different AI CLIs)
-- Env allowlist/prefix on agent (`-env-allow-keys`, `-env-allow-prefix`)
-- Separate agent/UI bearer tokens with tenant isolation
-- UI token roles: `viewer` / `operator` / `owner`
-- Admin token for token issuance/revocation
-- Basic per-token rate limiting on control plane
+- Runtime executable path control (`-claude-path`)
+- Env allowlist/prefix (`-env-allow-keys`, `-env-allow-prefix`)
+- Token-based tenant isolation with role checks
+- Basic per-token rate limiting in control plane
 
 ## Docs
 
 - Architecture: `docs/architecture.md`
-- API reference (REST + WS): `docs/api.md`
+- API reference: `docs/api.md`
 - Public deployment guide: `docs/deploy-public-server.md`
