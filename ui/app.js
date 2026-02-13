@@ -66,6 +66,8 @@
   const adminGenerateBtn = document.getElementById("adminGenerateBtn");
   const adminCopyTokenBtn = document.getElementById("adminCopyTokenBtn");
   const adminListTenantsBtn = document.getElementById("adminListTenantsBtn");
+  const adminExportBtn = document.getElementById("adminExportBtn");
+  const adminExportCsvBtn = document.getElementById("adminExportCsvBtn");
   const adminMessage = document.getElementById("adminMessage");
   const adminResult = document.getElementById("adminResult");
   const adminTenantList = document.getElementById("adminTenantList");
@@ -331,6 +333,8 @@
     adminListTenantsBtn.addEventListener("click", () => {
       listAdminTenantTokens();
     });
+    adminExportBtn.addEventListener("click", exportAdminTokens);
+    adminExportCsvBtn.addEventListener("click", exportAdminTokensCsv);
     renderAdminResult(null);
     renderAdminTenantTokens();
     updateAdminCopyState();
@@ -830,6 +834,12 @@
     if (adminListTenantsBtn) {
       adminListTenantsBtn.disabled = !verified;
     }
+    if (adminExportBtn) {
+      adminExportBtn.disabled = !verified;
+    }
+    if (adminExportCsvBtn) {
+      adminExportCsvBtn.disabled = !verified;
+    }
     if (!verified) {
       setAdminMessage("");
       adminCopyTokenBtn.disabled = true;
@@ -897,6 +907,117 @@
       return;
     }
     adminCopyTokenBtn.disabled = !latestToken;
+  }
+
+  function formatExportFilename(prefix) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return `${prefix}-${stamp}.json`;
+  }
+
+  function formatExportCsvFilename(prefix) {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return `${prefix}-${stamp}.csv`;
+  }
+
+  function toCsvValue(value) {
+    const raw = value === undefined || value === null ? "" : String(value);
+    const escaped = raw.replaceAll('"', '""');
+    if (/[",\n]/.test(escaped)) {
+      return `"${escaped}"`;
+    }
+    return escaped;
+  }
+
+  function buildAdminExportRecords() {
+    const records = [];
+    const seen = new Set();
+    for (const rec of state.adminTenantTokens) {
+      if (!rec || !rec.token_id || seen.has(rec.token_id)) {
+        continue;
+      }
+      seen.add(rec.token_id);
+      records.push({
+        tenant_id: rec.tenant_id || "",
+        token_id: rec.token_id,
+        token: getCachedAdminToken(rec.token_id) || "",
+        created_at_ms: rec.created_at_ms || 0,
+        revoked: Boolean(rec.revoked),
+      });
+    }
+    if (records.length === 0 && state.lastGeneratedToken && state.lastGeneratedToken.token_id) {
+      records.push({
+        tenant_id: state.lastGeneratedToken.tenant_id || "",
+        token_id: state.lastGeneratedToken.token_id,
+        token: state.lastGeneratedToken.token || "",
+        created_at_ms: state.lastGeneratedToken.created_at_ms || 0,
+        revoked: false,
+      });
+    }
+    return records;
+  }
+
+  function exportAdminTokensCsv() {
+    if (!state.adminVerified) {
+      setAdminMessage("Verify admin token first.", true);
+      return;
+    }
+    const records = buildAdminExportRecords();
+    if (!records.length) {
+      setAdminMessage("No tenant tokens available to export.", true);
+      return;
+    }
+    const header = ["tenant_id", "token_id", "token", "created_at_ms", "revoked"];
+    const lines = [header.map(toCsvValue).join(",")];
+    for (const rec of records) {
+      lines.push([
+        toCsvValue(rec.tenant_id),
+        toCsvValue(rec.token_id),
+        toCsvValue(rec.token),
+        toCsvValue(rec.created_at_ms),
+        toCsvValue(rec.revoked),
+      ].join(","));
+    }
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = formatExportCsvFilename("tenant-tokens");
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setAdminMessage(`Exported ${records.length} token(s) to CSV.`);
+  }
+
+  function exportAdminTokens() {
+    if (!state.adminVerified) {
+      setAdminMessage("Verify admin token first.", true);
+      return;
+    }
+    const records = buildAdminExportRecords();
+    if (!records.length) {
+      setAdminMessage("No tenant tokens available to export.", true);
+      return;
+    }
+    const payload = {
+      exported_at_ms: Date.now(),
+      tokens: records,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = formatExportFilename("tenant-tokens");
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setAdminMessage(`Exported ${records.length} token(s).`);
   }
 
   function formatTenantTokenClipboard(tenantID, tokenLabel, tokenValue) {
