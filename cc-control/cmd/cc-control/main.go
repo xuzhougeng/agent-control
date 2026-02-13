@@ -24,6 +24,7 @@ func main() {
 		agentToken            = flag.String("agent-token", getenv("AGENT_TOKEN", "agent-dev-token"), "agent bearer token")
 		uiToken               = flag.String("ui-token", getenv("UI_TOKEN", "admin-dev-token"), "ui bearer token")
 		adminToken            = flag.String("admin-token", getenv("ADMIN_TOKEN", ""), "admin bearer token (optional)")
+		tokenDBPath           = flag.String("token-db", getenv("TOKEN_DB", ""), "sqlite db path for token persistence (optional)")
 		auditPath             = flag.String("audit-path", "./audit.jsonl", "audit jsonl path")
 		ringBufferBytes       = flag.Int("ring-buffer-bytes", 128*1024, "session ring buffer size")
 		offlineAfterSec       = flag.Int("offline-after-sec", 20, "mark server offline if no heartbeat")
@@ -49,7 +50,22 @@ func main() {
 	}
 	defer cp.Close()
 
-	tokenStore := auth.NewStore()
+	var tokenStore *auth.Store
+	if *tokenDBPath != "" {
+		store, err := auth.NewStoreWithSQLite(*tokenDBPath)
+		if err != nil {
+			slog.Error("init token db failed", "err", err)
+			os.Exit(1)
+		}
+		tokenStore = store
+	} else {
+		tokenStore = auth.NewStore()
+	}
+	defer func() {
+		if err := tokenStore.Close(); err != nil {
+			slog.Error("close token store failed", "err", err)
+		}
+	}()
 	defaultTenantID := ""
 	if *agentToken != "" || *uiToken != "" {
 		defaultTenantID = uuid.NewString()

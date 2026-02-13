@@ -48,8 +48,10 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/servers", s.withUIAuth(s.handleServers))
 	mux.HandleFunc("/api/sessions", s.withUIAuth(s.handleSessions))
 	mux.HandleFunc("/api/sessions/", s.withUIAuth(s.handleSessionSubroutes))
+	mux.HandleFunc("/admin/verify", s.withAdminAuth(s.handleAdminVerify))
 	mux.HandleFunc("/admin/tokens", s.withAdminAuth(s.handleAdminTokens))
 	mux.HandleFunc("/admin/tokens/", s.withAdminAuth(s.handleAdminTokenSubroutes))
+	mux.HandleFunc("/tenant/verify", s.withTenantAuth(s.handleTenantVerify))
 	mux.HandleFunc("/tenant/tokens", s.withTenantAuth(s.handleTenantTokens))
 	mux.HandleFunc("/api/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -59,7 +61,26 @@ func (s *Server) Router() http.Handler {
 	if uiDir == "" {
 		uiDir = "ui"
 	}
-	mux.Handle("/", http.FileServer(http.Dir(filepath.Clean(uiDir))))
+	indexPath := filepath.Join(filepath.Clean(uiDir), "index.html")
+	adminPath := filepath.Join(filepath.Clean(uiDir), "admin.html")
+	tenantPath := filepath.Join(filepath.Clean(uiDir), "tenant.html")
+	fileServer := http.FileServer(http.Dir(filepath.Clean(uiDir)))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			switch r.URL.Path {
+			case "/":
+				http.ServeFile(w, r, indexPath)
+				return
+			case "/admin", "/admin/":
+				http.ServeFile(w, r, adminPath)
+				return
+			case "/tenant", "/tenant/":
+				http.ServeFile(w, r, tenantPath)
+				return
+			}
+		}
+		fileServer.ServeHTTP(w, r)
+	})
 	return mux
 }
 
@@ -275,6 +296,53 @@ func (s *Server) handleAdminTokens(w http.ResponseWriter, r *http.Request, _ *au
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleAdminVerify(w http.ResponseWriter, r *http.Request, rec *auth.TokenRecord) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"token_id":  rec.TokenID,
+		"type":      rec.Type,
+		"tenant_id": rec.TenantID,
+	})
+}
+
+func (s *Server) handleTenantVerify(w http.ResponseWriter, r *http.Request, rec *auth.TokenRecord) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	tenantID := ""
+	if r.Method == http.MethodGet {
+		tenantID = strings.TrimSpace(r.URL.Query().Get("tenant_id"))
+	} else {
+		var req struct {
+			TenantID string `json:"tenant_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		tenantID = strings.TrimSpace(req.TenantID)
+	}
+	if tenantID == "" {
+		http.Error(w, "tenant id required", http.StatusBadRequest)
+		return
+	}
+	if tenantID != rec.TenantID {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"token_id":  rec.TokenID,
+		"type":      rec.Type,
+		"tenant_id": rec.TenantID,
+	})
 }
 
 func (s *Server) handleTenantTokens(w http.ResponseWriter, r *http.Request, rec *auth.TokenRecord) {

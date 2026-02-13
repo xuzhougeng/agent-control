@@ -3,8 +3,10 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -43,6 +45,7 @@ type Store struct {
 	mu     sync.RWMutex
 	byHash map[string]*TokenRecord
 	byID   map[string]*TokenRecord
+	db     *sql.DB
 }
 
 func NewStore() *Store {
@@ -50,6 +53,13 @@ func NewStore() *Store {
 		byHash: make(map[string]*TokenRecord),
 		byID:   make(map[string]*TokenRecord),
 	}
+}
+
+func (s *Store) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Close()
 }
 
 func ParseType(v string) (TokenType, bool) {
@@ -122,6 +132,9 @@ func (s *Store) SeedToken(token string, tt TokenType, role TokenRole, tenantID, 
 	if token == "" {
 		return TokenRecord{}, errors.New("token required")
 	}
+	if existing, ok := s.Lookup(token); ok {
+		return *existing, nil
+	}
 	if !validType(tt) {
 		return TokenRecord{}, errors.New("invalid token type")
 	}
@@ -160,6 +173,11 @@ func (s *Store) insert(rec *TokenRecord) error {
 	if _, ok := s.byID[rec.TokenID]; ok {
 		return errors.New("token id already exists")
 	}
+	if s.db != nil {
+		if err := s.persistInsertLocked(rec); err != nil {
+			return err
+		}
+	}
 	copyRec := *rec
 	s.byHash[rec.TokenHash] = &copyRec
 	s.byID[rec.TokenID] = &copyRec
@@ -185,8 +203,17 @@ func (s *Store) RevokeToken(tokenID string) bool {
 		s.mu.Unlock()
 		return false
 	}
+	if rec.Revoked {
+		s.mu.Unlock()
+		return true
+	}
 	rec.Revoked = true
 	s.mu.Unlock()
+	if s.db != nil {
+		if _, err := s.db.Exec(`UPDATE tokens SET revoked = 1 WHERE token_id = ?`, tokenID); err != nil {
+			slog.Error("persist revoke token failed", "token_id", tokenID, "err", err)
+		}
+	}
 	return true
 }
 
@@ -214,6 +241,11 @@ func (s *Store) RevokeTokensByTenant(tenantID string, types ...TokenType) int {
 		count++
 	}
 	s.mu.Unlock()
+	if s.db != nil {
+		if err := s.persistRevokeByTenant(tenantID, types); err != nil {
+			slog.Error("persist revoke tenant tokens failed", "tenant_id", tenantID, "err", err)
+		}
+	}
 	return count
 }
 
