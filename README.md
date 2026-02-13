@@ -17,7 +17,7 @@ flowchart LR
 - `ui/`: static browser UI (`xterm.js`)
 - `app/AgentControlMac/`: native macOS/iOS client
 
-## Quick Start (Current Version)
+## Quick Start
 
 For production deployment (including TLS), use `docs/deploy-public-server.md`.
 
@@ -29,33 +29,90 @@ go run ./cmd/cc-control \
   -addr :18080 \
   -ui-dir ../ui \
   -admin-token admin-dev-token \
+  -ui-token "" \
+  -agent-token "" \
   -audit-path ./audit.jsonl \
   -offline-after-sec 30
 ```
 
-2. Create UI/Agent tokens via Admin API.
+2. Create UI token for Tenant A via Admin API.
 
 ```bash
-# Create UI token (owner role). Save both token and tenant_id from response.
+# Tenant: create UI token (owner role), response includes tenant_id
+curl -X POST http://127.0.0.1:18080/admin/tokens \
+  -H "Authorization: Bearer admin-dev-token" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"ui","role":"owner"}'
+```
+
+Example Tenant UI token response:
+
+```json
+{
+  "created_at_ms": 1770964695390,
+  "role": "owner",
+  "tenant_id": "<tenant-a-id>",
+  "token": "<tenant-a-ui-token>",
+  "token_id": "<tenant-a-ui-token-id>",
+  "type": "ui"
+}
+```
+
+- `token`: use this as the UI login token for Tenant.
+- `tenant_id`: must be reused when creating Tenant agent tokens.
+
+3. Create AGENT token for Tenant A via Admin API.
+
+```bash
+# Tenant: create Agent token with the same tenant_id
+curl -X POST http://127.0.0.1:18080/admin/tokens \
+  -H "Authorization: Bearer admin-dev-token" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"agent","tenant_id":"<tenant-a-id>"}'
+```
+
+Example Tenant A Agent token response:
+
+```json
+{
+  "created_at_ms": 1770964737109,
+  "role": "",
+  "tenant_id": "<tenant-a-id>",
+  "token": "<tenant-a-agent-token>",
+  "token_id": "<tenant-a-agent-token-id>",
+  "type": "agent"
+}
+```
+
+- `token`: use this as `-agent-token` when starting Tenant A `cc-agent`.
+- `token` is returned in plaintext only once; if leaked, revoke and re-issue immediately.
+
+4. (Optional) Create a second tenant (Tenant B) to verify multi-tenant isolation.
+
+```bash
+# Tenant B: create another UI token; this returns a different tenant_id
 curl -X POST http://127.0.0.1:18080/admin/tokens \
   -H "Authorization: Bearer admin-dev-token" \
   -H "Content-Type: application/json" \
   -d '{"type":"ui","role":"owner"}'
 
-# Create Agent token for the same tenant_id.
+# Tenant B: create Agent token for Tenant B's tenant_id
 curl -X POST http://127.0.0.1:18080/admin/tokens \
   -H "Authorization: Bearer admin-dev-token" \
   -H "Content-Type: application/json" \
-  -d '{"type":"agent","tenant_id":"<tenant_id>"}'
+  -d '{"type":"agent","tenant_id":"<tenant-b-id>"}'
 ```
 
-3. Start one `cc-agent`.
+- Tenant A and Tenant B data are isolated by `tenant_id`.
+- A Tenant A UI token cannot operate on Tenant B servers/sessions.
+
+5. Start one `cc-agent` for Tenant A.
 
 ```bash
 cd cc-agent
 go run ./cmd/cc-agent \
   -control-url ws://127.0.0.1:18080/ws/agent \
-  -agent-token <agent-token> \
+  -agent-token <tenant-a-agent-token> \
   -server-id srv-local \
   -allow-root /path/to/repo \
   -claude-path /path/to/ai-cli
@@ -69,11 +126,11 @@ Example executable values for `-claude-path`:
 /path/to/gemini
 ```
 
-4. Open browser UI:
+6. Open browser UI:
 
 `http://127.0.0.1:18080`
 
-Login with the UI token returned by `/admin/tokens`.
+Login with the Tenant A UI token returned by `/admin/tokens`.
 
 ## Token Model (Latest)
 

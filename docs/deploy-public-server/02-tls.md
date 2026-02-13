@@ -70,22 +70,6 @@ systemctl enable --now cc-control
 
 可选：增加 `-enable-prompt-detection`。
 
-### B.3.1 创建 UI/Agent Token（Admin API）
-
-```bash
-# UI token（owner），返回 tenant_id
-curl -X POST https://1.2.3.4/admin/tokens \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"ui","role":"owner"}'
-
-# Agent token（同 tenant_id）
-curl -X POST https://1.2.3.4/admin/tokens \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"agent","tenant_id":"<tenant_id>"}'
-```
-
 ### B.4 生成自签名证书（含 IP SAN）
 
 将 `1.2.3.4` 替换为你的公网 IP。
@@ -149,7 +133,24 @@ ufw allow 443/tcp
 ufw enable
 ```
 
-### B.6 部署 cc-agent（启用 -tls-skip-verify）
+### B.6 创建 UI/Agent Token（Admin API）
+
+```bash
+# UI token（owner），返回 tenant_id
+curl -k -X POST https://1.2.3.4/admin/tokens \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"ui","role":"owner"}'
+
+
+# Agent token（同 tenant_id）
+curl -k -X POST https://1.2.3.4/admin/tokens \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"agent","tenant_id":"<tenant_id>"}'
+```
+
+### B.7 部署 cc-agent（启用 -tls-skip-verify）
 
 ```bash
 # 上传 agent（二选一：用你实际上传方式）
