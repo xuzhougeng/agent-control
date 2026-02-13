@@ -42,3 +42,5 @@ app/**/DerivedData/
 app/**/.build/
 app/**/*.app
 **/xcuserdata/
+
+.cursor
