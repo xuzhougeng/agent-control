@@ -23,6 +23,7 @@ UI Token 具备角色权限：
 - `owner`：包含 `operator` 权限 + 删除会话
 
 > Admin Token 仅用于管理接口（见下文），不用于 UI/WS。
+> Tenant Token 仅用于租户自助签发接口（见下文），不用于 UI/WS。
 > 所有请求均按 token 所属 `tenant_id` 隔离，跨租户资源会返回 `not found`。
 
 ---
@@ -39,7 +40,7 @@ Base URL：`http://127.0.0.1:18080`
 
 ```json
 {
-  "type": "ui|agent",
+  "type": "ui|agent|tenant",
   "tenant_id": "optional",
   "role": "viewer|operator|owner (ui only)",
   "name": "optional"
@@ -53,7 +54,7 @@ Base URL：`http://127.0.0.1:18080`
   "token": "plain-text",
   "token_id": "uuid",
   "tenant_id": "uuid",
-  "type": "ui|agent",
+  "type": "ui|agent|tenant",
   "role": "viewer|operator|owner",
   "created_at_ms": 1730000000000
 }
@@ -81,7 +82,7 @@ Base URL：`http://127.0.0.1:18080`
     {
       "token_id": "uuid",
       "tenant_id": "uuid",
-      "type": "ui|agent|admin",
+      "type": "ui|agent|tenant|admin",
       "role": "viewer|operator|owner",
       "created_at_ms": 1730000000000,
       "revoked": false,
@@ -90,6 +91,51 @@ Base URL：`http://127.0.0.1:18080`
   ]
 }
 ```
+
+---
+
+## Tenant API（自助签发 UI/Agent Token）
+
+Base URL：`http://127.0.0.1:18080`
+
+### 1) 生成 UI + Agent token（自动撤销旧 token）
+
+- `POST /tenant/tokens`
+- Header：`Authorization: Bearer <TENANT_TOKEN>`
+- 请求体（可选）：
+
+```json
+{
+  "tenant_id": "optional (must match tenant token)",
+  "role": "viewer|operator|owner (ui role, default owner)",
+  "ui_name": "optional",
+  "agent_name": "optional"
+}
+```
+
+- 响应（仅返回一次明文 token）：
+
+```json
+{
+  "tenant_id": "uuid",
+  "revoked_count": 2,
+  "ui": {
+    "token": "plain-text",
+    "token_id": "uuid",
+    "type": "ui",
+    "role": "owner",
+    "created_at_ms": 1730000000000
+  },
+  "agent": {
+    "token": "plain-text",
+    "token_id": "uuid",
+    "type": "agent",
+    "created_at_ms": 1730000000000
+  }
+}
+```
+
+> 说明：每次调用会撤销该 `tenant_id` 现有的 UI/Agent token，请同步更新浏览器和 agent 的配置。
 
 ---
 

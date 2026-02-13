@@ -30,5 +30,5 @@
 ---
 
 说明：
-- 当前推荐主路径是 `-admin-token + /admin/tokens`。
+- 当前推荐主路径是 `-admin-token + /admin/tokens` 生成 tenant token，再用 `/tenant/tokens` 生成 UI/Agent token。
 - 若你从旧版 `-ui-token/-agent-token` 迁移，请直接看 Part 3 的升级章节。

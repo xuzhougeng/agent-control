@@ -19,7 +19,7 @@
      - 直连：`http://公网IP:18080`
      - 域名 TLS：`https://cc.example.com`
      - 自签名 TLS：`https://公网IP`（勾选 Skip TLS verification）
-   - UI Token：由 Admin API 创建
+   - UI Token：由 Tenant API 创建（需 tenant token）
 3. 点击 Save & Reconnect
 
 ### 1.2 浏览器
@@ -49,7 +49,7 @@
 for host in gpu01 gpu02 gpu03; do
   scp cc-agent $host:/opt/cc-agent/
   ssh $host "cat > /opt/cc-agent/.env << EOF
-AGENT_TOKEN=<agent-token-from-admin-api>
+AGENT_TOKEN=<agent-token-from-tenant-api>
 SERVER_ID=srv-$host
 EOF
 chmod 600 /opt/cc-agent/.env
@@ -103,17 +103,17 @@ curl -sS http://127.0.0.1:18080/api/healthz
 ### 4.3 签发新 token
 
 ```bash
-# UI token + tenant_id
+# 先创建 tenant token
 curl -X POST https://<control-host>/admin/tokens \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"type":"ui","role":"owner"}'
+  -d '{"type":"tenant"}'
 
-# Agent token（同 tenant）
-curl -X POST https://<control-host>/admin/tokens \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
+# 再用 tenant token 生成 UI + Agent token
+curl -X POST https://<control-host>/tenant/tokens \
+  -H "Authorization: Bearer <tenant-token>" \
   -H "Content-Type: application/json" \
-  -d '{"type":"agent","tenant_id":"<tenant_id>"}'
+  -d '{"role":"owner"}'
 ```
 
 说明：

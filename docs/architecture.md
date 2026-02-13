@@ -28,7 +28,8 @@ flowchart TB
 
 - `agent_token` 与 `ui_token` 均绑定 `tenant_id`，中心服务器只按 tenant 维度隔离，不关心真实身份。
 - UI 角色：`viewer` / `operator` / `owner`。
-- `admin_token` 用于生成/撤销 token。
+- `admin_token` 用于生成/撤销 tenant token。
+- `tenant_token` 用于该租户自助签发 UI/Agent token（每次生成会刷新旧 token）。
 
 ## 组件与目录
 

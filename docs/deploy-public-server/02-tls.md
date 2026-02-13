@@ -133,24 +133,29 @@ ufw allow 443/tcp
 ufw enable
 ```
 
-### B.6 创建 UI/Agent Token（Admin API）
+### B.6 创建 Tenant Token（Admin API）
 
 ```bash
-# UI token（owner），返回 tenant_id
+# Tenant token（返回 tenant_id）
 curl -k -X POST https://1.2.3.4/admin/tokens \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"type":"ui","role":"owner"}'
-
-
-# Agent token（同 tenant_id）
-curl -k -X POST https://1.2.3.4/admin/tokens \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"agent","tenant_id":"<tenant_id>"}'
+  -d '{"type":"tenant"}'
 ```
 
-### B.7 部署 cc-agent（启用 -tls-skip-verify）
+### B.7 创建 UI/Agent Token（Tenant API）
+
+```bash
+# 使用 tenant token 生成 UI + Agent（默认 role=owner）
+curl -k -X POST https://1.2.3.4/tenant/tokens \
+  -H "Authorization: Bearer <tenant-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"role":"owner"}'
+```
+
+说明：每次调用会撤销该租户旧的 UI/Agent token，请同步更新浏览器和 agent 的配置。
+
+### B.8 部署 cc-agent（启用 -tls-skip-verify）
 
 ```bash
 # 上传 agent（二选一：用你实际上传方式）
@@ -180,7 +185,7 @@ ExecStart=/opt/cc-agent/cc-agent \
 
 也可在 `.env` 里设置 `TLS_SKIP_VERIFY=1`。
 
-### B.7 验证
+### B.9 验证
 
 - 浏览器访问 `https://1.2.3.4`，先接受证书警告，再用 UI token 登录。
 - `journalctl -u cc-agent -f` 观察 agent 连接状态。
@@ -189,7 +194,7 @@ ExecStart=/opt/cc-agent/cc-agent \
 
 ## 方案 B'：域名 + Let's Encrypt（由 B 改造）
 
-`cc-control` 与 token 流程可直接沿用 B 的 B.1～B.3.1。  
+`cc-control` 与 token 流程可直接沿用 B 的 B.1～B.7。  
 主要改动是证书来源、Nginx `server_name`、以及 agent 去掉 `-tls-skip-verify`。
 
 ### B'.0 B -> B' 逐项替换清单

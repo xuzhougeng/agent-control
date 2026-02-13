@@ -71,21 +71,27 @@ WantedBy=multi-user.target
 
 可选：若需 Pending Approvals 自动识别，增加 `-enable-prompt-detection`。
 
-## A.3.1 创建 UI/Agent Token（Admin API）
+## A.3.1 创建 Tenant Token（Admin API）
 
 ```bash
-# UI token（owner），返回 tenant_id
+# Tenant token（返回 tenant_id）
 curl -X POST http://1.2.3.4:18080/admin/tokens \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"type":"ui","role":"owner"}'
-
-# Agent token（同 tenant_id）
-curl -X POST http://1.2.3.4:18080/admin/tokens \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"agent","tenant_id":"<tenant_id>"}'
+  -d '{"type":"tenant"}'
 ```
+
+## A.3.2 创建 UI/Agent Token（Tenant API）
+
+```bash
+# 使用 tenant token 生成 UI + Agent（默认 role=owner）
+curl -X POST http://1.2.3.4:18080/tenant/tokens \
+  -H "Authorization: Bearer <tenant-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"role":"owner"}'
+```
+
+说明：每次调用会撤销该租户旧的 UI/Agent token，请同步更新浏览器和 agent 的配置。
 
 放行端口：
 
@@ -135,7 +141,7 @@ WantedBy=multi-user.target
 `/opt/cc-agent/.env`（600）：
 
 ```bash
-AGENT_TOKEN=<agent-token-from-admin-api>
+AGENT_TOKEN=<agent-token-from-tenant-api>
 SERVER_ID=srv-gpu-01
 ```
 
