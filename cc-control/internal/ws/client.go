@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"cc-control/internal/auth"
 	"cc-control/internal/core"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -16,13 +17,18 @@ import (
 type ClientHandler struct {
 	CP       *core.ControlPlane
 	Upgrader websocket.Upgrader
-	UIToken  string
+	Tokens   *auth.Store
 }
 
 func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	remote := r.RemoteAddr
 	token := extractToken(r)
-	if token == "" || token != h.UIToken || !h.CP.RateAllow("ui:"+token) {
+	if token == "" || h.Tokens == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	rec, ok := h.Tokens.Lookup(token)
+	if !ok || rec.Revoked || rec.Type != auth.TokenTypeUI || !auth.RoleAtLeast(rec.Role, auth.RoleViewer) || !h.CP.RateAllow("ui:"+rec.TokenID) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -34,9 +40,10 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info("ui ws connected", "remote", remote)
 
 	sub := &core.Subscriber{
-		ID:    uuid.NewString(),
-		Actor: "ui:" + token,
-		Send:  make(chan core.Envelope, 256),
+		ID:       uuid.NewString(),
+		Actor:    "ui:" + rec.TokenID,
+		Send:     make(chan core.Envelope, 256),
+		TenantID: rec.TenantID,
 	}
 	h.CP.RegisterSubscriber(sub)
 	stopWriter := make(chan struct{})
@@ -79,7 +86,7 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Replay all unresolved approval events on connect so UI has a global
 	// pending-approvals view without requiring per-session attach clicks.
-	pendingEvents := h.CP.GetPendingApprovalEvents()
+	pendingEvents := h.CP.GetPendingApprovalEvents(rec.TenantID)
 	for _, ev := range pendingEvents {
 		evMsg := core.NewEnvelope("event", ev.ServerID, ev.SessionID)
 		evMsg.Data, _ = json.Marshal(ev)
@@ -129,7 +136,7 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Re-send pending approval events for this session to recover from transient drops.
-			events := h.CP.GetSessionEvents(req.SessionID)
+			events := h.CP.GetSessionEvents(rec.TenantID, req.SessionID)
 			pendingApprovals := 0
 			for _, ev := range events {
 				if ev.Kind != "approval_needed" || ev.Resolved {
@@ -145,6 +152,10 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			slog.Info("ui attach", "remote", remote, "session_id", req.SessionID, "pending_approvals", pendingApprovals, "total_events", len(events))
 		case "term_in":
+			if !auth.RoleAtLeast(rec.Role, auth.RoleOperator) {
+				sub.Send <- errorEnvelope("forbidden", msg.SessionID)
+				continue
+			}
 			sessionID := msg.SessionID
 			if sessionID == "" {
 				sessionID = sub.AttachedSession
@@ -153,10 +164,14 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				sub.Send <- errorEnvelope("no_attached_session", "")
 				continue
 			}
-			if err := h.CP.HandleClientTermIn(sub.Actor, sessionID, msg.DataB64); err != nil {
+			if err := h.CP.HandleClientTermIn(sub.Actor, rec.TenantID, sessionID, msg.DataB64); err != nil {
 				sub.Send <- errorEnvelope(err.Error(), sessionID)
 			}
 		case "action":
+			if !auth.RoleAtLeast(rec.Role, auth.RoleOperator) {
+				sub.Send <- errorEnvelope("forbidden", msg.SessionID)
+				continue
+			}
 			var req core.ActionRequest
 			if err := json.Unmarshal(msg.Data, &req); err != nil {
 				sub.Send <- errorEnvelope("bad_action_payload", msg.SessionID)
@@ -170,10 +185,14 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				sub.Send <- errorEnvelope("no_attached_session", "")
 				continue
 			}
-			if err := h.CP.HandleClientAction(sub.Actor, sessionID, req); err != nil {
+			if err := h.CP.HandleClientAction(sub.Actor, rec.TenantID, sessionID, req); err != nil {
 				sub.Send <- errorEnvelope(err.Error(), sessionID)
 			}
 		case "resize":
+			if !auth.RoleAtLeast(rec.Role, auth.RoleOperator) {
+				sub.Send <- errorEnvelope("forbidden", msg.SessionID)
+				continue
+			}
 			var req struct {
 				Cols uint16 `json:"cols"`
 				Rows uint16 `json:"rows"`
@@ -190,7 +209,7 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				sub.Send <- errorEnvelope("no_attached_session", "")
 				continue
 			}
-			if err := h.CP.HandleClientResize(sub.Actor, sessionID, req.Cols, req.Rows); err != nil {
+			if err := h.CP.HandleClientResize(sub.Actor, rec.TenantID, sessionID, req.Cols, req.Rows); err != nil {
 				sub.Send <- errorEnvelope(err.Error(), sessionID)
 			}
 		default:

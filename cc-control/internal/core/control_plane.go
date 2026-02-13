@@ -39,6 +39,7 @@ type Subscriber struct {
 	Actor           string
 	Send            chan Envelope
 	AttachedSession string
+	TenantID        string
 }
 
 type SessionHub struct {
@@ -129,7 +130,7 @@ func (cp *ControlPlane) RateAllow(token string) bool {
 	return cp.limiter.Allow(token)
 }
 
-func (cp *ControlPlane) RegisterOrUpdateServer(reg AgentRegister, conn AgentSender) error {
+func (cp *ControlPlane) RegisterOrUpdateServer(tenantID string, reg AgentRegister, conn AgentSender) error {
 	now := time.Now().UnixMilli()
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
@@ -139,6 +140,7 @@ func (cp *ControlPlane) RegisterOrUpdateServer(reg AgentRegister, conn AgentSend
 	}
 
 	cp.servers[reg.ServerID] = &Server{
+		TenantID:     tenantID,
 		ServerID:     reg.ServerID,
 		Hostname:     reg.Hostname,
 		Tags:         append([]string(nil), reg.Tags...),
@@ -184,12 +186,15 @@ func (cp *ControlPlane) RemoveAgentConnection(serverID string) {
 	})
 }
 
-func (cp *ControlPlane) GetServers() []Server {
+func (cp *ControlPlane) GetServers(tenantID string) []Server {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	now := time.Now()
 	items := make([]Server, 0, len(cp.servers))
 	for _, s := range cp.servers {
+		if tenantID != "" && s.TenantID != tenantID {
+			continue
+		}
 		if now.Sub(time.UnixMilli(s.LastSeenMS)) > cp.cfg.OfflineAfter {
 			s.Status = ServerOffline
 		}
@@ -199,11 +204,14 @@ func (cp *ControlPlane) GetServers() []Server {
 	return items
 }
 
-func (cp *ControlPlane) GetSessions(serverID string) []Session {
+func (cp *ControlPlane) GetSessions(tenantID, serverID string) []Session {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
 	items := make([]Session, 0, len(cp.sessions))
 	for _, s := range cp.sessions {
+		if tenantID != "" && s.TenantID != tenantID {
+			continue
+		}
 		if serverID != "" && s.ServerID != serverID {
 			continue
 		}
@@ -213,9 +221,15 @@ func (cp *ControlPlane) GetSessions(serverID string) []Session {
 	return items
 }
 
-func (cp *ControlPlane) GetSessionEvents(sessionID string) []SessionEvent {
+func (cp *ControlPlane) GetSessionEvents(tenantID, sessionID string) []SessionEvent {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
+	if tenantID != "" {
+		sess, ok := cp.sessions[sessionID]
+		if !ok || sess.TenantID != tenantID {
+			return nil
+		}
+	}
 	events := cp.sessionEvents[sessionID]
 	out := make([]SessionEvent, len(events))
 	copy(out, events)
@@ -223,7 +237,7 @@ func (cp *ControlPlane) GetSessionEvents(sessionID string) []SessionEvent {
 }
 
 // GetPendingApprovalEvents returns unresolved approval events across all sessions.
-func (cp *ControlPlane) GetPendingApprovalEvents() []SessionEvent {
+func (cp *ControlPlane) GetPendingApprovalEvents(tenantID string) []SessionEvent {
 	cp.mu.RLock()
 	defer cp.mu.RUnlock()
 
@@ -231,6 +245,9 @@ func (cp *ControlPlane) GetPendingApprovalEvents() []SessionEvent {
 	for _, events := range cp.sessionEvents {
 		for _, ev := range events {
 			if ev.Kind != "approval_needed" || ev.Resolved {
+				continue
+			}
+			if tenantID != "" && ev.TenantID != tenantID {
 				continue
 			}
 			out = append(out, ev)
@@ -269,6 +286,9 @@ func (cp *ControlPlane) AttachSubscriber(sub *Subscriber, sessionID string) ([]b
 	if !ok {
 		return nil, 0, errors.New("session not found")
 	}
+	if sub.TenantID != "" && sess.TenantID != sub.TenantID {
+		return nil, 0, errors.New("session not found")
+	}
 	if sub.AttachedSession != "" {
 		if oldHub, ok := cp.sessionHubs[sub.AttachedSession]; ok {
 			delete(oldHub.subscribers, sub)
@@ -284,7 +304,7 @@ func (cp *ControlPlane) AttachSubscriber(sub *Subscriber, sessionID string) ([]b
 	return hub.ring.Snapshot(), sess.LatestAgentOutSeq, nil
 }
 
-func (cp *ControlPlane) CreateSession(actor string, req StartSessionRequest) (*Session, error) {
+func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSessionRequest) (*Session, error) {
 	if req.ServerID == "" || req.Cwd == "" {
 		return nil, errors.New("server_id and cwd are required")
 	}
@@ -294,6 +314,10 @@ func (cp *ControlPlane) CreateSession(actor string, req StartSessionRequest) (*S
 	if !ok || conn == nil || server.Status != ServerOnline {
 		cp.mu.Unlock()
 		return nil, errors.New("server offline")
+	}
+	if tenantID != "" && server.TenantID != tenantID {
+		cp.mu.Unlock()
+		return nil, errors.New("server not in tenant")
 	}
 	sessionID := uuid.NewString()
 	resumeID := strings.TrimSpace(req.ResumeID)
@@ -311,6 +335,7 @@ func (cp *ControlPlane) CreateSession(actor string, req StartSessionRequest) (*S
 	}
 	sort.Strings(envKeys)
 	sess := &Session{
+		TenantID:         tenantID,
 		SessionID:        sessionID,
 		ServerID:         req.ServerID,
 		Cwd:              req.Cwd,
@@ -359,10 +384,14 @@ func (cp *ControlPlane) CreateSession(actor string, req StartSessionRequest) (*S
 	return sess, nil
 }
 
-func (cp *ControlPlane) StopSession(actor, sessionID string, graceMS, killAfterMS int) error {
+func (cp *ControlPlane) StopSession(actor, tenantID, sessionID string, graceMS, killAfterMS int) error {
 	cp.mu.Lock()
 	sess, ok := cp.sessions[sessionID]
 	if !ok {
+		cp.mu.Unlock()
+		return errors.New("session not found")
+	}
+	if tenantID != "" && sess.TenantID != tenantID {
 		cp.mu.Unlock()
 		return errors.New("session not found")
 	}
@@ -404,10 +433,14 @@ func (cp *ControlPlane) StopSession(actor, sessionID string, graceMS, killAfterM
 	return nil
 }
 
-func (cp *ControlPlane) DeleteSession(actor, sessionID string) error {
+func (cp *ControlPlane) DeleteSession(actor, tenantID, sessionID string) error {
 	cp.mu.Lock()
 	sess, ok := cp.sessions[sessionID]
 	if !ok {
+		cp.mu.Unlock()
+		return errors.New("session not found")
+	}
+	if tenantID != "" && sess.TenantID != tenantID {
 		cp.mu.Unlock()
 		return errors.New("session not found")
 	}
@@ -438,10 +471,14 @@ func (cp *ControlPlane) DeleteSession(actor, sessionID string) error {
 	return nil
 }
 
-func (cp *ControlPlane) StopAndDeleteSession(actor, sessionID string, graceMS, killAfterMS int) error {
+func (cp *ControlPlane) StopAndDeleteSession(actor, tenantID, sessionID string, graceMS, killAfterMS int) error {
 	cp.mu.RLock()
 	sess, ok := cp.sessions[sessionID]
 	if !ok {
+		cp.mu.RUnlock()
+		return errors.New("session not found")
+	}
+	if tenantID != "" && sess.TenantID != tenantID {
 		cp.mu.RUnlock()
 		return errors.New("session not found")
 	}
@@ -485,6 +522,10 @@ func (cp *ControlPlane) StopAndDeleteSession(actor, sessionID string, graceMS, k
 	cp.mu.Lock()
 	sess, ok = cp.sessions[sessionID]
 	if !ok {
+		cp.mu.Unlock()
+		return errors.New("session not found")
+	}
+	if tenantID != "" && sess.TenantID != tenantID {
 		cp.mu.Unlock()
 		return errors.New("session not found")
 	}
@@ -580,6 +621,7 @@ func (cp *ControlPlane) createApprovalEvent(sessionID, serverID, excerpt string)
 		EventID:    eventID,
 		SessionID:  sessionID,
 		ServerID:   serverID,
+		TenantID:   sess.TenantID,
 		Kind:       "approval_needed",
 		PromptText: excerpt,
 		TsMS:       time.Now().UnixMilli(),
@@ -719,10 +761,14 @@ func (cp *ControlPlane) HandleAgentError(serverID, sessionID, message string) {
 	})
 }
 
-func (cp *ControlPlane) HandleClientTermIn(actor, sessionID, dataB64 string) error {
+func (cp *ControlPlane) HandleClientTermIn(actor, tenantID, sessionID, dataB64 string) error {
 	cp.mu.RLock()
 	sess, ok := cp.sessions[sessionID]
 	if !ok {
+		cp.mu.RUnlock()
+		return errors.New("session not found")
+	}
+	if tenantID != "" && sess.TenantID != tenantID {
 		cp.mu.RUnlock()
 		return errors.New("session not found")
 	}
@@ -751,12 +797,16 @@ func (cp *ControlPlane) HandleClientTermIn(actor, sessionID, dataB64 string) err
 	return nil
 }
 
-func (cp *ControlPlane) HandleClientAction(actor, sessionID string, req ActionRequest) error {
+func (cp *ControlPlane) HandleClientAction(actor, tenantID, sessionID string, req ActionRequest) error {
 	switch req.Kind {
 	case "approve", "reject":
 		cp.mu.Lock()
 		sess, ok := cp.sessions[sessionID]
 		if !ok {
+			cp.mu.Unlock()
+			return errors.New("session not found")
+		}
+		if tenantID != "" && sess.TenantID != tenantID {
 			cp.mu.Unlock()
 			return errors.New("session not found")
 		}
@@ -794,7 +844,7 @@ func (cp *ControlPlane) HandleClientAction(actor, sessionID string, req ActionRe
 				input = "\u001b"
 			}
 		}
-		if err := cp.HandleClientTermIn(actor, sessionID, base64.StdEncoding.EncodeToString([]byte(input))); err != nil {
+		if err := cp.HandleClientTermIn(actor, tenantID, sessionID, base64.StdEncoding.EncodeToString([]byte(input))); err != nil {
 			return err
 		}
 		cp.broadcastSessionUpdate(sessionID)
@@ -809,7 +859,7 @@ func (cp *ControlPlane) HandleClientAction(actor, sessionID string, req ActionRe
 		})
 		return nil
 	case "stop":
-		return cp.StopSession(actor, sessionID, cp.cfg.DefaultGraceMS, cp.cfg.DefaultKillMS)
+		return cp.StopSession(actor, tenantID, sessionID, cp.cfg.DefaultGraceMS, cp.cfg.DefaultKillMS)
 	default:
 		return errors.New("invalid action")
 	}
@@ -847,10 +897,14 @@ func normalizePromptForMenuMatch(prompt string) string {
 	return strings.Join(strings.Fields(strings.ToLower(prompt)), " ")
 }
 
-func (cp *ControlPlane) HandleClientResize(actor, sessionID string, cols, rows uint16) error {
+func (cp *ControlPlane) HandleClientResize(actor, tenantID, sessionID string, cols, rows uint16) error {
 	cp.mu.RLock()
 	sess, ok := cp.sessions[sessionID]
 	if !ok {
+		cp.mu.RUnlock()
+		return errors.New("session not found")
+	}
+	if tenantID != "" && sess.TenantID != tenantID {
 		cp.mu.RUnlock()
 		return errors.New("session not found")
 	}

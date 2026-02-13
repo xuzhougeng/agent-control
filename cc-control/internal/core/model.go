@@ -18,6 +18,7 @@ const (
 )
 
 type Server struct {
+	TenantID     string       `json:"tenant_id"`
 	ServerID     string       `json:"server_id"`
 	Hostname     string       `json:"hostname"`
 	Tags         []string     `json:"tags"`
@@ -31,6 +32,7 @@ type Server struct {
 }
 
 type Session struct {
+	TenantID          string        `json:"tenant_id"`
 	SessionID         string        `json:"session_id"`
 	ServerID          string        `json:"server_id"`
 	Cwd               string        `json:"cwd"`
@@ -51,6 +53,7 @@ type SessionEvent struct {
 	EventID    string `json:"event_id"`
 	SessionID  string `json:"session_id"`
 	ServerID   string `json:"server_id"`
+	TenantID   string `json:"tenant_id"`
 	Kind       string `json:"kind"`
 	PromptText string `json:"prompt_excerpt,omitempty"`
 	Actor      string `json:"actor,omitempty"`

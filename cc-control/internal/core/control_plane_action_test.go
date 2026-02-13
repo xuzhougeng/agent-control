@@ -27,10 +27,12 @@ func setupActionTestControlPlane(t *testing.T, prompt string) (*ControlPlane, *f
 	conn := &fakeAgentConn{}
 	sessionID := "s1"
 	eventID := "e1"
+	tenantID := "t1"
 	cp.mu.Lock()
-	cp.servers["srv"] = &Server{ServerID: "srv", Status: ServerOnline}
+	cp.servers["srv"] = &Server{TenantID: tenantID, ServerID: "srv", Status: ServerOnline}
 	cp.agentConns["srv"] = conn
 	cp.sessions[sessionID] = &Session{
+		TenantID:         tenantID,
 		SessionID:        sessionID,
 		ServerID:         "srv",
 		Status:           SessionRunning,
@@ -42,6 +44,7 @@ func setupActionTestControlPlane(t *testing.T, prompt string) (*ControlPlane, *f
 			EventID:    eventID,
 			SessionID:  sessionID,
 			ServerID:   "srv",
+			TenantID:   tenantID,
 			Kind:       "approval_needed",
 			PromptText: prompt,
 			TsMS:       1,
@@ -71,7 +74,7 @@ func TestHandleClientAction_ApproveMenuUsesEnter(t *testing.T) {
 	prompt := "Do you want to create abc?\n1. Yes\n2. Yes, allow all edits during this session (shift+tab)\n3. No\nEsc to cancel · Tab to amend"
 	cp, conn, sessionID, eventID := setupActionTestControlPlane(t, prompt)
 
-	if err := cp.HandleClientAction("ui:test", sessionID, ActionRequest{Kind: "approve", EventID: eventID}); err != nil {
+	if err := cp.HandleClientAction("ui:test", "t1", sessionID, ActionRequest{Kind: "approve", EventID: eventID}); err != nil {
 		t.Fatalf("approve action failed: %v", err)
 	}
 	if got := lastPTYInput(t, conn); got != "\r" {
@@ -83,7 +86,7 @@ func TestHandleClientAction_RejectMenuUsesEscape(t *testing.T) {
 	prompt := "Do you want to create abc?\n1. Yes\n2. Yes, allow all edits during this session (shift+tab)\n3. No\nEsc to cancel · Tab to amend"
 	cp, conn, sessionID, eventID := setupActionTestControlPlane(t, prompt)
 
-	if err := cp.HandleClientAction("ui:test", sessionID, ActionRequest{Kind: "reject", EventID: eventID}); err != nil {
+	if err := cp.HandleClientAction("ui:test", "t1", sessionID, ActionRequest{Kind: "reject", EventID: eventID}); err != nil {
 		t.Fatalf("reject action failed: %v", err)
 	}
 	if got := lastPTYInput(t, conn); got != "\u001b" {
@@ -94,7 +97,7 @@ func TestHandleClientAction_RejectMenuUsesEscape(t *testing.T) {
 func TestHandleClientAction_PlainPromptUsesYN(t *testing.T) {
 	prompt := "Do you want to continue? [y/N]"
 	cp1, conn1, sessionID1, eventID1 := setupActionTestControlPlane(t, prompt)
-	if err := cp1.HandleClientAction("ui:test", sessionID1, ActionRequest{Kind: "approve", EventID: eventID1}); err != nil {
+	if err := cp1.HandleClientAction("ui:test", "t1", sessionID1, ActionRequest{Kind: "approve", EventID: eventID1}); err != nil {
 		t.Fatalf("approve action failed: %v", err)
 	}
 	if got := lastPTYInput(t, conn1); got != "y\n" {
@@ -102,7 +105,7 @@ func TestHandleClientAction_PlainPromptUsesYN(t *testing.T) {
 	}
 
 	cp2, conn2, sessionID2, eventID2 := setupActionTestControlPlane(t, prompt)
-	if err := cp2.HandleClientAction("ui:test", sessionID2, ActionRequest{Kind: "reject", EventID: eventID2}); err != nil {
+	if err := cp2.HandleClientAction("ui:test", "t1", sessionID2, ActionRequest{Kind: "reject", EventID: eventID2}); err != nil {
 		t.Fatalf("reject action failed: %v", err)
 	}
 	if got := lastPTYInput(t, conn2); got != "n\n" {
@@ -114,7 +117,7 @@ func TestHandleClientAction_StaleEventIDStillExecutesCurrentPending(t *testing.T
 	prompt := "Do you want to create abc?\n1. Yes\n2. Yes, allow all edits during this session (shift+tab)\n3. No\nEsc to cancel · Tab to amend"
 	cp, conn, sessionID, _ := setupActionTestControlPlane(t, prompt)
 
-	if err := cp.HandleClientAction("ui:test", sessionID, ActionRequest{Kind: "approve", EventID: "stale-event-id"}); err != nil {
+	if err := cp.HandleClientAction("ui:test", "t1", sessionID, ActionRequest{Kind: "approve", EventID: "stale-event-id"}); err != nil {
 		t.Fatalf("approve with stale event_id should still succeed, got: %v", err)
 	}
 	if got := lastPTYInput(t, conn); got != "\r" {
@@ -129,7 +132,7 @@ func TestDeleteSession_RemovesExitedSessionData(t *testing.T) {
 	cp.sessionHubs[sessionID] = newSessionHub(1024)
 	cp.mu.Unlock()
 
-	if err := cp.DeleteSession("ui:test", sessionID); err != nil {
+	if err := cp.DeleteSession("ui:test", "t1", sessionID); err != nil {
 		t.Fatalf("delete session failed: %v", err)
 	}
 
@@ -149,7 +152,7 @@ func TestDeleteSession_RejectsActiveSession(t *testing.T) {
 	cp.sessions[sessionID].Status = SessionRunning
 	cp.mu.Unlock()
 
-	if err := cp.DeleteSession("ui:test", sessionID); err == nil {
+	if err := cp.DeleteSession("ui:test", "t1", sessionID); err == nil {
 		t.Fatal("expected delete active session to fail")
 	}
 }
@@ -161,7 +164,7 @@ func TestStopAndDeleteSession_RunningSendsStopAndRemoves(t *testing.T) {
 	cp.sessionHubs[sessionID] = newSessionHub(1024)
 	cp.mu.Unlock()
 
-	if err := cp.StopAndDeleteSession("ui:test", sessionID, 0, 0); err != nil {
+	if err := cp.StopAndDeleteSession("ui:test", "t1", sessionID, 0, 0); err != nil {
 		t.Fatalf("stop and delete failed: %v", err)
 	}
 	if len(conn.msgs) == 0 || conn.msgs[len(conn.msgs)-1].Type != "stop_session" {
@@ -185,7 +188,7 @@ func TestStopAndDeleteSession_ExitedDeletesDirectly(t *testing.T) {
 	cp.sessionHubs[sessionID] = newSessionHub(1024)
 	cp.mu.Unlock()
 
-	if err := cp.StopAndDeleteSession("ui:test", sessionID, 0, 0); err != nil {
+	if err := cp.StopAndDeleteSession("ui:test", "t1", sessionID, 0, 0); err != nil {
 		t.Fatalf("stop and delete failed: %v", err)
 	}
 	if len(conn.msgs) != 0 {

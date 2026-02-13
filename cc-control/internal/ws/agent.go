@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"cc-control/internal/auth"
 	"cc-control/internal/core"
 	"github.com/gorilla/websocket"
 )
@@ -58,14 +59,19 @@ func (a *AgentConn) writeLoop() {
 }
 
 type AgentHandler struct {
-	CP         *core.ControlPlane
-	Upgrader   websocket.Upgrader
-	AgentToken string
+	CP       *core.ControlPlane
+	Upgrader websocket.Upgrader
+	Tokens   *auth.Store
 }
 
 func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token := extractToken(r)
-	if token == "" || token != h.AgentToken || !h.CP.RateAllow("agent:"+token) {
+	if token == "" || h.Tokens == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	rec, ok := h.Tokens.Lookup(token)
+	if !ok || rec.Revoked || rec.Type != auth.TokenTypeAgent || !h.CP.RateAllow("agent:"+rec.TokenID) {
 		slog.Warn("agent ws unauthorized", "remote", r.RemoteAddr)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -97,7 +103,7 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agentConn := NewAgentConn(conn)
-	if err := h.CP.RegisterOrUpdateServer(reg, agentConn); err != nil {
+	if err := h.CP.RegisterOrUpdateServer(rec.TenantID, reg, agentConn); err != nil {
 		_ = conn.WriteControl(
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, err.Error()),
