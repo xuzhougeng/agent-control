@@ -15,6 +15,8 @@
 
   const state = {
     token: localStorage.getItem("ui_token") || "admin-dev-token",
+    adminToken: localStorage.getItem("admin_token") || "admin-dev-token",
+    sidebarPanel: localStorage.getItem("sidebar_panel") || "control",
     selectedServerID: "",
     selectedSessionID: "",
     pendingFirstOutputSessionID: "",
@@ -22,10 +24,24 @@
     approvals: new Map(),
     sessions: [],
     servers: [],
+    lastGeneratedToken: null,
+    adminTokens: [],
   };
 
   const tokenInput = document.getElementById("tokenInput");
   const saveTokenBtn = document.getElementById("saveTokenBtn");
+  const adminTokenInput = document.getElementById("adminTokenInput");
+  const adminTypeSelect = document.getElementById("adminTypeSelect");
+  const adminRoleSelect = document.getElementById("adminRoleSelect");
+  const adminTenantInput = document.getElementById("adminTenantInput");
+  const adminNameInput = document.getElementById("adminNameInput");
+  const adminGenerateBtn = document.getElementById("adminGenerateBtn");
+  const adminListTokensBtn = document.getElementById("adminListTokensBtn");
+  const adminCopyTokenBtn = document.getElementById("adminCopyTokenBtn");
+  const adminUseUiTokenBtn = document.getElementById("adminUseUiTokenBtn");
+  const adminMessage = document.getElementById("adminMessage");
+  const adminResult = document.getElementById("adminResult");
+  const adminTokensList = document.getElementById("adminTokensList");
   const serversList = document.getElementById("serversList");
   const sessionsList = document.getElementById("sessionsList");
   const approvalList = document.getElementById("approvalList");
@@ -37,10 +53,15 @@
   const currentSessionLabel = document.getElementById("currentSessionLabel");
   const sidebarToggleBtn = document.getElementById("sidebarToggleBtn");
   const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+  const tabControlBtn = document.getElementById("tabControlBtn");
+  const tabAdminBtn = document.getElementById("tabAdminBtn");
+  const sidebarPanelControl = document.getElementById("sidebarPanelControl");
+  const sidebarPanelAdmin = document.getElementById("sidebarPanelAdmin");
   const mobileMedia = window.matchMedia("(max-width: 900px)");
   let mobileKeyboardOpen = false;
 
   tokenInput.value = state.token;
+  adminTokenInput.value = state.adminToken;
 
   const term = new Terminal({
     cursorBlink: true,
@@ -103,6 +124,20 @@
     }
   }
 
+  function setSidebarPanel(panelName) {
+    const panel = panelName === "admin" ? "admin" : "control";
+    state.sidebarPanel = panel;
+    localStorage.setItem("sidebar_panel", panel);
+
+    const controlActive = panel === "control";
+    tabControlBtn.classList.toggle("active", controlActive);
+    tabAdminBtn.classList.toggle("active", !controlActive);
+    tabControlBtn.setAttribute("aria-selected", String(controlActive));
+    tabAdminBtn.setAttribute("aria-selected", String(!controlActive));
+    sidebarPanelControl.classList.toggle("active", controlActive);
+    sidebarPanelAdmin.classList.toggle("active", !controlActive);
+  }
+
   function initializeApprovalDetails() {
     const saved = localStorage.getItem("approval_collapsed");
     if (saved === "1") {
@@ -122,8 +157,11 @@
 
   initializeApprovalDetails();
   toggleSidebar(false);
+  setSidebarPanel(state.sidebarPanel);
 
   sidebarToggleBtn.addEventListener("click", () => toggleSidebar());
+  tabControlBtn.addEventListener("click", () => setSidebarPanel("control"));
+  tabAdminBtn.addEventListener("click", () => setSidebarPanel("admin"));
   sidebarBackdrop.addEventListener("click", () => toggleSidebar(false));
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && document.body.classList.contains("sidebar-open")) {
@@ -154,11 +192,24 @@
   });
 
   saveTokenBtn.addEventListener("click", () => {
-    state.token = tokenInput.value.trim();
-    localStorage.setItem("ui_token", state.token);
-    reconnectWS();
-    refreshAll();
+    applyUIToken(tokenInput.value.trim());
   });
+
+  adminTypeSelect.addEventListener("change", syncAdminRoleState);
+  adminGenerateBtn.addEventListener("click", createAdminToken);
+  adminListTokensBtn.addEventListener("click", () => listAdminTokens());
+  adminCopyTokenBtn.addEventListener("click", copyGeneratedToken);
+  adminUseUiTokenBtn.addEventListener("click", () => {
+    const generated = state.lastGeneratedToken;
+    if (!generated || generated.type !== "ui" || !generated.token) {
+      return;
+    }
+    applyUIToken(generated.token);
+    setAdminMessage("Generated UI token is now active.");
+  });
+  syncAdminRoleState();
+  renderAdminResult(null);
+  renderAdminTokens();
 
   document.getElementById("refreshServersBtn").addEventListener("click", fetchServers);
   document.getElementById("refreshSessionsBtn").addEventListener("click", fetchSessions);
@@ -286,19 +337,34 @@
     renderSessions();
   }
 
+  function renderEmptyItem(list, text) {
+    const li = document.createElement("li");
+    li.className = "list-empty";
+    li.textContent = text;
+    list.appendChild(li);
+  }
+
   function renderServers() {
     serversList.innerHTML = "";
+    if (!state.servers.length) {
+      renderEmptyItem(serversList, "No servers");
+      return;
+    }
     for (const s of state.servers) {
       const li = document.createElement("li");
+      li.classList.add("server-item");
       if (s.server_id === state.selectedServerID) li.classList.add("selected");
       const statusClass = s.status === "online" ? "badge-online" : "badge-offline";
+      const tags = (s.tags || []).map(escapeHtml).join(", ");
       li.innerHTML = `
-        <div class="row">
-          <strong>${escapeHtml(s.server_id)}</strong>
+        <div class="server-main">
+          <strong class="server-id">${escapeHtml(s.server_id)}</strong>
           <span class="badge ${statusClass}">${escapeHtml(s.status)}</span>
         </div>
-        <div class="item-meta">${escapeHtml(s.hostname || "")}</div>
-        <div class="item-meta">${(s.tags || []).map(escapeHtml).join(", ")}</div>
+        <div class="server-sub">
+          <span class="server-host">${escapeHtml(s.hostname || "-")}</span>
+          ${tags ? `<span class="server-tags">${tags}</span>` : ""}
+        </div>
       `;
       li.addEventListener("click", async () => {
         state.selectedServerID = s.server_id;
@@ -312,24 +378,38 @@
 
   function renderSessions() {
     sessionsList.innerHTML = "";
+    if (!state.sessions.length) {
+      renderEmptyItem(sessionsList, "No sessions");
+      return;
+    }
     for (const s of state.sessions) {
       const li = document.createElement("li");
+      li.classList.add("session-item");
       if (s.session_id === state.selectedSessionID) li.classList.add("selected");
       const statusBadge = s.status === "running" ? "badge badge-running" : "badge";
       const canDelete = s.status !== "running";
+      const approvalClass = s.awaiting_approval ? "badge-pending" : "badge-muted";
       li.innerHTML = `
-        <div class="row">
-          <strong>${escapeHtml(s.session_id.slice(0, 8))}</strong>
-          <span class="${statusBadge}">${escapeHtml(s.status)}</span>
+        <div class="session-main">
+          <strong class="session-id">${escapeHtml(s.session_id.slice(0, 8))}</strong>
+          <div class="session-badges">
+            <span class="${statusBadge}">${escapeHtml(s.status)}</span>
+            <span class="badge ${approvalClass}">${s.awaiting_approval ? "approval" : "normal"}</span>
+          </div>
         </div>
-        <div class="item-meta">${escapeHtml(s.cwd || "")}</div>
-        ${s.resume_id ? `<div class="item-meta">resume: ${escapeHtml(s.resume_id)}</div>` : ""}
-        <div class="item-meta">approval: ${s.awaiting_approval ? "yes" : "no"}</div>
-        <div class="row" style="margin-top:6px;">
+        <div class="session-sub">${escapeHtml(s.cwd || "-")}</div>
+        ${
+          s.resume_id || s.exit_reason
+            ? `<div class="session-detail">
+                ${s.resume_id ? `<span>resume ${escapeHtml(s.resume_id)}</span>` : ""}
+                ${s.exit_reason ? `<span>reason ${escapeHtml(s.exit_reason)}</span>` : ""}
+              </div>`
+            : ""
+        }
+        <div class="session-actions">
           ${s.resume_id ? `<button type="button" data-action="resume" class="btn-secondary">Resume</button>` : ""}
           <button type="button" data-action="delete" class="btn-danger" ${canDelete ? "" : "disabled"}>Delete</button>
         </div>
-        ${s.exit_reason ? `<div class="item-meta">reason: ${escapeHtml(s.exit_reason)}</div>` : ""}
       `;
       if (s.resume_id) {
         const resumeBtn = li.querySelector('[data-action="resume"]');
@@ -602,9 +682,289 @@
     state.ws.send(raw);
   }
 
+  function applyUIToken(token) {
+    state.token = token || "";
+    tokenInput.value = state.token;
+    localStorage.setItem("ui_token", state.token);
+    reconnectWS();
+    refreshAll();
+  }
+
+  function syncAdminRoleState() {
+    const isUI = adminTypeSelect.value === "ui";
+    adminRoleSelect.disabled = !isUI;
+  }
+
+  function setAdminMessage(message, isError = false) {
+    adminMessage.textContent = message || "";
+    adminMessage.classList.toggle("error", isError);
+  }
+
+  function normalizeValue(value, fallback = "-") {
+    if (value === undefined || value === null || value === "") {
+      return fallback;
+    }
+    return String(value);
+  }
+
+  function makeAdminFieldRow(label, value, { mono = false } = {}) {
+    const row = document.createElement("div");
+    row.className = "admin-field-row";
+    const key = document.createElement("div");
+    key.className = "admin-field-key";
+    key.textContent = label;
+    const val = document.createElement("div");
+    val.className = `admin-field-value${mono ? " mono" : ""}`;
+    val.textContent = normalizeValue(value);
+    row.appendChild(key);
+    row.appendChild(val);
+    return row;
+  }
+
+  function renderAdminResult(data) {
+    adminResult.innerHTML = "";
+    if (!data) {
+      const empty = document.createElement("div");
+      empty.className = "admin-result-empty";
+      empty.textContent = "(no token generated)";
+      adminResult.appendChild(empty);
+      return;
+    }
+    const card = document.createElement("div");
+    card.className = "admin-result-card";
+
+    const header = document.createElement("div");
+    header.className = "admin-result-header";
+    const title = document.createElement("strong");
+    title.textContent = "Latest Generated Token";
+    const typeBadge = document.createElement("span");
+    typeBadge.className = "badge";
+    typeBadge.textContent = normalizeValue(data.type);
+    header.appendChild(title);
+    header.appendChild(typeBadge);
+
+    const fields = document.createElement("div");
+    fields.className = "admin-field-list";
+    fields.appendChild(makeAdminFieldRow("token", data.token, { mono: true }));
+    fields.appendChild(makeAdminFieldRow("token_id", data.token_id, { mono: true }));
+    fields.appendChild(makeAdminFieldRow("tenant", data.tenant_id, { mono: true }));
+    fields.appendChild(makeAdminFieldRow("role", data.role));
+    fields.appendChild(makeAdminFieldRow("name", data.name));
+    fields.appendChild(makeAdminFieldRow("created", formatTime(data.created_at_ms)));
+
+    card.appendChild(header);
+    card.appendChild(fields);
+    adminResult.appendChild(card);
+  }
+
+  function renderAdminTokens() {
+    adminTokensList.innerHTML = "";
+    if (!state.adminTokens.length) {
+      const li = document.createElement("li");
+      li.className = "admin-token-item";
+      li.textContent = "(no tokens)";
+      adminTokensList.appendChild(li);
+      return;
+    }
+    for (const rec of state.adminTokens) {
+      const li = document.createElement("li");
+      li.className = "admin-token-item";
+
+      const head = document.createElement("div");
+      head.className = "admin-token-head";
+      const id = document.createElement("strong");
+      id.textContent = rec.token_id ? rec.token_id.slice(0, 8) : "(unknown)";
+      const status = document.createElement("span");
+      status.className = rec.revoked ? "badge badge-offline" : "badge badge-online";
+      status.textContent = rec.revoked ? "revoked" : "active";
+      head.appendChild(id);
+      head.appendChild(status);
+
+      const fields = document.createElement("div");
+      fields.className = "admin-field-list";
+      fields.appendChild(makeAdminFieldRow("type", rec.type));
+      fields.appendChild(makeAdminFieldRow("role", rec.role));
+      fields.appendChild(makeAdminFieldRow("tenant", rec.tenant_id, { mono: true }));
+      fields.appendChild(makeAdminFieldRow("token_id", rec.token_id, { mono: true }));
+      fields.appendChild(makeAdminFieldRow("created", formatTime(rec.created_at_ms)));
+      fields.appendChild(makeAdminFieldRow("name", rec.name));
+
+      li.appendChild(head);
+      li.appendChild(fields);
+
+      if (!rec.revoked && rec.token_id) {
+        const actions = document.createElement("div");
+        actions.className = "admin-token-actions";
+        const revokeBtn = document.createElement("button");
+        revokeBtn.type = "button";
+        revokeBtn.className = "btn-danger";
+        revokeBtn.textContent = "Revoke";
+        revokeBtn.addEventListener("click", () => revokeAdminToken(rec.token_id));
+        actions.appendChild(revokeBtn);
+        li.appendChild(actions);
+      }
+      adminTokensList.appendChild(li);
+    }
+  }
+
+  function formatTime(ts) {
+    const n = Number(ts);
+    if (!Number.isFinite(n) || n <= 0) {
+      return String(ts || "-");
+    }
+    try {
+      return new Date(n).toLocaleString();
+    } catch (_err) {
+      return String(ts);
+    }
+  }
+
+  async function createAdminToken() {
+    const token = adminTokenInput.value.trim();
+    if (!token) {
+      setAdminMessage("Admin token is required.", true);
+      return;
+    }
+    const payload = {
+      type: adminTypeSelect.value,
+    };
+    if (payload.type === "ui") {
+      payload.role = adminRoleSelect.value;
+    }
+    const tenantID = adminTenantInput.value.trim();
+    if (tenantID) {
+      payload.tenant_id = tenantID;
+    }
+    const name = adminNameInput.value.trim();
+    if (name) {
+      payload.name = name;
+    }
+    state.adminToken = token;
+    localStorage.setItem("admin_token", state.adminToken);
+    setAdminMessage("Generating token...");
+    let resp;
+    try {
+      resp = await adminApi("/admin/tokens", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      setAdminMessage(`Request failed: ${String(err)}`, true);
+      return;
+    }
+    if (!resp.ok) {
+      setAdminMessage(await resp.text(), true);
+      return;
+    }
+    const result = await resp.json();
+    state.lastGeneratedToken = result;
+    if (result.tenant_id) {
+      adminTenantInput.value = result.tenant_id;
+    }
+    adminCopyTokenBtn.disabled = !result.token;
+    adminUseUiTokenBtn.disabled = !(result.type === "ui" && result.token);
+    renderAdminResult(result);
+    setAdminMessage("Token generated.");
+  }
+
+  async function listAdminTokens(showLoading = true) {
+    const token = adminTokenInput.value.trim();
+    if (!token) {
+      setAdminMessage("Admin token is required.", true);
+      return;
+    }
+    state.adminToken = token;
+    localStorage.setItem("admin_token", state.adminToken);
+    const tenantID = adminTenantInput.value.trim();
+    const path = tenantID ? `/admin/tokens?tenant_id=${encodeURIComponent(tenantID)}` : "/admin/tokens";
+    if (showLoading) {
+      setAdminMessage("Loading tokens...");
+    }
+    let resp;
+    try {
+      resp = await adminApi(path);
+    } catch (err) {
+      setAdminMessage(`Request failed: ${String(err)}`, true);
+      return;
+    }
+    if (!resp.ok) {
+      setAdminMessage(await resp.text(), true);
+      return;
+    }
+    const body = await resp.json();
+    const tokens = Array.isArray(body.tokens) ? body.tokens : [];
+    tokens.sort((a, b) => Number(b.created_at_ms || 0) - Number(a.created_at_ms || 0));
+    state.adminTokens = tokens;
+    renderAdminTokens();
+    setAdminMessage(`Loaded ${tokens.length} token(s).`);
+  }
+
+  async function copyGeneratedToken() {
+    const token = state.lastGeneratedToken && state.lastGeneratedToken.token;
+    if (!token) {
+      return;
+    }
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      setAdminMessage("Clipboard not available. Copy token from the result box.", true);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(token);
+      setAdminMessage("Token copied to clipboard.");
+    } catch (_err) {
+      setAdminMessage("Copy failed. Copy token from the result box.", true);
+    }
+  }
+
+  async function revokeAdminToken(tokenID) {
+    if (!tokenID) {
+      return;
+    }
+    if (!window.confirm(`Revoke token ${tokenID.slice(0, 8)}?`)) {
+      return;
+    }
+    const token = adminTokenInput.value.trim();
+    if (!token) {
+      setAdminMessage("Admin token is required.", true);
+      return;
+    }
+    state.adminToken = token;
+    localStorage.setItem("admin_token", state.adminToken);
+    setAdminMessage("Revoking token...");
+    let resp;
+    try {
+      resp = await adminApi(`/admin/tokens/${encodeURIComponent(tokenID)}/revoke`, {
+        method: "POST",
+      });
+    } catch (err) {
+      setAdminMessage(`Request failed: ${String(err)}`, true);
+      return;
+    }
+    if (!resp.ok) {
+      setAdminMessage(await resp.text(), true);
+      return;
+    }
+    for (const rec of state.adminTokens) {
+      if (rec.token_id === tokenID) {
+        rec.revoked = true;
+      }
+    }
+    renderAdminTokens();
+    setAdminMessage("Token revoked.");
+  }
+
   function api(path, init = {}) {
     const headers = new Headers(init.headers || {});
     headers.set("Authorization", `Bearer ${state.token}`);
+    if (init.body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    return fetch(path, { ...init, headers });
+  }
+
+  function adminApi(path, init = {}) {
+    const headers = new Headers(init.headers || {});
+    headers.set("Authorization", `Bearer ${state.adminToken}`);
     if (init.body && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
@@ -640,4 +1000,3 @@
   connectWS();
   refreshAll();
 })();
-

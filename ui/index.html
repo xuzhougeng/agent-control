@@ -32,26 +32,71 @@
 
   <main>
     <aside id="sidebar">
-      <section>
-        <h2>Servers</h2>
-        <button id="refreshServersBtn">Refresh</button>
-        <ul id="serversList"></ul>
-      </section>
-      <section>
-        <h2>New Session</h2>
-        <label for="cwdInput">cwd</label>
-        <input id="cwdInput" type="text" placeholder="/path/to/repo">
-        <label for="resumeInput">resume id (optional)</label>
-        <input id="resumeInput" type="text" placeholder="763bf36b-94cb-41b9-bc9c-3e6cf83c2cdf">
-        <label for="envInput">env (KEY=VALUE, comma-separated)</label>
-        <input id="envInput" type="text" placeholder="CC_PROFILE=dev">
-        <button id="newSessionBtn">Create</button>
-      </section>
-      <section>
-        <h2>Sessions</h2>
-        <button id="refreshSessionsBtn">Refresh</button>
-        <ul id="sessionsList"></ul>
-      </section>
+      <div class="sidebar-tabs" role="tablist" aria-label="Sidebar panels">
+        <button id="tabControlBtn" class="sidebar-tab active" type="button" role="tab" aria-controls="sidebarPanelControl" aria-selected="true">Control</button>
+        <button id="tabAdminBtn" class="sidebar-tab" type="button" role="tab" aria-controls="sidebarPanelAdmin" aria-selected="false">Admin</button>
+      </div>
+
+      <div id="sidebarPanelControl" class="sidebar-panel active">
+        <section class="sidebar-card">
+          <div class="section-header">
+            <h2>Servers</h2>
+            <button id="refreshServersBtn" type="button">Refresh</button>
+          </div>
+          <ul id="serversList"></ul>
+        </section>
+
+        <details id="newSessionDetails" class="sidebar-card" open>
+          <summary class="section-summary"><h2>New Session</h2></summary>
+          <label for="cwdInput">cwd</label>
+          <input id="cwdInput" type="text" placeholder="/path/to/repo">
+          <label for="resumeInput">resume id (optional)</label>
+          <input id="resumeInput" type="text" placeholder="763bf36b-94cb-41b9-bc9c-3e6cf83c2cdf">
+          <label for="envInput">env (KEY=VALUE, comma-separated)</label>
+          <input id="envInput" type="text" placeholder="CC_PROFILE=dev">
+          <button id="newSessionBtn" type="button" class="btn-primary">Create</button>
+        </details>
+
+        <section class="sidebar-card">
+          <div class="section-header">
+            <h2>Sessions</h2>
+            <button id="refreshSessionsBtn" type="button">Refresh</button>
+          </div>
+          <ul id="sessionsList"></ul>
+        </section>
+      </div>
+
+      <div id="sidebarPanelAdmin" class="sidebar-panel">
+        <section class="sidebar-card">
+          <h2>Admin Tokens</h2>
+          <label for="adminTokenInput">admin token</label>
+          <input id="adminTokenInput" type="password" placeholder="admin-dev-token">
+          <label for="adminTypeSelect">token type</label>
+          <select id="adminTypeSelect">
+            <option value="ui" selected>ui</option>
+            <option value="agent">agent</option>
+          </select>
+          <label for="adminRoleSelect">ui role</label>
+          <select id="adminRoleSelect">
+            <option value="viewer">viewer</option>
+            <option value="operator">operator</option>
+            <option value="owner" selected>owner</option>
+          </select>
+          <label for="adminTenantInput">tenant id (optional)</label>
+          <input id="adminTenantInput" type="text" placeholder="auto-generate if empty">
+          <label for="adminNameInput">name (optional)</label>
+          <input id="adminNameInput" type="text" placeholder="tenant-a-ui">
+          <div class="admin-actions">
+            <button id="adminGenerateBtn" class="btn-primary" type="button">Generate Token</button>
+            <button id="adminListTokensBtn" class="btn-secondary" type="button">List Tokens</button>
+            <button id="adminCopyTokenBtn" class="btn-secondary" type="button" disabled>Copy Token</button>
+            <button id="adminUseUiTokenBtn" class="btn-secondary" type="button" disabled>Use As UI Token</button>
+          </div>
+          <div id="adminMessage" class="admin-message"></div>
+          <div id="adminResult" class="admin-result">(no token generated)</div>
+          <ul id="adminTokensList" class="admin-tokens-list"></ul>
+        </section>
+      </div>
     </aside>
 
     <section class="content">
@@ -97,4 +142,3 @@
   <script src="/app.js"></script>
 </body>
 </html>
-
