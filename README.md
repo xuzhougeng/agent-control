@@ -35,7 +35,36 @@ go run ./cmd/cc-control \
   -offline-after-sec 30
 ```
 
-2. Create UI token for Tenant A via Admin API.
+2. Create token via web
+
+Open `http://127.0.0.1:18080`, then use the left sidebar `Admin` tab.
+
+2.1 Create Tenant UI token
+
+- Fill `admin token` (for example `admin-dev-token`).
+- Set `token type = ui`.
+- Set `ui role = owner` (or `viewer/operator` as needed).
+- Leave `tenant id` empty to auto-create a new tenant.
+- Click `Generate Token`.
+- Save the generated `token` (UI login token) and `tenant` (tenant id).
+- Optional: click `Use As UI Token` to switch current UI login directly.
+
+2.2 Create Tenant Agent token
+
+- Keep the same `tenant id` from 2.1.
+- Set `token type = agent`.
+- Click `Generate Token`.
+- Save the generated `token` as `-agent-token` for `cc-agent`.
+
+2.3 Optional management
+
+- Click `List Tokens` to view issued tokens (supports tenant filter).
+- Click `Revoke` to revoke a token by `token_id`.
+
+
+3. Create token via CLI.
+
+3.1 UI token
 
 ```bash
 # Tenant: create UI token (owner role), response includes tenant_id
@@ -61,7 +90,7 @@ Example Tenant UI token response:
 - `token`: use this as the UI login token for Tenant.
 - `tenant_id`: must be reused when creating Tenant agent tokens.
 
-3. Create AGENT token for Tenant A via Admin API.
+3.2 Agent Token
 
 ```bash
 # Tenant: create Agent token with the same tenant_id
@@ -87,26 +116,7 @@ Example Tenant A Agent token response:
 - `token`: use this as `-agent-token` when starting Tenant A `cc-agent`.
 - `token` is returned in plaintext only once; if leaked, revoke and re-issue immediately.
 
-4. (Optional) Create a second tenant (Tenant B) to verify multi-tenant isolation.
-
-```bash
-# Tenant B: create another UI token; this returns a different tenant_id
-curl -X POST http://127.0.0.1:18080/admin/tokens \
-  -H "Authorization: Bearer admin-dev-token" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"ui","role":"owner"}'
-
-# Tenant B: create Agent token for Tenant B's tenant_id
-curl -X POST http://127.0.0.1:18080/admin/tokens \
-  -H "Authorization: Bearer admin-dev-token" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"agent","tenant_id":"<tenant-b-id>"}'
-```
-
-- Tenant A and Tenant B data are isolated by `tenant_id`.
-- A Tenant A UI token cannot operate on Tenant B servers/sessions.
-
-5. Start one `cc-agent` for Tenant A.
+4. Start one `cc-agent` for Tenant A.
 
 ```bash
 cd cc-agent
@@ -126,11 +136,21 @@ Example executable values for `-claude-path`:
 /path/to/gemini
 ```
 
-6. Open browser UI:
+5. Open browser UI:
 
 `http://127.0.0.1:18080`
 
-Login with the Tenant A UI token returned by `/admin/tokens`.
+Use the sidebar `Admin` panel (optional) to create tokens from UI:
+
+- Fill `admin token`.
+- Choose `token type` (`ui` or `agent`), plus `ui role` when type is `ui`.
+- (Optional) keep/reuse `tenant id` to issue matching UI + Agent tokens for one tenant.
+- Click `Generate Token`.
+- Click `List Tokens` to query existing tokens (supports optional tenant filter).
+- Click `Revoke` in the token list to revoke a token by `token_id`.
+- For a generated UI token, click `Use As UI Token` to switch current UI login quickly.
+
+Or login with the Tenant A UI token returned by `/admin/tokens` (curl flow above).
 
 ## Token Model (Latest)
 
