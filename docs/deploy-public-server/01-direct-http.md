@@ -20,7 +20,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o cc-agent ./cmd/cc-agent
 
 # 上传 control 到公网服务器
 scp cc-control root@1.2.3.4:/opt/cc-control/
-scp -r ../ui root@1.2.3.4:/opt/cc-control/ui
+scp -r ../cc-web root@1.2.3.4:/opt/cc-control/cc-web
 ```
 
 ## A.2 生成 Admin Token
@@ -37,7 +37,7 @@ echo "ADMIN_TOKEN=$ADMIN_TOKEN"
 ```bash
 /opt/cc-control/cc-control \
   -addr 0.0.0.0:18080 \
-  -ui-dir /opt/cc-control/ui \
+  -ui-dir /opt/cc-control/cc-web \
   -admin-token "$ADMIN_TOKEN" \
   -audit-path /opt/cc-control/audit.jsonl \
   -offline-after-sec 30
@@ -59,7 +59,7 @@ Group=cc
 WorkingDirectory=/opt/cc-control
 ExecStart=/opt/cc-control/cc-control \
   -addr 0.0.0.0:18080 \
-  -ui-dir /opt/cc-control/ui \
+  -ui-dir /opt/cc-control/cc-web \
   -admin-token ${ADMIN_TOKEN} \
   -audit-path /opt/cc-control/audit.jsonl \
   -offline-after-sec 30

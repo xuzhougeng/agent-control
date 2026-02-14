@@ -20,7 +20,7 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})))
 	var (
 		addr                  = flag.String("addr", ":18080", "http listen address")
-		uiDir                 = flag.String("ui-dir", "../ui", "static ui directory")
+		uiDir                 = flag.String("ui-dir", "../cc-web", "static ui directory")
 		agentToken            = flag.String("agent-token", getenv("AGENT_TOKEN", "agent-dev-token"), "agent bearer token")
 		uiToken               = flag.String("ui-token", getenv("UI_TOKEN", "admin-dev-token"), "ui bearer token")
 		adminToken            = flag.String("admin-token", getenv("ADMIN_TOKEN", ""), "admin bearer token (optional)")

@@ -3,9 +3,10 @@
 ## Project Structure & Module Organization
 - `cc-control/`: Go control plane service (REST/WS, token management, audit logging).
 - `cc-agent/`: Go agent that connects to control plane and spawns PTYs.
-- `ui/`: static browser UI (`index.html`, `admin.html`, `tenant.html`, `app.js`).
+- `cc-web/`: static browser UI (`index.html`, `admin.html`, `tenant.html`, `app.js`).
 - `app/AgentControlMac/`: native macOS/iOS client (Xcode project).
 - `docs/`: architecture, API, and deployment guides.
+- `skills`: useful skill for agent.
 - `scripts/`: test and integration scripts.
 - `go.work`: workspace wiring for `cc-control` and `cc-agent`.
 
@@ -19,7 +20,7 @@
 ## Coding Style & Naming Conventions
 - Go: format with `gofmt`; package names are short/lowercase; exported identifiers use `CamelCase` and unexported use `camelCase`.
 - Files: Go source follows existing `snake_case.go` patterns; tests use `*_test.go`.
-- UI: keep changes scoped to `ui/` and follow the existing vanilla JS/DOM style (no framework).
+- UI: keep changes scoped to `cc-web/` and follow the existing vanilla JS/DOM style (no framework).
 
 ## Testing Guidelines
 - Framework: Go standard `testing` package.

@@ -5,7 +5,7 @@
 ```mermaid
 flowchart TB
     subgraph Clients["客户端"]
-        Browser["Browser\n(xterm.js / ui)"]
+        Browser["Browser\n(xterm.js / cc-web)"]
         App["AgentControl App\n(macOS / iOS)"]
     end
 
@@ -39,7 +39,7 @@ flowchart LR
     subgraph Repo["agent-control 仓库"]
         CC_DIR["cc-control/"]
         AGENT_DIR["cc-agent/"]
-        UI_DIR["ui/"]
+        UI_DIR["cc-web/"]
         APP_DIR["app/AgentControlMac/"]
     end
 
@@ -119,10 +119,10 @@ flowchart TB
 
 各子项目使用的依赖库如下，便于后续开发与升级。
 
-### 前端（ui/）
+### 前端（cc-web/）
 
 - **技术**：原生 HTML/CSS/JavaScript，无构建工具，无 `package.json`。
-- **运行时依赖**（通过 CDN 引入，见 `ui/index.html`）：
+- **运行时依赖**（通过 CDN 引入，见 `cc-web/index.html`）：
   - **xterm.js** — 终端模拟（`xterm/lib/xterm.js`、`xterm/css/xterm.css`）
   - **xterm-addon-fit** — 终端自适应窗口大小（`xterm-addon-fit/lib/xterm-addon-fit.js`）
 

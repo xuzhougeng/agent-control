@@ -61,7 +61,7 @@ echo "[readme-flow] logs: ${TMP_DIR}"
 echo "[readme-flow] starting cc-control on :${PORT}"
 go -C "$ROOT_DIR/cc-control" run ./cmd/cc-control \
   -addr ":${PORT}" \
-  -ui-dir ../ui \
+  -ui-dir ../cc-web \
   -admin-token "$ADMIN_TOKEN" \
   -agent-token "$AGENT_TOKEN" \
   -ui-token "$UI_TOKEN" \

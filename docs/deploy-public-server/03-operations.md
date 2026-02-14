@@ -79,7 +79,7 @@ sudo cp /opt/cc-control/.env ~/cc-upgrade-backup/$TS/cc-control.env.bak
 ```ini
 ExecStart=/opt/cc-control/cc-control \
   -addr 127.0.0.1:18080 \
-  -ui-dir /opt/cc-control/ui \
+  -ui-dir /opt/cc-control/cc-web \
   -admin-token ${ADMIN_TOKEN} \
   -audit-path /opt/cc-control/audit.jsonl \
   -offline-after-sec 30

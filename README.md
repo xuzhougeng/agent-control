@@ -14,7 +14,7 @@ flowchart LR
 
 - `cc-control/`: control plane (`REST + WS + audit + token management + optional prompt detection`)
 - `cc-agent/`: per-server agent (`WS outbound + PTY spawn/stream/input`)
-- `ui/`: static browser UI (`xterm.js`)
+- `cc-web/`: static browser UI (`xterm.js`)
 - `app/AgentControlMac/`: native macOS/iOS client
 
 ## Quick Start
@@ -27,7 +27,7 @@ For production deployment (including TLS), use `docs/deploy-public-server.md`.
 cd cc-control
 go run ./cmd/cc-control \
   -addr :18080 \
-  -ui-dir ../ui \
+  -ui-dir ../cc-web \
   -admin-token admin-dev-token \
   -ui-token "" \
   -agent-token "" \

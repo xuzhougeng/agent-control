@@ -59,7 +59,7 @@ func (s *Server) Router() http.Handler {
 
 	uiDir := s.UIDir
 	if uiDir == "" {
-		uiDir = "ui"
+		uiDir = "cc-web"
 	}
 	indexPath := filepath.Join(filepath.Clean(uiDir), "index.html")
 	adminPath := filepath.Join(filepath.Clean(uiDir), "admin.html")

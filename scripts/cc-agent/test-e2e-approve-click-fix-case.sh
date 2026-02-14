@@ -78,7 +78,7 @@ else
   echo "[cc-agent][e2e] starting cc-control on :${PORT}"
   go -C "$ROOT_DIR/cc-control" run ./cmd/cc-control \
     -addr ":${PORT}" \
-    -ui-dir ../ui \
+    -ui-dir ../cc-web \
     -agent-token "$AGENT_TOKEN" \
     -ui-token "$UI_TOKEN" \
     -audit-path "$AUDIT_PATH" \
