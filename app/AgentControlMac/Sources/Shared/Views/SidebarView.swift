@@ -30,6 +30,16 @@ struct SidebarView: View {
                 HStack {
                     Text("Servers")
                     Spacer()
+                    #if os(macOS)
+                    if #available(macOS 14, *) {
+                        SettingsLink {
+                            Image(systemName: "gearshape")
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .help("Connection Settings")
+                    }
+                    #else
                     if let onOpenSettings {
                         Button(action: onOpenSettings) {
                             Image(systemName: "gearshape")
@@ -38,6 +48,7 @@ struct SidebarView: View {
                         .font(.caption)
                         .help("Connection Settings")
                     }
+                    #endif
                     Button { showServerGuide = true } label: {
                         Image(systemName: "questionmark.circle")
                     }
@@ -131,6 +142,15 @@ struct ServerGuideSheet: View {
                     Label("Start cc-agent on target machine with a unique -server-id.", systemImage: "terminal")
                     Label("Return here and tap refresh in the Servers section.", systemImage: "arrow.clockwise")
                 }
+                #if os(macOS)
+                if #available(macOS 14, *) {
+                    Section {
+                        SettingsLink {
+                            Text("Open Settings")
+                        }
+                    }
+                }
+                #else
                 if let onOpenSettings {
                     Section {
                         Button("Open Settings") {
@@ -139,6 +159,7 @@ struct ServerGuideSheet: View {
                         }
                     }
                 }
+                #endif
             }
             .navigationTitle("Add Server")
             .toolbar {

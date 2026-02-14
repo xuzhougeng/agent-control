@@ -53,6 +53,14 @@ struct ContentView: View {
             ToolbarItem(placement: .automatic) {
                 ConnectionBadge(connected: appState.wsConnected)
             }
+            ToolbarItem(placement: .automatic) {
+                if #available(macOS 14, *) {
+                    SettingsLink {
+                        Image(systemName: "gear")
+                    }
+                    .help("Settings (⌘,)")
+                }
+            }
         }
         .sheet(isPresented: $appState.showNewSessionSheet) {
             NewSessionSheet()
