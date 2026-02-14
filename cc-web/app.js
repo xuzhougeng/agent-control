@@ -58,6 +58,9 @@
     adminTenantTokens: [],
     selectedAdminTokenID: "",
     adminTokenSecrets: loadAdminTokenCache(),
+    adminServers: [],
+    adminSessions: [],
+    adminActiveTab: "overview",
   };
 
   const tokenInput = document.getElementById("tokenInput");
@@ -74,6 +77,10 @@
   const adminVerifyBtn = document.getElementById("adminVerifyBtn");
   const adminGateMessage = document.getElementById("adminGateMessage");
   const adminContent = document.getElementById("adminContent");
+  const adminServersSearch = document.getElementById("adminServersSearch");
+  const adminSessionsSearch = document.getElementById("adminSessionsSearch");
+  const adminSessionsStatusFilter = document.getElementById("adminSessionsStatusFilter");
+  const adminTokenSearch = document.getElementById("adminTokenSearch");
   const tenantTokenInput = document.getElementById("tenantTokenInput");
   const tenantRoleSelect = document.getElementById("tenantRoleSelect");
   const tenantTenantInput = document.getElementById("tenantTenantInput");
@@ -338,6 +345,25 @@
     renderAdminResult(null);
     renderAdminTenantTokens();
     updateAdminCopyState();
+
+    // Tab switching
+    for (const tab of document.querySelectorAll(".admin-tab")) {
+      tab.addEventListener("click", () => switchAdminTab(tab.dataset.tab));
+    }
+
+    // Refresh buttons
+    const adminRefreshOverviewBtn = document.getElementById("adminRefreshOverviewBtn");
+    const adminRefreshServersBtn = document.getElementById("adminRefreshServersBtn");
+    const adminRefreshSessionsBtn = document.getElementById("adminRefreshSessionsBtn");
+    if (adminRefreshOverviewBtn) adminRefreshOverviewBtn.addEventListener("click", refreshAdminOverview);
+    if (adminRefreshServersBtn) adminRefreshServersBtn.addEventListener("click", fetchAdminServers);
+    if (adminRefreshSessionsBtn) adminRefreshSessionsBtn.addEventListener("click", fetchAdminSessions);
+
+    // Search / filter
+    if (adminServersSearch) adminServersSearch.addEventListener("input", debounce(renderAdminServers, 200));
+    if (adminSessionsSearch) adminSessionsSearch.addEventListener("input", debounce(renderAdminSessions, 200));
+    if (adminSessionsStatusFilter) adminSessionsStatusFilter.addEventListener("change", renderAdminSessions);
+    if (adminTokenSearch) adminTokenSearch.addEventListener("input", debounce(renderAdminTenantTokens, 200));
   }
 
   if (isTenantPage) {
@@ -845,6 +871,8 @@
       adminCopyTokenBtn.disabled = true;
       state.lastGeneratedToken = null;
       state.adminTenantTokens = [];
+      state.adminServers = [];
+      state.adminSessions = [];
       state.selectedAdminTokenID = "";
       if (adminTenantList) {
         adminTenantList.hidden = true;
@@ -852,6 +880,8 @@
       renderAdminResult(null);
       renderAdminTenantTokens();
       updateAdminCopyState();
+    } else {
+      refreshAdminOverview();
     }
   }
 
@@ -1083,14 +1113,20 @@
       return;
     }
     adminTenantList.innerHTML = "";
-    if (!state.adminTenantTokens.length) {
+    const query = (adminTokenSearch && adminTokenSearch.value || "").toLowerCase().trim();
+    const filtered = state.adminTenantTokens.filter((rec) => {
+      if (!query) return true;
+      return (rec.tenant_id || "").toLowerCase().includes(query)
+        || (rec.token_id || "").toLowerCase().includes(query);
+    });
+    if (!filtered.length) {
       const li = document.createElement("li");
       li.className = "admin-token-item list-empty";
       li.textContent = "(no tenant tokens)";
       adminTenantList.appendChild(li);
       return;
     }
-    for (const rec of state.adminTenantTokens) {
+    for (const rec of filtered) {
       const li = document.createElement("li");
       li.className = "admin-token-item";
       const tokenID = rec.token_id || "";
@@ -1515,6 +1551,223 @@
       setTenantMessage(`${kind === "agent" ? "Agent" : "UI"} token copied to clipboard.`);
     } catch (_err) {
       setTenantMessage("Copy failed. Copy token from the result box.", true);
+    }
+  }
+
+  function debounce(fn, ms) {
+    let timer;
+    return function (...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), ms);
+    };
+  }
+
+  function switchAdminTab(tabName) {
+    state.adminActiveTab = tabName;
+    const tabs = document.querySelectorAll(".admin-tab");
+    const panels = document.querySelectorAll(".admin-panel");
+    for (const tab of tabs) {
+      tab.classList.toggle("active", tab.dataset.tab === tabName);
+    }
+    for (const panel of panels) {
+      panel.classList.toggle("active", panel.id === `adminPanel${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+    }
+    if (tabName === "overview") {
+      refreshAdminOverview();
+    } else if (tabName === "servers") {
+      fetchAdminServers();
+    } else if (tabName === "sessions") {
+      fetchAdminSessions();
+    } else if (tabName === "tokens") {
+      if (!adminTenantList.hidden) {
+        listAdminTenantTokens(false);
+      }
+    }
+  }
+
+  async function fetchAdminServers() {
+    const resp = await adminApi("/admin/servers");
+    if (!resp.ok) {
+      return;
+    }
+    const body = await resp.json();
+    state.adminServers = body.servers || [];
+    renderAdminServers();
+  }
+
+  async function fetchAdminSessions() {
+    const resp = await adminApi("/admin/sessions");
+    if (!resp.ok) {
+      return;
+    }
+    const body = await resp.json();
+    state.adminSessions = body.sessions || [];
+    renderAdminSessions();
+  }
+
+  async function refreshAdminOverview() {
+    const [serversResp, sessionsResp, tokensResp] = await Promise.all([
+      adminApi("/admin/servers"),
+      adminApi("/admin/sessions"),
+      adminApi("/admin/tokens"),
+    ]);
+    if (serversResp.ok) {
+      const b = await serversResp.json();
+      state.adminServers = b.servers || [];
+    }
+    if (sessionsResp.ok) {
+      const b = await sessionsResp.json();
+      state.adminSessions = b.sessions || [];
+    }
+    let allTokens = [];
+    if (tokensResp.ok) {
+      const b = await tokensResp.json();
+      allTokens = b.tokens || [];
+      const tenants = allTokens.filter((r) => r.type === "tenant");
+      tenants.sort((a, b) => Number(b.created_at_ms || 0) - Number(a.created_at_ms || 0));
+      state.adminTenantTokens = tenants;
+    }
+    renderAdminOverviewStats(allTokens);
+  }
+
+  function renderAdminOverviewStats(allTokens) {
+    const servers = state.adminServers;
+    const sessions = state.adminSessions;
+    const tokens = allTokens || [];
+
+    const online = servers.filter((s) => s.status === "online").length;
+    const offline = servers.length - online;
+    setText("statServersTotal", String(servers.length));
+    setText("statServersOnline", `${online} online`);
+    setText("statServersOffline", `${offline} offline`);
+
+    const running = sessions.filter((s) => s.status === "running").length;
+    const other = sessions.length - running;
+    setText("statSessionsTotal", String(sessions.length));
+    setText("statSessionsRunning", `${running} running`);
+    setText("statSessionsOther", `${other} other`);
+
+    const active = tokens.filter((t) => !t.revoked).length;
+    const revoked = tokens.filter((t) => t.revoked).length;
+    setText("statTokensTotal", String(tokens.length));
+    setText("statTokensActive", `${active} active`);
+    setText("statTokensRevoked", `${revoked} revoked`);
+
+    const tenantIDs = new Set();
+    for (const t of tokens) {
+      if (t.tenant_id) tenantIDs.add(t.tenant_id);
+    }
+    for (const s of servers) {
+      if (s.tenant_id) tenantIDs.add(s.tenant_id);
+    }
+    setText("statTenantsTotal", String(tenantIDs.size));
+    setText("statTenantsDetail", "unique tenant IDs");
+  }
+
+  function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  async function adminStopSession(sessionID) {
+    if (!sessionID) return;
+    if (!window.confirm(`Stop session ${sessionID.slice(0, 8)}?`)) return;
+    const resp = await adminApi(`/admin/sessions/${encodeURIComponent(sessionID)}/stop`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    if (!resp.ok) {
+      alert(await resp.text());
+      return;
+    }
+    await fetchAdminSessions();
+  }
+
+  function renderAdminServers() {
+    const list = document.getElementById("adminServersList");
+    if (!list) return;
+    list.innerHTML = "";
+    const query = (adminServersSearch && adminServersSearch.value || "").toLowerCase().trim();
+    const filtered = state.adminServers.filter((s) => {
+      if (!query) return true;
+      return (s.server_id || "").toLowerCase().includes(query)
+        || (s.hostname || "").toLowerCase().includes(query)
+        || (s.tenant_id || "").toLowerCase().includes(query)
+        || (s.os || "").toLowerCase().includes(query)
+        || (s.arch || "").toLowerCase().includes(query);
+    });
+    if (!filtered.length) {
+      renderEmptyItem(list, "No servers");
+      return;
+    }
+    for (const s of filtered) {
+      const li = document.createElement("li");
+      li.className = "server-item";
+      const statusClass = s.status === "online" ? "badge-online" : "badge-offline";
+      const lastSeen = s.last_seen_ms ? formatTime(s.last_seen_ms) : "-";
+      li.innerHTML = `
+        <div class="server-main">
+          <strong class="server-id">${escapeHtml(s.server_id)}</strong>
+          <span class="badge ${statusClass}">${escapeHtml(s.status)}</span>
+        </div>
+        <div class="server-sub">
+          <span class="server-host">${escapeHtml(s.hostname || "-")}</span>
+          <span class="server-tags">${escapeHtml(s.os || "")}/${escapeHtml(s.arch || "")}</span>
+          ${s.version ? `<span class="server-tags">v${escapeHtml(s.version)}</span>` : ""}
+        </div>
+        <div class="session-detail">
+          <span>tenant: ${escapeHtml(s.tenant_id || "-")}</span>
+          <span>seen: ${escapeHtml(lastSeen)}</span>
+        </div>
+      `;
+      list.appendChild(li);
+    }
+  }
+
+  function renderAdminSessions() {
+    const list = document.getElementById("adminSessionsList");
+    if (!list) return;
+    list.innerHTML = "";
+    const query = (adminSessionsSearch && adminSessionsSearch.value || "").toLowerCase().trim();
+    const statusFilter = (adminSessionsStatusFilter && adminSessionsStatusFilter.value || "");
+    const filtered = state.adminSessions.filter((s) => {
+      if (statusFilter && s.status !== statusFilter) return false;
+      if (!query) return true;
+      return (s.session_id || "").toLowerCase().includes(query)
+        || (s.server_id || "").toLowerCase().includes(query)
+        || (s.tenant_id || "").toLowerCase().includes(query)
+        || (s.cwd || "").toLowerCase().includes(query);
+    });
+    if (!filtered.length) {
+      renderEmptyItem(list, "No sessions");
+      return;
+    }
+    for (const s of filtered) {
+      const li = document.createElement("li");
+      li.className = "session-item";
+      const statusBadge = s.status === "running" ? "badge badge-running" : "badge";
+      li.innerHTML = `
+        <div class="session-main">
+          <strong class="session-id">${escapeHtml(s.session_id.slice(0, 8))}</strong>
+          <div class="session-badges">
+            <span class="${statusBadge}">${escapeHtml(s.status)}</span>
+          </div>
+        </div>
+        <div class="session-sub">${escapeHtml(s.cwd || "-")}</div>
+        <div class="session-detail">
+          <span>server: ${escapeHtml(s.server_id || "-")}</span>
+          <span>tenant: ${escapeHtml(s.tenant_id || "-")}</span>
+        </div>
+        ${s.status === "running" ? `<div class="session-actions"><button type="button" data-session-id="${escapeHtml(s.session_id)}" class="btn-danger admin-stop-btn">Stop</button></div>` : ""}
+      `;
+      const stopBtn = li.querySelector(".admin-stop-btn");
+      if (stopBtn) {
+        stopBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          adminStopSession(s.session_id);
+        });
+      }
+      list.appendChild(li);
     }
   }
 

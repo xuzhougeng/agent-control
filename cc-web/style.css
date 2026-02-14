@@ -781,6 +781,114 @@ body.sidebar-open .sidebar-backdrop {
   pointer-events: auto;
 }
 
+/* ── Admin Tabs & Panels ──────────────────────────────── */
+.admin-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-tab {
+  flex: 1 1 0;
+  min-height: 36px;
+  border-radius: 7px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.admin-tab:hover {
+  border-color: transparent;
+  background: var(--bg-hover);
+}
+
+.admin-tab.active {
+  background: linear-gradient(180deg, #2f5089, #223e6f);
+  border-color: #3e629a;
+  color: #f4f8ff;
+}
+
+.admin-panel {
+  display: none;
+}
+
+.admin-panel.active {
+  display: block;
+}
+
+/* ── Admin Stats Grid ────────────────────────────────── */
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.admin-stat-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--bg-elevated);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+}
+
+.admin-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.1;
+}
+
+.admin-stat-detail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── Admin Filter Row ────────────────────────────────── */
+.admin-filter-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.admin-filter-row input {
+  flex: 1;
+  margin: 0;
+}
+
+.admin-filter-row select {
+  width: 140px;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+/* ── Admin Server / Session Lists ────────────────────── */
+#adminServersList,
+#adminSessionsList {
+  max-height: 60vh;
+  overflow: auto;
+}
+
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width: 900px) {
   h1 { font-size: 14px; }
@@ -863,6 +971,13 @@ body.sidebar-open .sidebar-backdrop {
   .toolbar-keys .btn-key { flex: 0 0 auto; }
 
   button, input, select { min-height: 42px; font-size: 16px; }
+
+  .admin-stats-grid { grid-template-columns: 1fr 1fr; }
+  .admin-tabs { flex-wrap: wrap; }
+  .admin-filter-row { flex-direction: column; }
+  .admin-filter-row select { width: 100%; }
+  #adminServersList,
+  #adminSessionsList { max-height: none; }
 }
 
 @media (max-width: 600px) {

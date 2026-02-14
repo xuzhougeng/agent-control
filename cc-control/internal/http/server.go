@@ -51,6 +51,9 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/admin/verify", s.withAdminAuth(s.handleAdminVerify))
 	mux.HandleFunc("/admin/tokens", s.withAdminAuth(s.handleAdminTokens))
 	mux.HandleFunc("/admin/tokens/", s.withAdminAuth(s.handleAdminTokenSubroutes))
+	mux.HandleFunc("/admin/servers", s.withAdminAuth(s.handleAdminServers))
+	mux.HandleFunc("/admin/sessions", s.withAdminAuth(s.handleAdminSessions))
+	mux.HandleFunc("/admin/sessions/", s.withAdminAuth(s.handleAdminSessionSubroutes))
 	mux.HandleFunc("/tenant/verify", s.withTenantAuth(s.handleTenantVerify))
 	mux.HandleFunc("/tenant/tokens", s.withTenantAuth(s.handleTenantTokens))
 	mux.HandleFunc("/api/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -411,6 +414,53 @@ func (s *Server) handleTenantTokens(w http.ResponseWriter, r *http.Request, rec 
 			"created_at_ms": agentRec.CreatedAtMS,
 		},
 	})
+}
+
+func (s *Server) handleAdminServers(w http.ResponseWriter, r *http.Request, _ *auth.TokenRecord) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	tenantID := strings.TrimSpace(r.URL.Query().Get("tenant_id"))
+	writeJSON(w, http.StatusOK, map[string]any{"servers": s.CP.GetServers(tenantID)})
+}
+
+func (s *Server) handleAdminSessions(w http.ResponseWriter, r *http.Request, _ *auth.TokenRecord) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	tenantID := strings.TrimSpace(r.URL.Query().Get("tenant_id"))
+	serverID := strings.TrimSpace(r.URL.Query().Get("server_id"))
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": s.CP.GetSessions(tenantID, serverID)})
+}
+
+func (s *Server) handleAdminSessionSubroutes(w http.ResponseWriter, r *http.Request, _ *auth.TokenRecord) {
+	path := strings.TrimPrefix(r.URL.Path, "/admin/sessions/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 || parts[0] == "" || parts[1] != "stop" {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sessionID := parts[0]
+	var req core.StopSessionRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := s.CP.StopSession("admin", "", sessionID, req.GraceMS, req.KillAfterMS); err != nil {
+		code := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") {
+			code = http.StatusNotFound
+		}
+		if strings.Contains(err.Error(), "offline") {
+			code = http.StatusServiceUnavailable
+		}
+		http.Error(w, err.Error(), code)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (s *Server) handleAdminTokenSubroutes(w http.ResponseWriter, r *http.Request, _ *auth.TokenRecord) {

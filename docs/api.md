@@ -107,6 +107,76 @@ Base URL：`http://127.0.0.1:18080`
 }
 ```
 
+### 4) 查询服务器（跨租户）
+
+- `GET /admin/servers`
+- 可选过滤：`GET /admin/servers?tenant_id=...`
+- Header：`Authorization: Bearer <ADMIN_TOKEN>`
+- 响应：
+
+```json
+{
+  "servers": [
+    {
+      "server_id": "srv-local",
+      "hostname": "host",
+      "status": "online",
+      "tenant_id": "uuid",
+      "os": "linux",
+      "arch": "amd64",
+      "version": "1.0.0",
+      "last_seen_ms": 1730000000000
+    }
+  ]
+}
+```
+
+> 说明：`tenant_id` 为空时返回所有租户的服务器；指定时仅返回该租户的服务器。
+
+### 5) 查询会话（跨租户）
+
+- `GET /admin/sessions`
+- 可选过滤：`GET /admin/sessions?tenant_id=...&server_id=...`
+- Header：`Authorization: Bearer <ADMIN_TOKEN>`
+- 响应：
+
+```json
+{
+  "sessions": [
+    {
+      "session_id": "uuid",
+      "server_id": "srv-local",
+      "tenant_id": "uuid",
+      "status": "running",
+      "cwd": "/path/to/dir"
+    }
+  ]
+}
+```
+
+> 说明：`tenant_id` 和 `server_id` 均为可选过滤参数，均为空时返回全部会话。
+
+### 6) 停止会话（跨租户）
+
+- `POST /admin/sessions/{session_id}/stop`
+- Header：`Authorization: Bearer <ADMIN_TOKEN>`
+- 请求体（可空）：
+
+```json
+{
+  "grace_ms": 4000,
+  "kill_after_ms": 9000
+}
+```
+
+- 响应：
+
+```json
+{"ok": true}
+```
+
+> 说明：Admin 可停止任意租户的会话，无需指定 `tenant_id`。
+
 ---
 
 ## Tenant API（自助签发 UI/Agent Token）

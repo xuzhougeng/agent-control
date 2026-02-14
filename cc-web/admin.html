@@ -16,7 +16,7 @@
   <main class="page-body">
     <div class="page-header">
       <h2>Admin</h2>
-      <p class="page-subtitle">Verify admin token to generate tenant IDs.</p>
+      <p class="page-subtitle">Verify admin token to manage the control plane.</p>
     </div>
 
     <section class="sidebar-card">
@@ -29,17 +29,87 @@
     </section>
 
     <section id="adminContent" class="sidebar-card" hidden>
-      <h2>Tenant Token</h2>
-      <div class="admin-actions">
-        <button id="adminGenerateBtn" class="btn-primary" type="button">Generate Tenant Token</button>
-        <button id="adminCopyTokenBtn" class="btn-secondary" type="button" disabled>Copy Token</button>
-        <button id="adminListTenantsBtn" class="btn-secondary" type="button">List Tenant Tokens</button>
-        <button id="adminExportBtn" class="btn-secondary" type="button">Export Tokens</button>
-        <button id="adminExportCsvBtn" class="btn-secondary" type="button">Export CSV</button>
+      <div class="admin-tabs">
+        <button class="admin-tab active" data-tab="overview" type="button">Overview</button>
+        <button class="admin-tab" data-tab="servers" type="button">Servers</button>
+        <button class="admin-tab" data-tab="sessions" type="button">Sessions</button>
+        <button class="admin-tab" data-tab="tokens" type="button">Tokens</button>
       </div>
-      <div id="adminMessage" class="admin-message"></div>
-      <div id="adminResult" class="admin-result">(no token generated)</div>
-      <ul id="adminTenantList" class="admin-tokens-list" hidden></ul>
+
+      <!-- Overview Panel -->
+      <div id="adminPanelOverview" class="admin-panel active">
+        <div class="admin-stats-grid">
+          <div class="admin-stat-card">
+            <div class="admin-stat-label">Servers</div>
+            <div class="admin-stat-value" id="statServersTotal">-</div>
+            <div class="admin-stat-detail"><span class="badge badge-online" id="statServersOnline">0 online</span> <span class="badge badge-offline" id="statServersOffline">0 offline</span></div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-label">Sessions</div>
+            <div class="admin-stat-value" id="statSessionsTotal">-</div>
+            <div class="admin-stat-detail"><span class="badge badge-running" id="statSessionsRunning">0 running</span> <span class="badge badge-muted" id="statSessionsOther">0 other</span></div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-label">Tokens</div>
+            <div class="admin-stat-value" id="statTokensTotal">-</div>
+            <div class="admin-stat-detail"><span class="badge badge-online" id="statTokensActive">0 active</span> <span class="badge badge-offline" id="statTokensRevoked">0 revoked</span></div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-label">Tenants</div>
+            <div class="admin-stat-value" id="statTenantsTotal">-</div>
+            <div class="admin-stat-detail"><span class="badge badge-muted" id="statTenantsDetail">unique tenant IDs</span></div>
+          </div>
+        </div>
+        <div class="admin-actions" style="margin-top:12px">
+          <button id="adminRefreshOverviewBtn" class="btn-secondary" type="button">Refresh Overview</button>
+        </div>
+      </div>
+
+      <!-- Servers Panel -->
+      <div id="adminPanelServers" class="admin-panel">
+        <div class="admin-filter-row">
+          <input id="adminServersSearch" type="text" placeholder="Search servers (ID, hostname, tenant)...">
+        </div>
+        <div class="admin-actions">
+          <button id="adminRefreshServersBtn" class="btn-secondary" type="button">Refresh Servers</button>
+        </div>
+        <ul id="adminServersList"></ul>
+      </div>
+
+      <!-- Sessions Panel -->
+      <div id="adminPanelSessions" class="admin-panel">
+        <div class="admin-filter-row">
+          <input id="adminSessionsSearch" type="text" placeholder="Search sessions (ID, server, tenant)...">
+          <select id="adminSessionsStatusFilter">
+            <option value="">All Status</option>
+            <option value="running">Running</option>
+            <option value="stopped">Stopped</option>
+            <option value="exited">Exited</option>
+          </select>
+        </div>
+        <div class="admin-actions">
+          <button id="adminRefreshSessionsBtn" class="btn-secondary" type="button">Refresh Sessions</button>
+        </div>
+        <ul id="adminSessionsList"></ul>
+      </div>
+
+      <!-- Tokens Panel -->
+      <div id="adminPanelTokens" class="admin-panel">
+        <div class="admin-filter-row">
+          <input id="adminTokenSearch" type="text" placeholder="Search tokens (tenant ID, token ID)...">
+        </div>
+        <h2>Tenant Token</h2>
+        <div class="admin-actions">
+          <button id="adminGenerateBtn" class="btn-primary" type="button">Generate Tenant Token</button>
+          <button id="adminCopyTokenBtn" class="btn-secondary" type="button" disabled>Copy Token</button>
+          <button id="adminListTenantsBtn" class="btn-secondary" type="button">List Tenant Tokens</button>
+          <button id="adminExportBtn" class="btn-secondary" type="button">Export Tokens</button>
+          <button id="adminExportCsvBtn" class="btn-secondary" type="button">Export CSV</button>
+        </div>
+        <div id="adminMessage" class="admin-message"></div>
+        <div id="adminResult" class="admin-result">(no token generated)</div>
+        <ul id="adminTenantList" class="admin-tokens-list" hidden></ul>
+      </div>
     </section>
   </main>
 

@@ -141,11 +141,13 @@ Example executable values for `-claude-path`:
 
 `http://127.0.0.1:18080`
 
-Open `http://127.0.0.1:18080/admin` (optional) to create tokens from UI:
+Open `http://127.0.0.1:18080/admin` (optional) to access the admin dashboard:
 
-- Admin section: create tenant tokens and manage issued tokens.
+- **Overview** tab: server/session/token/tenant counts at a glance.
+- **Servers** tab: cross-tenant server list with search and online/offline status.
+- **Sessions** tab: cross-tenant session list with search, status filter, and Stop button.
+- **Tokens** tab: create tenant tokens, list/revoke/export issued tokens.
 - Tenant page (`/tenant`): generate UI + Agent tokens with the tenant token.
-- For a generated UI token, click `Use As UI Token` to switch current UI login quickly.
 
 Or login with the Tenant A UI token returned by `/tenant/tokens` (curl flow above).
 
@@ -182,6 +184,7 @@ Full guide: `docs/deploy-public-server.md`
 - Approve/Reject action routing (`y/n`, Enter/Esc patterns)
 - JSONL audit log (`cc-control/audit.jsonl`)
 - Token issue/list/revoke admin API with tenant isolation
+- Admin dashboard with cross-tenant server/session monitoring
 
 ## Security Baseline (MVP)
 
