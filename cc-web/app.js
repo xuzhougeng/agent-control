@@ -61,6 +61,7 @@
     adminServers: [],
     adminSessions: [],
     adminActiveTab: "overview",
+    adminImportInFlight: false,
   };
 
   const tokenInput = document.getElementById("tokenInput");
@@ -71,6 +72,9 @@
   const adminListTenantsBtn = document.getElementById("adminListTenantsBtn");
   const adminExportBtn = document.getElementById("adminExportBtn");
   const adminExportCsvBtn = document.getElementById("adminExportCsvBtn");
+  const adminImportBtn = document.getElementById("adminImportBtn");
+  const adminImportInput = document.getElementById("adminImportInput");
+  const adminImportResult = document.getElementById("adminImportResult");
   const adminMessage = document.getElementById("adminMessage");
   const adminResult = document.getElementById("adminResult");
   const adminTenantList = document.getElementById("adminTenantList");
@@ -342,8 +346,25 @@
     });
     adminExportBtn.addEventListener("click", exportAdminTokens);
     adminExportCsvBtn.addEventListener("click", exportAdminTokensCsv);
+    if (adminImportBtn && adminImportInput) {
+      adminImportBtn.addEventListener("click", () => {
+        if (!state.adminVerified) {
+          setAdminMessage("Verify admin token first.", true);
+          return;
+        }
+        adminImportInput.click();
+      });
+      adminImportInput.addEventListener("change", () => {
+        const file = adminImportInput.files && adminImportInput.files[0];
+        adminImportInput.value = "";
+        if (file) {
+          importAdminTokensCsv(file);
+        }
+      });
+    }
     renderAdminResult(null);
     renderAdminTenantTokens();
+    renderAdminImportResult(null);
     updateAdminCopyState();
 
     // Tab switching
@@ -866,6 +887,12 @@
     if (adminExportCsvBtn) {
       adminExportCsvBtn.disabled = !verified;
     }
+    if (adminImportBtn) {
+      adminImportBtn.disabled = !verified;
+    }
+    if (adminImportInput) {
+      adminImportInput.disabled = !verified;
+    }
     if (!verified) {
       setAdminMessage("");
       adminCopyTokenBtn.disabled = true;
@@ -874,11 +901,13 @@
       state.adminServers = [];
       state.adminSessions = [];
       state.selectedAdminTokenID = "";
+      state.adminImportInFlight = false;
       if (adminTenantList) {
         adminTenantList.hidden = true;
       }
       renderAdminResult(null);
       renderAdminTenantTokens();
+      renderAdminImportResult(null);
       updateAdminCopyState();
     } else {
       refreshAdminOverview();
@@ -1048,6 +1077,227 @@
     a.remove();
     URL.revokeObjectURL(url);
     setAdminMessage(`Exported ${records.length} token(s).`);
+  }
+
+  function parseCsvRows(input) {
+    const rows = [];
+    let row = [];
+    let value = "";
+    let inQuotes = false;
+    for (let i = 0; i < input.length; i++) {
+      const ch = input[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (input[i + 1] === '"') {
+            value += '"';
+            i += 1;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          value += ch;
+        }
+        continue;
+      }
+      if (ch === '"') {
+        inQuotes = true;
+        continue;
+      }
+      if (ch === ",") {
+        row.push(value);
+        value = "";
+        continue;
+      }
+      if (ch === "\n") {
+        row.push(value);
+        rows.push(row);
+        row = [];
+        value = "";
+        continue;
+      }
+      if (ch === "\r") {
+        continue;
+      }
+      value += ch;
+    }
+    if (value.length || row.length) {
+      row.push(value);
+      rows.push(row);
+    }
+    return rows.filter((item) => item.some((cell) => String(cell || "").trim() !== ""));
+  }
+
+  function buildAdminImportRecords(text) {
+    const rows = parseCsvRows(text || "");
+    if (!rows.length) {
+      return { records: [], error: "No rows found in CSV." };
+    }
+    const header = rows[0].map((cell) => String(cell || "").trim().toLowerCase());
+    const hasHeader = header[0] === "tenant_id" && header[1] === "token";
+    const records = [];
+    const startIndex = hasHeader ? 1 : 0;
+    for (let i = startIndex; i < rows.length; i++) {
+      const row = rows[i] || [];
+      const tenantID = String(row[0] || "").trim();
+      const token = String(row[1] || "").trim();
+      if (!tenantID && !token) {
+        continue;
+      }
+      records.push({
+        row: i + 1,
+        tenant_id: tenantID,
+        token,
+      });
+    }
+    return { records };
+  }
+
+  function renderAdminImportResult(payload) {
+    if (!adminImportResult) {
+      return;
+    }
+    adminImportResult.innerHTML = "";
+    if (!payload) {
+      const empty = document.createElement("div");
+      empty.className = "admin-result-empty";
+      empty.textContent = "(no import yet)";
+      adminImportResult.appendChild(empty);
+      return;
+    }
+    const card = document.createElement("div");
+    card.className = "admin-result-card";
+
+    const header = document.createElement("div");
+    header.className = "admin-result-header";
+    const title = document.createElement("strong");
+    title.textContent = "Import Summary";
+    header.appendChild(title);
+    card.appendChild(header);
+
+    const fields = document.createElement("div");
+    fields.className = "admin-field-list";
+    fields.appendChild(makeAdminFieldRow("total", payload.total));
+    fields.appendChild(makeAdminFieldRow("imported", payload.imported));
+    fields.appendChild(makeAdminFieldRow("skipped", payload.skipped));
+    fields.appendChild(makeAdminFieldRow("errors", payload.errors));
+    card.appendChild(fields);
+    adminImportResult.appendChild(card);
+
+    const results = Array.isArray(payload.results) ? payload.results : [];
+    const issues = results.filter((item) => item && item.status !== "imported");
+    if (!issues.length) {
+      return;
+    }
+    const list = document.createElement("ul");
+    list.className = "admin-import-list";
+    for (const item of issues) {
+      const li = document.createElement("li");
+      const status = item.status || "error";
+      li.className = `admin-import-item ${status}`;
+      const reason = item.reason ? ` - ${item.reason}` : "";
+      const tenant = item.tenant_id ? ` tenant=${item.tenant_id}` : "";
+      const tokenID = item.token_id ? ` token_id=${item.token_id}` : "";
+      const row = item.row || "-";
+      li.textContent = `Row ${row}: ${status}${reason}${tenant}${tokenID}`;
+      list.appendChild(li);
+    }
+    adminImportResult.appendChild(list);
+  }
+
+  function setAdminImportBusy(busy) {
+    state.adminImportInFlight = busy;
+    if (adminImportBtn) {
+      adminImportBtn.disabled = busy || !state.adminVerified;
+    }
+    if (adminImportInput) {
+      adminImportInput.disabled = busy || !state.adminVerified;
+    }
+  }
+
+  async function importAdminTokensCsv(file) {
+    if (!state.adminVerified) {
+      setAdminMessage("Verify admin token first.", true);
+      return;
+    }
+    if (state.adminImportInFlight) {
+      return;
+    }
+    if (!file) {
+      setAdminMessage("Select a CSV file to import.", true);
+      return;
+    }
+    setAdminMessage("Importing tokens...");
+    setAdminImportBusy(true);
+    let text = "";
+    try {
+      text = await file.text();
+    } catch (err) {
+      setAdminMessage(`Failed to read file: ${String(err)}`, true);
+      setAdminImportBusy(false);
+      return;
+    }
+    const { records, error } = buildAdminImportRecords(text);
+    if (error) {
+      setAdminMessage(error, true);
+      renderAdminImportResult(null);
+      setAdminImportBusy(false);
+      return;
+    }
+    if (!records.length) {
+      setAdminMessage("No importable rows found.", true);
+      renderAdminImportResult(null);
+      setAdminImportBusy(false);
+      return;
+    }
+    const maxRows = 2000;
+    if (records.length > maxRows) {
+      setAdminMessage(`Too many rows (${records.length}). Max ${maxRows}.`, true);
+      renderAdminImportResult(null);
+      setAdminImportBusy(false);
+      return;
+    }
+    state.adminToken = adminTokenInput.value.trim();
+    localStorage.setItem("admin_token", state.adminToken);
+    let resp;
+    try {
+      resp = await adminApi("/admin/tokens/import", {
+        method: "POST",
+        body: JSON.stringify({ tokens: records }),
+      });
+    } catch (err) {
+      setAdminMessage(`Request failed: ${String(err)}`, true);
+      setAdminImportBusy(false);
+      return;
+    }
+    if (!resp.ok) {
+      setAdminMessage(await resp.text(), true);
+      setAdminImportBusy(false);
+      return;
+    }
+    const payload = await resp.json();
+    renderAdminImportResult(payload);
+    const results = Array.isArray(payload.results) ? payload.results : [];
+    const tokenByRow = new Map(records.map((rec) => [rec.row, rec.token]));
+    for (const item of results) {
+      if (!item || !item.token_id) {
+        continue;
+      }
+      const token = tokenByRow.get(item.row);
+      if (token) {
+        cacheAdminToken(item.token_id, token);
+      }
+    }
+    let listOK = true;
+    if (adminTenantList && !adminTenantList.hidden) {
+      listOK = await listAdminTenantTokens(false);
+    } else {
+      renderAdminTenantTokens();
+      updateAdminCopyState();
+    }
+    if (listOK) {
+      setAdminMessage(`Import complete: ${payload.imported || 0} imported, ${payload.skipped || 0} skipped, ${payload.errors || 0} errors.`);
+    }
+    setAdminImportBusy(false);
   }
 
   function formatTenantTokenClipboard(tenantID, tokenLabel, tokenValue) {
@@ -1414,11 +1664,11 @@
     const token = adminTokenInput.value.trim();
     if (!token) {
       setAdminMessage("Admin token is required.", true);
-      return;
+      return false;
     }
     if (!state.adminVerified) {
       setAdminMessage("Verify admin token first.", true);
-      return;
+      return false;
     }
     state.adminToken = token;
     localStorage.setItem("admin_token", state.adminToken);
@@ -1430,11 +1680,11 @@
       resp = await adminApi("/admin/tokens");
     } catch (err) {
       setAdminMessage(`Request failed: ${String(err)}`, true);
-      return;
+      return false;
     }
     if (!resp.ok) {
       setAdminMessage(await resp.text(), true);
-      return;
+      return false;
     }
     const body = await resp.json();
     const tokens = Array.isArray(body.tokens) ? body.tokens : [];
@@ -1450,6 +1700,7 @@
     renderAdminTenantTokens();
     updateAdminCopyState();
     setAdminMessage(`Loaded ${tenants.length} tenant token(s).`);
+    return true;
   }
 
   async function revokeAdminToken(tokenID) {

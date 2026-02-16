@@ -50,6 +50,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/sessions/", s.withUIAuth(s.handleSessionSubroutes))
 	mux.HandleFunc("/admin/verify", s.withAdminAuth(s.handleAdminVerify))
 	mux.HandleFunc("/admin/tokens", s.withAdminAuth(s.handleAdminTokens))
+	mux.HandleFunc("/admin/tokens/import", s.withAdminAuth(s.handleAdminTokensImport))
 	mux.HandleFunc("/admin/tokens/", s.withAdminAuth(s.handleAdminTokenSubroutes))
 	mux.HandleFunc("/admin/servers", s.withAdminAuth(s.handleAdminServers))
 	mux.HandleFunc("/admin/sessions", s.withAdminAuth(s.handleAdminSessions))
@@ -299,6 +300,133 @@ func (s *Server) handleAdminTokens(w http.ResponseWriter, r *http.Request, _ *au
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleAdminTokensImport(w http.ResponseWriter, r *http.Request, _ *auth.TokenRecord) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Tokens []struct {
+			Row      int    `json:"row"`
+			TenantID string `json:"tenant_id"`
+			Token    string `json:"token"`
+		} `json:"tokens"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if len(req.Tokens) == 0 {
+		http.Error(w, "no tokens to import", http.StatusBadRequest)
+		return
+	}
+	type result struct {
+		Row      int    `json:"row"`
+		TenantID string `json:"tenant_id"`
+		TokenID  string `json:"token_id,omitempty"`
+		Status   string `json:"status"`
+		Reason   string `json:"reason,omitempty"`
+	}
+	results := make([]result, 0, len(req.Tokens))
+	imported := 0
+	skipped := 0
+	errors := 0
+	for idx, item := range req.Tokens {
+		rowNum := item.Row
+		if rowNum <= 0 {
+			rowNum = idx + 1
+		}
+		tenantID := strings.TrimSpace(item.TenantID)
+		token := strings.TrimSpace(item.Token)
+		if tenantID == "" || token == "" {
+			reason := "missing tenant_id or token"
+			if tenantID == "" && token == "" {
+				reason = "missing tenant_id and token"
+			} else if tenantID == "" {
+				reason = "missing tenant_id"
+			} else if token == "" {
+				reason = "missing token"
+			}
+			results = append(results, result{
+				Row:      rowNum,
+				TenantID: tenantID,
+				Status:   "error",
+				Reason:   reason,
+			})
+			errors++
+			continue
+		}
+		if existing, ok := s.Tokens.Lookup(token); ok {
+			if existing.Type != auth.TokenTypeTenant {
+				results = append(results, result{
+					Row:      rowNum,
+					TenantID: tenantID,
+					TokenID:  existing.TokenID,
+					Status:   "error",
+					Reason:   "token type mismatch",
+				})
+				errors++
+				continue
+			}
+			if existing.TenantID != tenantID {
+				results = append(results, result{
+					Row:      rowNum,
+					TenantID: tenantID,
+					TokenID:  existing.TokenID,
+					Status:   "error",
+					Reason:   "tenant mismatch",
+				})
+				errors++
+				continue
+			}
+			if existing.Revoked {
+				results = append(results, result{
+					Row:      rowNum,
+					TenantID: tenantID,
+					TokenID:  existing.TokenID,
+					Status:   "error",
+					Reason:   "token revoked",
+				})
+				errors++
+				continue
+			}
+			results = append(results, result{
+				Row:      rowNum,
+				TenantID: tenantID,
+				TokenID:  existing.TokenID,
+				Status:   "duplicate",
+			})
+			skipped++
+			continue
+		}
+		rec, err := s.Tokens.SeedToken(token, auth.TokenTypeTenant, "", tenantID, "import")
+		if err != nil {
+			results = append(results, result{
+				Row:      rowNum,
+				TenantID: tenantID,
+				Status:   "error",
+				Reason:   err.Error(),
+			})
+			errors++
+			continue
+		}
+		results = append(results, result{
+			Row:      rowNum,
+			TenantID: tenantID,
+			TokenID:  rec.TokenID,
+			Status:   "imported",
+		})
+		imported++
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":    len(req.Tokens),
+		"imported": imported,
+		"skipped":  skipped,
+		"errors":   errors,
+		"results":  results,
+	})
 }
 
 func (s *Server) handleAdminVerify(w http.ResponseWriter, r *http.Request, rec *auth.TokenRecord) {

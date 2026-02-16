@@ -106,6 +106,15 @@
           <button id="adminExportBtn" class="btn-secondary" type="button">Export Tokens</button>
           <button id="adminExportCsvBtn" class="btn-secondary" type="button">Export CSV</button>
         </div>
+        <h2>Import Tenant Tokens</h2>
+        <div class="admin-import">
+          <div class="admin-actions">
+            <button id="adminImportBtn" class="btn-secondary" type="button">Import CSV</button>
+          </div>
+          <input id="adminImportInput" type="file" accept=".csv,text/csv" hidden>
+          <div class="admin-import-help">CSV columns: tenant_id, token (header optional).</div>
+          <div id="adminImportResult" class="admin-result admin-import-result">(no import yet)</div>
+        </div>
         <div id="adminMessage" class="admin-message"></div>
         <div id="adminResult" class="admin-result">(no token generated)</div>
         <ul id="adminTenantList" class="admin-tokens-list" hidden></ul>
