@@ -1,7 +1,7 @@
 # 公网服务器部署（Part 2）：TLS（域名 / 自签名）
 
 适用：生产部署、跨公网长期运行。  
-本文按常用顺序先写自签名方案（B）完整流程，再给出如何改造成域名 TLS（B'）。
+本文按常用顺序：自签名（B）→ 域名 + Let's Encrypt（B'）→ Cloudflare 托管域名 + Origin CA（B''）。
 
 ## 方案 B：无域名 + 自签名 TLS（完整流程）
 
@@ -275,6 +275,112 @@ ufw enable
 ```
 
 ### B'.4 验证
+
+- 浏览器访问 `https://cc.example.com`，使用 UI token 登录。
+- `journalctl -u cc-agent -f` 观察 agent 连接状态。
+
+---
+
+## 方案 B''：Cloudflare 托管域名 + Origin CA 证书
+
+域名在 Cloudflare 托管，使用 Cloudflare 签发的 **Origin Certificate** 部署在源站，客户端与 Agent 通过 Cloudflare 边缘访问，无需 Let's Encrypt 与 `-tls-skip-verify`。
+
+### B''.0 与 B/B' 对比
+
+| 项目 | 方案 B'（Let's Encrypt） | 方案 B''（Cloudflare） |
+|------|--------------------------|-------------------------|
+| 证书来源 | Let's Encrypt（ACME） | Cloudflare Origin CA（控制台签发） |
+| 证书有效期 | 90 天需续期 | 最长 15 年 |
+| 80 端口 | 需开放给 ACME | 可选（若仅用 Cloudflare 代理可不必开放） |
+| Agent | 不用 `-tls-skip-verify` | 不用 `-tls-skip-verify` |
+
+### B''.1 域名托管到 Cloudflare
+
+1. 在 [Cloudflare Dashboard](https://dash.cloudflare.com) 添加站点，按提示将域名的 NS 改为 Cloudflare 提供的 NS。
+2. DNS 里添加 A 记录，例如：
+   - 名称：`cc`（或 `@` 用根域）
+   - 内容：你的源站公网 IP
+   - 代理状态：**已代理**（橙色云）推荐，流量经 Cloudflare 再回源。
+
+### B''.2 创建 Origin Certificate
+
+1. 进入 **SSL/TLS → Origin Server**，点击 **Create Certificate**。
+2. 选择 **Let Cloudflare generate a private key and a CSR**，有效期选 15 年。
+3. 主机名填：`cc.example.com`（或你的实际域名），可勾选「Include wildcard」如 `*.example.com`。
+4. 点击 **Create**，保存显示的 **Origin Certificate**（PEM）和 **Private Key**（PEM）。
+
+### B''.3 源站安装证书
+
+在源站服务器上：
+
+```bash
+mkdir -p /opt/cc-control/tls
+# 将 Cloudflare 控制台中的 Origin Certificate 内容写入 cert.pem
+# 将 Private Key 内容写入 key.pem
+nano /opt/cc-control/tls/cert.pem   # 粘贴证书
+nano /opt/cc-control/tls/key.pem    # 粘贴私钥
+chown -R cc:cc /opt/cc-control/tls
+chmod 600 /opt/cc-control/tls/key.pem
+```
+
+### B''.4 设置 SSL/TLS 模式（若使用代理）
+
+在 Cloudflare：**SSL/TLS → Overview** 中，加密模式选 **Full** 或 **Full (Strict)**（推荐 Full Strict，因 Origin 使用 Cloudflare 签发的证书）。
+
+### B''.5 Nginx 配置
+
+`/etc/nginx/conf.d/cc.conf`：
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name cc.example.com;
+
+    ssl_certificate     /opt/cc-control/tls/cert.pem;
+    ssl_certificate_key /opt/cc-control/tls/key.pem;
+
+    location /ws/ {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+若希望 HTTP 跳转 HTTPS，可加 80 端口的 `server` 块（同 B'.2）；若全程经 Cloudflare 代理且只开放 443，可不开放 80。
+
+```bash
+nginx -t && systemctl reload nginx
+ufw allow 443/tcp
+# ufw allow 80/tcp   # 仅在有 80 跳转时开放
+ufw enable
+```
+
+### B''.6 cc-agent 连接
+
+使用托管域名，无需 `-tls-skip-verify`（客户端与 Agent 均面对 Cloudflare 边缘证书）：
+
+```bash
+/opt/cc-agent/cc-agent \
+  -control-url wss://cc.example.com/ws/agent \
+  -agent-token "<agent-token>" \
+  -server-id srv-gpu-01 \
+  -allow-root /home/deploy/repos \
+  -claude-path /path/to/ai-cli
+```
+
+### B''.7 验证
 
 - 浏览器访问 `https://cc.example.com`，使用 UI token 登录。
 - `journalctl -u cc-agent -f` 观察 agent 连接状态。
