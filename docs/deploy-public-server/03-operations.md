@@ -19,6 +19,7 @@
      - 直连：`http://公网IP:18080`
      - 域名 TLS：`https://cc.example.com`
      - 自签名 TLS：`https://公网IP`（勾选 Skip TLS verification）
+     - Cloudflare Tunnel：`https://cc.example.com`
    - UI Token：由 Tenant API 创建（需 tenant token）
 3. 点击 Save & Reconnect
 
@@ -27,21 +28,22 @@
 - 直连：`http://公网IP:18080`
 - 域名 TLS：`https://cc.example.com`
 - 自签名 TLS：`https://公网IP`（先手动信任证书）
+- Cloudflare Tunnel：`https://cc.example.com`
 
 登录均使用 UI token。
 
 ## 2. 安全加固清单
 
-| 项目 | 方案 A (无 TLS) | 方案 B (域名 TLS) | 方案 B' (自签名 TLS) |
-|------|----------------|-------------------|----------------------|
-| 传输加密 | 无，token 明文 | TLS 加密 | TLS 加密 |
-| Token | 强随机，防火墙限源 IP | 强随机即可 | 强随机即可 |
-| allow-root | 严格限制到项目目录 | 同左 | 同左 |
-| 运行用户 | 非 root | 同左 | 同左 |
-| 端口暴露 | 防火墙限源 IP | 仅 80/443 | 仅 443 |
-| UI 访问限制 | 防火墙限源 IP | Nginx IP 白名单 / Basic Auth | 同左 |
-| 日志审计 | `audit.jsonl` 定期归档 | 同左 | 同左 |
-| 证书 | — | Let's Encrypt | 自签名，agent 用 `-tls-skip-verify` |
+| 项目 | 方案 A (无 TLS) | 方案 B (自签名 TLS) | 方案 B' (域名 TLS) | 方案 C (Cloudflare Tunnel) |
+|------|----------------|---------------------|-------------------|---------------------------|
+| 传输加密 | 无，token 明文 | TLS 加密 | TLS 加密 | TLS 加密（Cloudflare 管理） |
+| Token | 强随机，防火墙限源 IP | 强随机即可 | 强随机即可 | 强随机即可 |
+| allow-root | 严格限制到项目目录 | 同左 | 同左 | 同左 |
+| 运行用户 | 非 root | 同左 | 同左 | 同左 |
+| 端口暴露 | 防火墙限源 IP | 仅 443 | 仅 80/443 | 无需开放入站端口 |
+| UI 访问限制 | 防火墙限源 IP | Nginx IP 白名单 / Basic Auth | 同左 | Cloudflare Access 零信任策略 |
+| 日志审计 | `audit.jsonl` 定期归档 | 同左 | 同左 | 同左 |
+| 证书 | — | 自签名，agent 用 `-tls-skip-verify` | Let's Encrypt | Cloudflare 自动管理 |
 
 ## 3. 多 Agent 批量部署（可选）
 
@@ -165,3 +167,4 @@ ufw status
 相关文档：
 - Part 1（直连部署）：`01-direct-http.md`
 - Part 2（TLS 部署）：`02-tls.md`
+- Part 2a（Cloudflare Tunnel）：`02a-cloudflare-tunnel.md`
