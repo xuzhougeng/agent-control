@@ -285,6 +285,7 @@ Base URL：`http://127.0.0.1:18080`
 ```json
 {
   "server_id": "srv-local",
+  "session_type": "pty",
   "cwd": "/Users/you/Documents",
   "env": {"CC_PROFILE": "dev"},
   "cols": 120,
@@ -293,7 +294,8 @@ Base URL：`http://127.0.0.1:18080`
 }
 ```
 
-- 成功：`201`，返回 `session` 对象（含 `session_id`）。
+- `session_type`：可选，`"pty"`（默认）或 `"chat"`。`chat` 类型不需要 `cols/rows`。
+- 成功：`201`，返回 `session` 对象（含 `session_id`、`session_type`）。
 
 ### 5) 停止会话
 
@@ -314,7 +316,43 @@ Base URL：`http://127.0.0.1:18080`
 - 角色要求：`viewer` 及以上
 - 返回 `events`。如果启用了 `cc-control -enable-prompt-detection`，可能会出现 `approval_needed`（以及对应的 resolved 状态）；否则通常为空或仅包含非 approval 类事件（如未来扩展）。
 
-### 7) 删除会话
+### 7) 查询聊天历史
+
+- `GET /api/sessions/{session_id}/chat`
+- 角色要求：`viewer` 及以上
+- 仅适用于 `session_type=chat` 的会话。
+- 返回：
+
+```json
+{
+  "messages": [
+    {
+      "message_id": "uuid",
+      "session_id": "uuid",
+      "role": "user|assistant",
+      "content": "message text",
+      "ts_ms": 1730000000000
+    }
+  ]
+}
+```
+
+#### Chat Worker（Claude Code 无头模式）
+
+`session_type=chat` 的推荐实现是使用无头 worker 调用 Claude Code。无头模式不支持交互式审批菜单（1/2/3），因此应在会话创建时通过参数/策略一次性限定能力（例如 `dontAsk` + allowed tools）。
+
+可用的环境变量（由 `StartSessionRequest.env` 透传到 worker）：
+
+- `CC_CLAUDE_CMD`：Claude Code 可执行文件路径（默认 `claude`）
+- `CC_CLAUDE_PERMISSION_MODE`：默认 `dontAsk`
+- `CC_CLAUDE_ALLOWED_TOOLS` / `CC_CLAUDE_DISALLOWED_TOOLS`
+- `CC_CLAUDE_MODEL` / `CC_CLAUDE_EFFORT`
+- `CC_CLAUDE_SYSTEM_PROMPT` / `CC_CLAUDE_APPEND_SYSTEM_PROMPT`
+- `CC_CLAUDE_ADD_DIR`：逗号分隔的允许目录（会转成多个 `--add-dir`）
+- `CC_CLAUDE_BETAS`
+- `CC_CLAUDE_TIMEOUT_MS`
+
+### 8) 删除会话
 
 - `DELETE /api/sessions/{session_id}`
 - 角色要求：`owner`
@@ -412,13 +450,29 @@ Base URL：`http://127.0.0.1:18080`
 }
 ```
 
+#### `chat_in`
+
+向聊天会话发送一条用户消息。仅适用于 `session_type=chat` 的会话。
+角色要求：`operator` 及以上
+
+```json
+{
+  "type": "chat_in",
+  "session_id": "SESSION_ID",
+  "data": {
+    "content": "your message here"
+  }
+}
+```
+
 ### 服务端 -> 客户端
 
 - `debug_probe`：调试探针，可忽略。
 - `attach_ok`：attach 成功确认。
 - `term_out`：终端输出（`data_b64`）。
+- `chat_msg`：聊天消息（仅 `session_type=chat`），`data` 包含 `{message_id, role, content, ts_ms}`。
 - `event`：业务事件，重点是 `approval_needed`。
-- `session_update`：会话状态更新（含 `awaiting_approval`、`pending_event_id`）。
+- `session_update`：会话状态更新（含 `awaiting_approval`、`pending_event_id`、`session_type`）。
 - `error`：错误消息，`data.message` 为错误文本。
 
 ---
