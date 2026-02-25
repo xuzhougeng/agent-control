@@ -27,6 +27,8 @@ func main() {
 		tlsSkipVerify    = flag.Bool("tls-skip-verify", getenvBool("TLS_SKIP_VERIFY", false), "skip TLS cert verification (e.g. self-signed)")
 		envAllowKeys     = flag.String("env-allow-keys", getenv("ENV_ALLOW_KEYS", ""), "comma-separated allowed env keys")
 		envAllowPrefix = flag.String("env-allow-prefix", getenv("ENV_ALLOW_PREFIX", "CC_"), "allowed env key prefix")
+		chatWorkerCmd  = flag.String("chat-worker", getenv("CHAT_WORKER_CMD", ""), "chat worker executable path")
+		chatWorkerArgs = flag.String("chat-worker-args", getenv("CHAT_WORKER_ARGS", ""), "comma-separated chat worker args")
 	)
 	flag.Parse()
 
@@ -40,12 +42,19 @@ func main() {
 		allowedKeys[k] = struct{}{}
 	}
 
+	var cwArgs []string
+	if *chatWorkerArgs != "" {
+		cwArgs = security.ParseCSV(*chatWorkerArgs)
+	}
+
 	mgr := agent.NewSessionManager(agent.Config{
 		ServerID:       *serverID,
 		Hostname:       *serverHost,
 		Tags:           security.ParseCSV(*tagsCSV),
 		AllowRoots:     roots,
 		ClaudePath:     *claudePath,
+		ChatWorkerCmd:  *chatWorkerCmd,
+		ChatWorkerArgs: cwArgs,
 		EnvAllowKeys:   allowedKeys,
 		EnvAllowPrefix: *envAllowPrefix,
 	})

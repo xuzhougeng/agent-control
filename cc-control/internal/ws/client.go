@@ -212,6 +212,29 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if err := h.CP.HandleClientResize(sub.Actor, rec.TenantID, sessionID, req.Cols, req.Rows); err != nil {
 				sub.Send <- errorEnvelope(err.Error(), sessionID)
 			}
+		case "chat_in":
+			if !auth.RoleAtLeast(rec.Role, auth.RoleOperator) {
+				sub.Send <- errorEnvelope("forbidden", msg.SessionID)
+				continue
+			}
+			var req struct {
+				Content string `json:"content"`
+			}
+			if err := json.Unmarshal(msg.Data, &req); err != nil || req.Content == "" {
+				sub.Send <- errorEnvelope("bad_chat_in_payload", msg.SessionID)
+				continue
+			}
+			sessionID := msg.SessionID
+			if sessionID == "" {
+				sessionID = sub.AttachedSession
+			}
+			if sessionID == "" {
+				sub.Send <- errorEnvelope("no_attached_session", "")
+				continue
+			}
+			if err := h.CP.HandleClientChatIn(sub.Actor, rec.TenantID, sessionID, req.Content); err != nil {
+				sub.Send <- errorEnvelope(err.Error(), sessionID)
+			}
 		default:
 			sub.Send <- errorEnvelope("unknown_type", msg.SessionID)
 		}

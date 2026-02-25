@@ -62,6 +62,8 @@
     adminSessions: [],
     adminActiveTab: "overview",
     adminImportInFlight: false,
+    chatMessages: [],
+    selectedChatSessionID: "",
   };
 
   const tokenInput = document.getElementById("tokenInput");
@@ -111,6 +113,7 @@
   let mobileKeyboardOpen = false;
 
   const isControllerPage = Boolean(document.getElementById("terminal"));
+  const isChatPage = Boolean(document.getElementById("chatContainer"));
   const isAdminPage = Boolean(adminVerifyBtn);
   const isTenantPage = Boolean(tenantVerifyBtn);
 
@@ -227,11 +230,11 @@
     approvalDetails.setAttribute("open", "");
   }
 
-  if (isControllerPage) {
-    initializeApprovalDetails();
+  if (isControllerPage || isChatPage) {
+    if (approvalDetails) initializeApprovalDetails();
     toggleSidebar(false);
-    sidebarToggleBtn.addEventListener("click", () => toggleSidebar());
-    sidebarBackdrop.addEventListener("click", () => toggleSidebar(false));
+    if (sidebarToggleBtn) sidebarToggleBtn.addEventListener("click", () => toggleSidebar());
+    if (sidebarBackdrop) sidebarBackdrop.addEventListener("click", () => toggleSidebar(false));
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && document.body.classList.contains("sidebar-open")) {
         toggleSidebar(false);
@@ -246,19 +249,23 @@
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", handleMobileViewportChange);
     }
-    approvalDetails.addEventListener("toggle", () => {
-      localStorage.setItem("approval_collapsed", approvalDetails.open ? "0" : "1");
-      setTimeout(syncTerminalLayout, 0);
-    });
-
-    term.onData((data) => {
-      console.log("[xterm] onData len=%d session=%s", data.length, state.selectedSessionID);
-      sendWS({
-        type: "term_in",
-        session_id: state.selectedSessionID,
-        data_b64: bytesToB64(data),
+    if (approvalDetails) {
+      approvalDetails.addEventListener("toggle", () => {
+        localStorage.setItem("approval_collapsed", approvalDetails.open ? "0" : "1");
+        setTimeout(syncTerminalLayout, 0);
       });
-    });
+    }
+
+    if (term) {
+      term.onData((data) => {
+        console.log("[xterm] onData len=%d session=%s", data.length, state.selectedSessionID);
+        sendWS({
+          type: "term_in",
+          session_id: state.selectedSessionID,
+          data_b64: bytesToB64(data),
+        });
+      });
+    }
   }
 
   if (isAdminPage) {
@@ -328,6 +335,18 @@
     document.getElementById("keyRight").addEventListener("click", () => sendQuickKey("\x1b[C"));
     document.getElementById("keyLeft").addEventListener("click", () => sendQuickKey("\x1b[D"));
     document.getElementById("keyEnter").addEventListener("click", () => sendQuickKey("\r"));
+  }
+
+  if (isChatPage) {
+    if (saveTokenBtn) {
+      saveTokenBtn.addEventListener("click", () => {
+        applyUIToken(tokenInput.value.trim());
+      });
+    }
+    const refreshServersBtn = document.getElementById("refreshServersBtn");
+    const refreshSessionsBtn = document.getElementById("refreshSessionsBtn");
+    if (refreshServersBtn) refreshServersBtn.addEventListener("click", fetchServers);
+    if (refreshSessionsBtn) refreshSessionsBtn.addEventListener("click", fetchSessions);
   }
 
   if (isAdminPage) {
@@ -526,12 +545,48 @@
   }
 
   function renderSessions() {
+    if (!sessionsList) return;
     sessionsList.innerHTML = "";
-    if (!state.sessions.length) {
+
+    const wantType = isChatPage ? "chat" : "pty";
+    const filtered = state.sessions.filter(
+      (s) => (s.session_type || "pty") === wantType
+    );
+
+    if (!filtered.length) {
       renderEmptyItem(sessionsList, "No sessions");
       return;
     }
-    for (const s of state.sessions) {
+
+    if (isChatPage) {
+      for (const s of filtered) {
+        const li = document.createElement("li");
+        li.classList.add("session-item");
+        if (s.session_id === state.selectedChatSessionID) li.classList.add("selected");
+        const statusBadge = s.status === "running" ? "badge badge-running" : "badge";
+        const canDelete = s.status !== "running";
+        li.innerHTML = `
+          <div class="session-main">
+            <strong class="session-id">${escapeHtml(s.session_id.slice(0, 8))}</strong>
+            <span class="${statusBadge}">${escapeHtml(s.status)}</span>
+          </div>
+          <div class="session-sub">${escapeHtml(s.cwd || "-")}</div>
+          <div class="session-actions">
+            <button type="button" data-action="delete" class="btn-danger" ${canDelete ? "" : "disabled"}>Delete</button>
+          </div>
+        `;
+        const deleteBtn = li.querySelector('[data-action="delete"]');
+        deleteBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          await deleteSession(s);
+        });
+        li.addEventListener("click", () => attachChatSession(s.session_id));
+        sessionsList.appendChild(li);
+      }
+      return;
+    }
+
+    for (const s of filtered) {
       const li = document.createElement("li");
       li.classList.add("session-item");
       if (s.session_id === state.selectedSessionID) li.classList.add("selected");
@@ -596,12 +651,18 @@
       alert(await resp.text());
       return;
     }
-    if (state.selectedSessionID === sessionID) {
+    if (isChatPage && state.selectedChatSessionID === sessionID) {
+      state.selectedChatSessionID = "";
+      state.chatMessages = [];
+      renderChatMessages();
+    } else if (state.selectedSessionID === sessionID) {
       state.selectedSessionID = "";
       state.pendingFirstOutputSessionID = "";
-      currentSessionLabel.textContent = "Session: (none)";
-      term.reset();
-      term.scrollToBottom();
+      if (currentSessionLabel) currentSessionLabel.textContent = "Session: (none)";
+      if (term) {
+        term.reset();
+        term.scrollToBottom();
+      }
     }
     for (const [eventID, approval] of state.approvals.entries()) {
       if (approval.session_id === sessionID) {
@@ -698,7 +759,7 @@
   }
 
   function connectWS() {
-    if (!isControllerPage) {
+    if (!isControllerPage && !isChatPage) {
       return;
     }
     const scheme = window.location.protocol === "https:" ? "wss" : "ws";
@@ -708,13 +769,20 @@
     state.ws.onopen = () => {
       console.log("[ws] connected");
       setWSStatus(true);
-      if (state.selectedSessionID) {
+      if (isChatPage && state.selectedChatSessionID) {
+        sendWS({
+          type: "attach",
+          data: { session_id: state.selectedChatSessionID, since_seq: 0 },
+        });
+      } else if (state.selectedSessionID) {
         sendWS({
           type: "attach",
           data: { session_id: state.selectedSessionID, since_seq: 0 },
         });
       }
-      sendResize();
+      if (isControllerPage) {
+        sendResize();
+      }
     };
     state.ws.onmessage = (event) => {
       try {
@@ -736,7 +804,7 @@
   }
 
   function reconnectWS() {
-    if (!isControllerPage) {
+    if (!isControllerPage && !isChatPage) {
       return;
     }
     if (state.ws) {
@@ -771,6 +839,14 @@
     }
     if (msg.type === "error" && msg.data) {
       console.error("[ws] server error", msg.session_id || "", msg.data);
+      return;
+    }
+    if (msg.type === "chat_msg" && msg.data && isChatPage) {
+      const cm = msg.data;
+      if (cm.session_id === state.selectedChatSessionID) {
+        state.chatMessages.push(cm);
+        renderChatMessages();
+      }
       return;
     }
     if (msg.type === "session_update" && msg.data) {
@@ -849,7 +925,7 @@
       tokenInput.value = state.token;
     }
     localStorage.setItem("ui_token", state.token);
-    if (isControllerPage) {
+    if (isControllerPage || isChatPage) {
       reconnectWS();
       refreshAll();
     }
@@ -2075,8 +2151,134 @@
       .replaceAll("'", "&#039;");
   }
 
-  if (isControllerPage) {
-    connectWS();
-    refreshAll();
+  // ── Chat page functions ──────────────────────────────────
+  const chatMessagesEl = document.getElementById("chatMessages");
+  const chatInput = document.getElementById("chatInput");
+  const chatSendBtn = document.getElementById("chatSendBtn");
+  const newChatBtn = document.getElementById("newChatBtn");
+
+  function renderChatMessages() {
+    if (!chatMessagesEl) return;
+    chatMessagesEl.innerHTML = "";
+    if (!state.chatMessages.length) {
+      const empty = document.createElement("div");
+      empty.className = "chat-empty";
+      empty.textContent = "No messages yet";
+      chatMessagesEl.appendChild(empty);
+      return;
+    }
+    for (const m of state.chatMessages) {
+      const bubble = document.createElement("div");
+      bubble.className = `chat-bubble ${m.role === "user" ? "user" : "assistant"}`;
+      bubble.textContent = m.content;
+      const meta = document.createElement("div");
+      meta.className = "chat-bubble-meta";
+      meta.textContent = new Date(m.ts_ms).toLocaleTimeString();
+      bubble.appendChild(meta);
+      chatMessagesEl.appendChild(bubble);
+    }
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+
+  async function attachChatSession(sessionID) {
+    if (!sessionID) return;
+    state.selectedChatSessionID = sessionID;
+    state.chatMessages = [];
+    renderSessions();
+    renderChatMessages();
+
+    sendWS({
+      type: "attach",
+      data: { session_id: sessionID, since_seq: 0 },
+    });
+
+    try {
+      const resp = await api(`/api/sessions/${encodeURIComponent(sessionID)}/chat`);
+      if (resp.ok) {
+        const body = await resp.json();
+        state.chatMessages = body.messages || [];
+        renderChatMessages();
+      }
+    } catch (e) {
+      console.error("[chat] failed to load history", e);
+    }
+    closeSidebarOnMobile();
+  }
+
+  function sendChatMessage() {
+    if (!chatInput) return;
+    const content = chatInput.value.trim();
+    if (!content) return;
+    if (!state.selectedChatSessionID) {
+      alert("Select or create a chat session first");
+      return;
+    }
+    sendWS({
+      type: "chat_in",
+      session_id: state.selectedChatSessionID,
+      data: { content },
+    });
+    chatInput.value = "";
+    chatInput.style.height = "auto";
+  }
+
+  async function createChatSession() {
+    if (!cwdInput) return;
+    const cwd = cwdInput.value.trim();
+    if (!cwd) {
+      alert("cwd is required");
+      return;
+    }
+    const serverID = state.selectedServerID;
+    if (!serverID) {
+      alert("select a server first");
+      return;
+    }
+    const body = {
+      server_id: serverID,
+      session_type: "chat",
+      cwd,
+      env: parseEnv(envInput ? envInput.value : ""),
+    };
+    const resp = await api("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      alert(await resp.text());
+      return;
+    }
+    const session = await resp.json();
+    await fetchSessions();
+    attachChatSession(session.session_id);
+  }
+
+  if (isChatPage) {
+    if (chatSendBtn) {
+      chatSendBtn.addEventListener("click", sendChatMessage);
+    }
+    if (chatInput) {
+      chatInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendChatMessage();
+        }
+      });
+      chatInput.addEventListener("input", () => {
+        chatInput.style.height = "auto";
+        chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + "px";
+      });
+    }
+    if (newChatBtn) {
+      newChatBtn.addEventListener("click", createChatSession);
+    }
+    renderChatMessages();
+  }
+
+  if (isControllerPage || isChatPage) {
+    if (localStorage.getItem("ui_token")) {
+      connectWS();
+      refreshAll();
+    }
   }
 })();

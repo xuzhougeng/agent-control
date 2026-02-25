@@ -146,6 +146,10 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			var exit core.PTYExit
 			_ = json.Unmarshal(msg.Data, &exit)
 			h.CP.HandlePTYExit(reg.ServerID, msg.SessionID, exit)
+		case "chat_out":
+			h.CP.HandleChatOut(reg.ServerID, msg.SessionID, msg.Data)
+		case "chat_exit":
+			h.CP.HandleChatExit(reg.ServerID, msg.SessionID, msg.Data)
 		case "error":
 			var payload struct {
 				Message string `json:"message"`

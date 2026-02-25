@@ -54,6 +54,8 @@ func newSessionHub(ringBytes int) *SessionHub {
 	}
 }
 
+const MaxChatHistory = 200
+
 type ControlPlane struct {
 	mu sync.RWMutex
 
@@ -65,6 +67,7 @@ type ControlPlane struct {
 	sessionHubs   map[string]*SessionHub
 	agentConns    map[string]AgentSender
 	subscribers   map[*Subscriber]struct{}
+	chatHistory   map[string][]ChatMessage
 
 	detector       *PromptDetector
 	resumeDetector *ResumeDetector
@@ -111,6 +114,7 @@ func NewControlPlane(cfg Config) (*ControlPlane, error) {
 		sessionHubs:    make(map[string]*SessionHub),
 		agentConns:     make(map[string]AgentSender),
 		subscribers:    make(map[*Subscriber]struct{}),
+		chatHistory:    make(map[string][]ChatMessage),
 		detector:       detector,
 		resumeDetector: NewResumeDetector(),
 		audit:          audit,
@@ -308,6 +312,13 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 	if req.ServerID == "" || req.Cwd == "" {
 		return nil, errors.New("server_id and cwd are required")
 	}
+	sessType := req.SessionType
+	if sessType == "" {
+		sessType = SessionTypePTY
+	}
+	if sessType != SessionTypePTY && sessType != SessionTypeChat {
+		return nil, errors.New("invalid session_type")
+	}
 	cp.mu.Lock()
 	server, ok := cp.servers[req.ServerID]
 	conn := cp.agentConns[req.ServerID]
@@ -320,15 +331,21 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 		return nil, errors.New("server not in tenant")
 	}
 	sessionID := uuid.NewString()
-	resumeID := strings.TrimSpace(req.ResumeID)
-	cmdPath := strings.TrimSpace(server.ClaudePath)
-	if cmdPath == "" {
-		cmdPath = "claude-code"
+
+	var cmd []string
+	var resumeID string
+	if sessType == SessionTypePTY {
+		resumeID = strings.TrimSpace(req.ResumeID)
+		cmdPath := strings.TrimSpace(server.ClaudePath)
+		if cmdPath == "" {
+			cmdPath = "claude-code"
+		}
+		cmd = []string{cmdPath}
+		if resumeID != "" {
+			cmd = append(cmd, "--resume", resumeID)
+		}
 	}
-	cmd := []string{cmdPath}
-	if resumeID != "" {
-		cmd = append(cmd, "--resume", resumeID)
-	}
+
 	envKeys := make([]string, 0, len(req.Env))
 	for k := range req.Env {
 		envKeys = append(envKeys, k)
@@ -338,6 +355,7 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 		TenantID:         tenantID,
 		SessionID:        sessionID,
 		ServerID:         req.ServerID,
+		SessionType:      sessType,
 		Cwd:              req.Cwd,
 		Cmd:              append([]string(nil), cmd...),
 		ResumeID:         resumeID,
@@ -351,23 +369,35 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 	cp.sessionHubs[sessionID] = newSessionHub(cp.cfg.RingBufferBytes)
 	cp.mu.Unlock()
 
-	payload := map[string]any{
-		"cwd":  req.Cwd,
-		"cmd":  cmd,
-		"env":  req.Env,
-		"cols": req.Cols,
-		"rows": req.Rows,
+	var msgType string
+	var data []byte
+	if sessType == SessionTypeChat {
+		msgType = "start_chat"
+		payload := map[string]any{
+			"cwd": req.Cwd,
+			"env": req.Env,
+		}
+		data, _ = json.Marshal(payload)
+	} else {
+		msgType = "start_session"
+		payload := map[string]any{
+			"cwd":  req.Cwd,
+			"cmd":  cmd,
+			"env":  req.Env,
+			"cols": req.Cols,
+			"rows": req.Rows,
+		}
+		if resumeID != "" {
+			payload["resume_id"] = resumeID
+		}
+		data, _ = json.Marshal(payload)
 	}
-	if resumeID != "" {
-		payload["resume_id"] = resumeID
-	}
-	data, _ := json.Marshal(payload)
-	msg := NewEnvelope("start_session", req.ServerID, sessionID)
+	msg := NewEnvelope(msgType, req.ServerID, sessionID)
 	msg.Data = data
 	if err := conn.Send(msg); err != nil {
 		cp.mu.Lock()
 		sess.Status = SessionError
-		sess.ExitReason = "start_session_send_failed"
+		sess.ExitReason = msgType + "_send_failed"
 		cp.mu.Unlock()
 		return nil, err
 	}
@@ -377,8 +407,9 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 		SessionID: sessionID,
 		Kind:      "create_session",
 		Meta: map[string]any{
-			"cwd":       req.Cwd,
-			"resume_id": resumeID,
+			"cwd":          req.Cwd,
+			"session_type": string(sessType),
+			"resume_id":    resumeID,
 		},
 	})
 	return sess, nil
@@ -451,6 +482,7 @@ func (cp *ControlPlane) DeleteSession(actor, tenantID, sessionID string) error {
 	delete(cp.sessions, sessionID)
 	delete(cp.sessionEvents, sessionID)
 	delete(cp.sessionHubs, sessionID)
+	delete(cp.chatHistory, sessionID)
 	for sub := range cp.subscribers {
 		if sub.AttachedSession == sessionID {
 			sub.AttachedSession = ""
@@ -532,6 +564,7 @@ func (cp *ControlPlane) StopAndDeleteSession(actor, tenantID, sessionID string, 
 	delete(cp.sessions, sessionID)
 	delete(cp.sessionEvents, sessionID)
 	delete(cp.sessionHubs, sessionID)
+	delete(cp.chatHistory, sessionID)
 	for sub := range cp.subscribers {
 		if sub.AttachedSession == sessionID {
 			sub.AttachedSession = ""
@@ -932,6 +965,164 @@ func (cp *ControlPlane) HandleClientResize(actor, tenantID, sessionID string, co
 	return nil
 }
 
+func (cp *ControlPlane) HandleClientChatIn(actor, tenantID, sessionID, content string) error {
+	cp.mu.Lock()
+	sess, ok := cp.sessions[sessionID]
+	if !ok {
+		cp.mu.Unlock()
+		return errors.New("session not found")
+	}
+	if tenantID != "" && sess.TenantID != tenantID {
+		cp.mu.Unlock()
+		return errors.New("session not found")
+	}
+	if sess.SessionType != SessionTypeChat {
+		cp.mu.Unlock()
+		return errors.New("session is not a chat session")
+	}
+	conn := cp.agentConns[sess.ServerID]
+	if conn == nil {
+		cp.mu.Unlock()
+		return errors.New("server offline")
+	}
+
+	if sess.Status == SessionStarting {
+		sess.Status = SessionRunning
+	}
+
+	msgID := uuid.NewString()
+	chatMsg := ChatMessage{
+		MessageID: msgID,
+		SessionID: sessionID,
+		Role:      "user",
+		Content:   content,
+		TsMS:      time.Now().UnixMilli(),
+	}
+	cp.appendChatMessage(sessionID, chatMsg)
+	cp.mu.Unlock()
+
+	userBroadcast := NewEnvelope("chat_msg", sess.ServerID, sessionID)
+	userBroadcast.Data, _ = json.Marshal(chatMsg)
+	cp.broadcastToAttached(sessionID, userBroadcast)
+
+	payload, _ := json.Marshal(map[string]any{
+		"message_id": msgID,
+		"content":    content,
+	})
+	agentMsg := NewEnvelope("chat_in", sess.ServerID, sessionID)
+	agentMsg.Data = payload
+	if err := conn.Send(agentMsg); err != nil {
+		return err
+	}
+	cp.audit.Log(AuditEvent{
+		Actor:     actor,
+		ServerID:  sess.ServerID,
+		SessionID: sessionID,
+		Kind:      "chat_in",
+		Meta: map[string]any{
+			"message_id": msgID,
+			"length":     len(content),
+		},
+	})
+	return nil
+}
+
+func (cp *ControlPlane) HandleChatOut(serverID, sessionID string, data json.RawMessage) {
+	var payload struct {
+		MessageID string `json:"message_id"`
+		Content   string `json:"content"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return
+	}
+	cp.mu.Lock()
+	sess, ok := cp.sessions[sessionID]
+	if !ok {
+		cp.mu.Unlock()
+		return
+	}
+	chatMsg := ChatMessage{
+		MessageID: payload.MessageID,
+		SessionID: sessionID,
+		Role:      "assistant",
+		Content:   payload.Content,
+		TsMS:      time.Now().UnixMilli(),
+	}
+	cp.appendChatMessage(sessionID, chatMsg)
+	cp.mu.Unlock()
+
+	broadcast := NewEnvelope("chat_msg", serverID, sessionID)
+	broadcast.Data, _ = json.Marshal(chatMsg)
+	cp.broadcastToAttached(sessionID, broadcast)
+
+	cp.audit.Log(AuditEvent{
+		Actor:     "agent:" + serverID,
+		ServerID:  serverID,
+		SessionID: sessionID,
+		Kind:      "chat_out",
+		Meta: map[string]any{
+			"message_id": payload.MessageID,
+			"length":     len(payload.Content),
+		},
+	})
+	_ = sess // avoid unused
+}
+
+func (cp *ControlPlane) HandleChatExit(serverID, sessionID string, data json.RawMessage) {
+	var exit PTYExit
+	_ = json.Unmarshal(data, &exit)
+	cp.mu.Lock()
+	sess, ok := cp.sessions[sessionID]
+	if !ok {
+		cp.mu.Unlock()
+		return
+	}
+	sess.Status = SessionExited
+	sess.ExitCode = exit.ExitCode
+	sess.ExitReason = exit.Reason
+	cp.mu.Unlock()
+
+	cp.broadcastSessionUpdate(sessionID)
+	cp.audit.Log(AuditEvent{
+		Actor:     "agent:" + serverID,
+		ServerID:  serverID,
+		SessionID: sessionID,
+		Kind:      "chat_exit",
+		Meta: map[string]any{
+			"reason":    exit.Reason,
+			"exit_code": exit.ExitCode,
+		},
+	})
+}
+
+func (cp *ControlPlane) GetChatHistory(tenantID, sessionID string) ([]ChatMessage, error) {
+	cp.mu.RLock()
+	defer cp.mu.RUnlock()
+	sess, ok := cp.sessions[sessionID]
+	if !ok {
+		return nil, errors.New("session not found")
+	}
+	if tenantID != "" && sess.TenantID != tenantID {
+		return nil, errors.New("session not found")
+	}
+	if sess.SessionType != SessionTypeChat {
+		return nil, errors.New("session is not a chat session")
+	}
+	msgs := cp.chatHistory[sessionID]
+	out := make([]ChatMessage, len(msgs))
+	copy(out, msgs)
+	return out, nil
+}
+
+func (cp *ControlPlane) appendChatMessage(sessionID string, msg ChatMessage) {
+	msgs := cp.chatHistory[sessionID]
+	msgs = append(msgs, msg)
+	if len(msgs) > MaxChatHistory {
+		msgs = msgs[len(msgs)-MaxChatHistory:]
+	}
+	cp.chatHistory[sessionID] = msgs
+}
+
 func (cp *ControlPlane) broadcastToAttached(sessionID string, msg Envelope) {
 	cp.mu.RLock()
 	hub := cp.sessionHubs[sessionID]
@@ -977,6 +1168,7 @@ func (cp *ControlPlane) broadcastSessionUpdate(sessionID string) {
 	serverID := sess.ServerID
 	body, _ := json.Marshal(map[string]any{
 		"session_id":        sess.SessionID,
+		"session_type":      sess.SessionType,
 		"status":            sess.Status,
 		"exit_code":         sess.ExitCode,
 		"exit_reason":       sess.ExitReason,

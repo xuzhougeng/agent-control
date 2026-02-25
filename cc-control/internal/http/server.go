@@ -68,6 +68,7 @@ func (s *Server) Router() http.Handler {
 	indexPath := filepath.Join(filepath.Clean(uiDir), "index.html")
 	adminPath := filepath.Join(filepath.Clean(uiDir), "admin.html")
 	tenantPath := filepath.Join(filepath.Clean(uiDir), "tenant.html")
+	chatPath := filepath.Join(filepath.Clean(uiDir), "chat.html")
 	fileServer := http.FileServer(http.Dir(filepath.Clean(uiDir)))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
@@ -80,6 +81,9 @@ func (s *Server) Router() http.Handler {
 				return
 			case "/tenant", "/tenant/":
 				http.ServeFile(w, r, tenantPath)
+				return
+			case "/chat", "/chat/":
+				http.ServeFile(w, r, chatPath)
 				return
 			}
 		}
@@ -246,6 +250,21 @@ func (s *Server) handleSessionSubroutes(w http.ResponseWriter, r *http.Request, 
 		}
 		events := s.CP.GetSessionEvents(rec.TenantID, sessionID)
 		writeJSON(w, http.StatusOK, map[string]any{"events": events})
+	case r.Method == http.MethodGet && action == "chat":
+		if !auth.RoleAtLeast(rec.Role, auth.RoleViewer) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		msgs, err := s.CP.GetChatHistory(rec.TenantID, sessionID)
+		if err != nil {
+			code := http.StatusInternalServerError
+			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not a chat") {
+				code = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), code)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"messages": msgs})
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}

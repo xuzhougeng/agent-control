@@ -60,3 +60,25 @@ type PTYExitPayload struct {
 	Signal   string `json:"signal,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 }
+
+type StartChatPayload struct {
+	Cwd        string            `json:"cwd"`
+	Env        map[string]string `json:"env"`
+	WorkerCmd  string            `json:"worker_cmd,omitempty"`
+	WorkerArgs []string          `json:"worker_args,omitempty"`
+}
+
+type ChatInPayload struct {
+	MessageID string `json:"message_id"`
+	Content   string `json:"content"`
+}
+
+type ChatOutPayload struct {
+	MessageID string `json:"message_id"`
+	Content   string `json:"content"`
+}
+
+type ChatExitPayload struct {
+	ExitCode *int   `json:"exit_code,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+}

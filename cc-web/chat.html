@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat – Control Plane</title>
+  <link rel="stylesheet" href="/style.css?v=chat2">
+</head>
+<body>
+  <header>
+    <div class="header-title-row">
+      <button
+        id="sidebarToggleBtn"
+        class="icon-btn"
+        type="button"
+        aria-label="Toggle sidebar"
+        aria-controls="sidebar"
+        aria-expanded="false"
+      >
+        ☰
+      </button>
+      <h1>Chat</h1>
+    </div>
+    <div class="token-row">
+      <span id="wsStatus" class="badge badge-offline">WS: disconnected</span>
+      <label for="tokenInput">UI Token</label>
+      <input id="tokenInput" type="password" placeholder="admin-dev-token">
+      <button id="saveTokenBtn" class="btn-primary">Save</button>
+    </div>
+  </header>
+
+  <main>
+    <aside id="sidebar">
+      <div id="sidebarPanelControl" class="sidebar-panel active">
+        <section class="sidebar-card">
+          <div class="section-header">
+            <h2>Servers</h2>
+            <button id="refreshServersBtn" type="button">Refresh</button>
+          </div>
+          <ul id="serversList"></ul>
+        </section>
+
+        <details id="newChatDetails" class="sidebar-card" open>
+          <summary class="section-summary"><h2>New Chat</h2></summary>
+          <label for="cwdInput">cwd</label>
+          <input id="cwdInput" type="text" placeholder="/path/to/repo">
+          <label for="envInput">env (KEY=VALUE, comma-separated)</label>
+          <input id="envInput" type="text" placeholder="CC_PROFILE=dev">
+          <button id="newChatBtn" type="button" class="btn-primary">Create</button>
+        </details>
+
+        <section class="sidebar-card">
+          <div class="section-header">
+            <h2>Chat Sessions</h2>
+            <button id="refreshSessionsBtn" type="button">Refresh</button>
+          </div>
+          <ul id="sessionsList"></ul>
+        </section>
+      </div>
+    </aside>
+
+    <section class="content">
+      <div id="chatContainer" class="chat-container">
+        <div id="chatMessages" class="chat-messages"></div>
+        <div class="chat-input-bar">
+          <textarea id="chatInput" class="chat-input" rows="1" placeholder="Type a message…"></textarea>
+          <button id="chatSendBtn" class="btn-primary chat-send-btn">Send</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
+
+  <script src="/app.js?v=chat2"></script>
+</body>
+</html>

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"unicode"
 
+	"cc-agent/internal/echocli"
 	"cc-agent/internal/pty"
 	"cc-agent/internal/security"
 )
@@ -20,6 +21,8 @@ type Config struct {
 	Tags           []string
 	AllowRoots     []string
 	ClaudePath     string
+	ChatWorkerCmd  string
+	ChatWorkerArgs []string
 	EnvAllowKeys   map[string]struct{}
 	EnvAllowPrefix string
 }
@@ -30,16 +33,18 @@ type SessionManager struct {
 	sendMu   sync.RWMutex
 	sendFunc func(msg Envelope) error
 
-	mu       sync.RWMutex
-	sessions map[string]*pty.Session
-	pending  map[string]struct{}
+	mu           sync.RWMutex
+	sessions     map[string]*pty.Session
+	chatSessions map[string]*echocli.Session
+	pending      map[string]struct{}
 }
 
 func NewSessionManager(cfg Config) *SessionManager {
 	return &SessionManager{
-		cfg:      cfg,
-		sessions: make(map[string]*pty.Session),
-		pending:  make(map[string]struct{}),
+		cfg:          cfg,
+		sessions:     make(map[string]*pty.Session),
+		chatSessions: make(map[string]*echocli.Session),
+		pending:      make(map[string]struct{}),
 	}
 }
 
@@ -94,6 +99,18 @@ func (m *SessionManager) Handle(msg Envelope) error {
 			return err
 		}
 		return m.stopSession(msg.SessionID, req.GraceMS, req.KillAfterMS)
+	case "start_chat":
+		var req StartChatPayload
+		if err := json.Unmarshal(msg.Data, &req); err != nil {
+			return err
+		}
+		return m.startChat(msg.SessionID, req)
+	case "chat_in":
+		var req ChatInPayload
+		if err := json.Unmarshal(msg.Data, &req); err != nil {
+			return err
+		}
+		return m.writeChatSession(msg.SessionID, req)
 	case "heartbeat":
 		return nil
 	default:
@@ -213,12 +230,113 @@ func (m *SessionManager) resizeSession(sessionID string, cols, rows uint16) erro
 func (m *SessionManager) stopSession(sessionID string, graceMS, killAfterMS int) error {
 	m.mu.RLock()
 	sess := m.sessions[sessionID]
+	csess := m.chatSessions[sessionID]
 	m.mu.RUnlock()
-	if sess == nil {
+	if sess != nil {
+		go sess.Stop(graceMS, killAfterMS)
+		return nil
+	}
+	if csess != nil {
+		csess.Stop()
+		return nil
+	}
+	return errors.New("session not found")
+}
+
+func (m *SessionManager) startChat(sessionID string, req StartChatPayload) error {
+	if sessionID == "" {
+		return errors.New("missing session_id")
+	}
+
+	m.mu.Lock()
+	if _, ok := m.chatSessions[sessionID]; ok {
+		m.mu.Unlock()
+		return errors.New("chat session already exists")
+	}
+	if _, ok := m.sessions[sessionID]; ok {
+		m.mu.Unlock()
+		return errors.New("session already exists")
+	}
+	if _, ok := m.pending[sessionID]; ok {
+		m.mu.Unlock()
+		return errors.New("session already starting")
+	}
+	m.pending[sessionID] = struct{}{}
+	m.mu.Unlock()
+
+	defer func() {
+		m.mu.Lock()
+		delete(m.pending, sessionID)
+		m.mu.Unlock()
+	}()
+
+	if err := security.ValidateCWD(req.Cwd, m.cfg.AllowRoots); err != nil {
+		m.sendError(sessionID, "reject_cwd:"+err.Error())
+		return err
+	}
+
+	workerCmd := req.WorkerCmd
+	workerArgs := req.WorkerArgs
+	if workerCmd == "" {
+		workerCmd = m.cfg.ChatWorkerCmd
+		workerArgs = m.cfg.ChatWorkerArgs
+	}
+	if workerCmd == "" {
+		m.sendError(sessionID, "no chat worker configured")
+		return errors.New("no chat worker configured")
+	}
+
+	env := security.FilterEnv(req.Env, m.cfg.EnvAllowKeys, m.cfg.EnvAllowPrefix)
+	if env == nil {
+		env = make(map[string]string)
+	}
+	env["CC_CHAT_SESSION_ID"] = sessionID
+	csess, err := echocli.Start(sessionID, req.Cwd, workerCmd, workerArgs, env)
+	if err != nil {
+		m.sendError(sessionID, "chat_start_failed:"+err.Error())
+		return err
+	}
+
+	csess.SetCallbacks(func(msg echocli.Message) {
+		payload, _ := json.Marshal(ChatOutPayload{
+			MessageID: msg.MessageID,
+			Content:   msg.Content,
+		})
+		env := NewEnvelope("chat_out", m.cfg.ServerID, sessionID)
+		env.Data = payload
+		if err := m.send(env); err != nil {
+			log.Printf("send chat_out failed session=%s: %v", sessionID, err)
+		}
+	}, func(code *int, reason string) {
+		m.mu.Lock()
+		delete(m.chatSessions, sessionID)
+		m.mu.Unlock()
+		payload, _ := json.Marshal(ChatExitPayload{
+			ExitCode: code,
+			Reason:   reason,
+		})
+		env := NewEnvelope("chat_exit", m.cfg.ServerID, sessionID)
+		env.Data = payload
+		_ = m.send(env)
+	})
+
+	m.mu.Lock()
+	m.chatSessions[sessionID] = csess
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *SessionManager) writeChatSession(sessionID string, req ChatInPayload) error {
+	m.mu.RLock()
+	csess := m.chatSessions[sessionID]
+	m.mu.RUnlock()
+	if csess == nil {
 		return errors.New("session not found")
 	}
-	go sess.Stop(graceMS, killAfterMS)
-	return nil
+	return csess.Write(echocli.Message{
+		MessageID: req.MessageID,
+		Content:   req.Content,
+	})
 }
 
 func (m *SessionManager) sendError(sessionID, message string) {

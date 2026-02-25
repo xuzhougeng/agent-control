@@ -1,5 +1,12 @@
 package core
 
+type SessionType string
+
+const (
+	SessionTypePTY  SessionType = "pty"
+	SessionTypeChat SessionType = "chat"
+)
+
 type ServerStatus string
 
 const (
@@ -35,6 +42,7 @@ type Session struct {
 	TenantID          string        `json:"tenant_id"`
 	SessionID         string        `json:"session_id"`
 	ServerID          string        `json:"server_id"`
+	SessionType       SessionType   `json:"session_type"`
 	Cwd               string        `json:"cwd"`
 	Cmd               []string      `json:"cmd"`
 	ResumeID          string        `json:"resume_id,omitempty"`
@@ -62,12 +70,13 @@ type SessionEvent struct {
 }
 
 type StartSessionRequest struct {
-	ServerID string            `json:"server_id"`
-	Cwd      string            `json:"cwd"`
-	ResumeID string            `json:"resume_id,omitempty"`
-	Env      map[string]string `json:"env"`
-	Cols     uint16            `json:"cols"`
-	Rows     uint16            `json:"rows"`
+	ServerID    string            `json:"server_id"`
+	SessionType SessionType       `json:"session_type"`
+	Cwd         string            `json:"cwd"`
+	ResumeID    string            `json:"resume_id,omitempty"`
+	Env         map[string]string `json:"env"`
+	Cols        uint16            `json:"cols"`
+	Rows        uint16            `json:"rows"`
 }
 
 type StopSessionRequest struct {
@@ -95,4 +104,12 @@ type PTYExit struct {
 	ExitCode *int   `json:"exit_code,omitempty"`
 	Signal   string `json:"signal,omitempty"`
 	Reason   string `json:"reason,omitempty"`
+}
+
+type ChatMessage struct {
+	MessageID string `json:"message_id"`
+	SessionID string `json:"session_id"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	TsMS      int64  `json:"ts_ms"`
 }
