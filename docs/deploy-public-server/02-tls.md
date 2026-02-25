@@ -388,4 +388,5 @@ ufw enable
 ---
 
 下一步：
+- Cloudflare Tunnel 部署（零端口暴露）看 Part 2a：`02a-cloudflare-tunnel.md`
 - 客户端接入、安全加固、批量部署、升级迁移请看 Part 3：`03-operations.md`

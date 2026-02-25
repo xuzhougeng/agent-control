@@ -174,4 +174,5 @@ ufw deny 18080/tcp
 
 下一步：
 - 上线部署看 Part 2：`02-tls.md`
+- Cloudflare Tunnel 部署看 Part 2a：`02a-cloudflare-tunnel.md`
 - 升级/排障看 Part 3：`03-operations.md`
