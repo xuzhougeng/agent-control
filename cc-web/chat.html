@@ -65,6 +65,9 @@
           <span id="chatSessionIdText" class="chat-session-id-text"></span>
           <button id="chatCopySessionBtn" type="button" class="btn-secondary chat-copy-session-btn">Copy</button>
         </div>
+        <div id="chatResumeHint" class="chat-resume-hint" hidden>
+          Send <code>/status</code> in chat to get Claude's session ID, then use <code>claude --resume &lt;id&gt;</code> to continue in CLI.
+        </div>
         <div id="chatMessages" class="chat-messages"></div>
         <div class="chat-input-bar">
           <textarea id="chatInput" class="chat-input" rows="1" placeholder="Type a message…"></textarea>

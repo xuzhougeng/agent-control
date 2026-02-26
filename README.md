@@ -245,6 +245,25 @@ echo worker 仅用于测试。正式使用时，将 `-chat-worker` 指向你自�
 
 只要你的程序遵循这个协议，就能无缝接入。
 
+### 5. 从 Chat 模式恢复到 CLI 模式
+
+Chat 页面顶部会显示一条提示，引导你获取 Claude 的真实 Session ID 以便在 CLI 中恢复会话。
+
+> **注意**：Chat 页面上展示的 Session ID 是系统内部生成的标识符，**不能**直接用于 `claude --resume`。
+> Claude Code 在运行时会创建自己的内部 session，其 ID 与系统 ID 不同。
+
+**操作步骤**：
+
+1. 在 Chat 对话框中发送 `/status`，Claude 会返回当前会话的详细信息，其中包含真实的 Session ID。
+2. 复制该 Session ID。
+3. 在终端中执行：
+
+```bash
+claude --resume <claude-session-id>
+```
+
+这样就能在 CLI 中继续 Chat 模式下的对话上下文。
+
 ## Current Capabilities
 
 - Server register + heartbeat online/offline

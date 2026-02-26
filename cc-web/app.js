@@ -658,6 +658,7 @@
       state.chatWorkerSessionID = "";
       renderChatMessages();
       updateChatSessionInfo();
+      if (chatResumeHint) chatResumeHint.hidden = true;
     } else if (state.selectedSessionID === sessionID) {
       state.selectedSessionID = "";
       state.pendingFirstOutputSessionID = "";
@@ -2166,6 +2167,7 @@
   const chatSessionInfo = document.getElementById("chatSessionInfo");
   const chatSessionIdText = document.getElementById("chatSessionIdText");
   const chatCopySessionBtn = document.getElementById("chatCopySessionBtn");
+  const chatResumeHint = document.getElementById("chatResumeHint");
 
   function renderChatMessages() {
     if (!chatMessagesEl) return;
@@ -2209,6 +2211,7 @@
     renderSessions();
     renderChatMessages();
     updateChatSessionInfo();
+    if (chatResumeHint) chatResumeHint.hidden = false;
 
     // Initialize workerSessionID from session list if available
     const sess = state.sessions.find((s) => s.session_id === sessionID);
