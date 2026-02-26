@@ -13,6 +13,7 @@ import (
 type Message struct {
 	MessageID string `json:"message_id"`
 	Content   string `json:"content"`
+	SessionID string `json:"session_id,omitempty"`
 }
 
 type Session struct {

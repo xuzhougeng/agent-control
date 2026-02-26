@@ -55,6 +55,7 @@ type Session struct {
 	AwaitingApproval  bool          `json:"awaiting_approval"`
 	PendingEventID    string        `json:"pending_event_id,omitempty"`
 	LatestAgentOutSeq uint64        `json:"latest_agent_out_seq"`
+	WorkerSessionID   string        `json:"worker_session_id,omitempty"`
 }
 
 type SessionEvent struct {

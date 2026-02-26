@@ -17,6 +17,7 @@ import (
 type Message struct {
 	MessageID string `json:"message_id"`
 	Content   string `json:"content"`
+	SessionID string `json:"session_id,omitempty"`
 }
 
 func main() {
@@ -46,7 +47,7 @@ func main() {
 		}
 
 		reply := handleMessage(cfg, sessionID, &sessionReady, msg.Content)
-		out := Message{MessageID: msg.MessageID, Content: reply}
+		out := Message{MessageID: msg.MessageID, Content: reply, SessionID: sessionID}
 		data, _ := json.Marshal(out)
 		writer.Write(data)
 		writer.WriteString("\n")

@@ -299,8 +299,9 @@ func (m *SessionManager) startChat(sessionID string, req StartChatPayload) error
 
 	csess.SetCallbacks(func(msg echocli.Message) {
 		payload, _ := json.Marshal(ChatOutPayload{
-			MessageID: msg.MessageID,
-			Content:   msg.Content,
+			MessageID:       msg.MessageID,
+			Content:         msg.Content,
+			WorkerSessionID: msg.SessionID,
 		})
 		env := NewEnvelope("chat_out", m.cfg.ServerID, sessionID)
 		env.Data = payload

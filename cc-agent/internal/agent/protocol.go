@@ -74,8 +74,9 @@ type ChatInPayload struct {
 }
 
 type ChatOutPayload struct {
-	MessageID string `json:"message_id"`
-	Content   string `json:"content"`
+	MessageID        string `json:"message_id"`
+	Content          string `json:"content"`
+	WorkerSessionID  string `json:"worker_session_id,omitempty"`
 }
 
 type ChatExitPayload struct {

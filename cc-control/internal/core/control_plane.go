@@ -1029,8 +1029,9 @@ func (cp *ControlPlane) HandleClientChatIn(actor, tenantID, sessionID, content s
 
 func (cp *ControlPlane) HandleChatOut(serverID, sessionID string, data json.RawMessage) {
 	var payload struct {
-		MessageID string `json:"message_id"`
-		Content   string `json:"content"`
+		MessageID       string `json:"message_id"`
+		Content         string `json:"content"`
+		WorkerSessionID string `json:"worker_session_id,omitempty"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return
@@ -1040,6 +1041,11 @@ func (cp *ControlPlane) HandleChatOut(serverID, sessionID string, data json.RawM
 	if !ok {
 		cp.mu.Unlock()
 		return
+	}
+	var sessionUpdated bool
+	if payload.WorkerSessionID != "" && sess.WorkerSessionID == "" {
+		sess.WorkerSessionID = payload.WorkerSessionID
+		sessionUpdated = true
 	}
 	chatMsg := ChatMessage{
 		MessageID: payload.MessageID,
@@ -1055,6 +1061,10 @@ func (cp *ControlPlane) HandleChatOut(serverID, sessionID string, data json.RawM
 	broadcast.Data, _ = json.Marshal(chatMsg)
 	cp.broadcastToAttached(sessionID, broadcast)
 
+	if sessionUpdated {
+		cp.broadcastSessionUpdate(sessionID)
+	}
+
 	cp.audit.Log(AuditEvent{
 		Actor:     "agent:" + serverID,
 		ServerID:  serverID,
@@ -1065,7 +1075,6 @@ func (cp *ControlPlane) HandleChatOut(serverID, sessionID string, data json.RawM
 			"length":     len(payload.Content),
 		},
 	})
-	_ = sess // avoid unused
 }
 
 func (cp *ControlPlane) HandleChatExit(serverID, sessionID string, data json.RawMessage) {
@@ -1167,14 +1176,15 @@ func (cp *ControlPlane) broadcastSessionUpdate(sessionID string) {
 	}
 	serverID := sess.ServerID
 	body, _ := json.Marshal(map[string]any{
-		"session_id":        sess.SessionID,
-		"session_type":      sess.SessionType,
-		"status":            sess.Status,
-		"exit_code":         sess.ExitCode,
-		"exit_reason":       sess.ExitReason,
-		"resume_id":         sess.ResumeID,
-		"awaiting_approval": sess.AwaitingApproval,
-		"pending_event_id":  sess.PendingEventID,
+		"session_id":         sess.SessionID,
+		"session_type":       sess.SessionType,
+		"status":             sess.Status,
+		"exit_code":          sess.ExitCode,
+		"exit_reason":        sess.ExitReason,
+		"resume_id":          sess.ResumeID,
+		"awaiting_approval":  sess.AwaitingApproval,
+		"pending_event_id":   sess.PendingEventID,
+		"worker_session_id":  sess.WorkerSessionID,
 	})
 	cp.mu.RUnlock()
 

@@ -64,6 +64,7 @@
     adminImportInFlight: false,
     chatMessages: [],
     selectedChatSessionID: "",
+    chatWorkerSessionID: "",
   };
 
   const tokenInput = document.getElementById("tokenInput");
@@ -654,7 +655,9 @@
     if (isChatPage && state.selectedChatSessionID === sessionID) {
       state.selectedChatSessionID = "";
       state.chatMessages = [];
+      state.chatWorkerSessionID = "";
       renderChatMessages();
+      updateChatSessionInfo();
     } else if (state.selectedSessionID === sessionID) {
       state.selectedSessionID = "";
       state.pendingFirstOutputSessionID = "";
@@ -859,6 +862,10 @@
           }
         }
         renderApprovals();
+      }
+      if (isChatPage && data.session_id === state.selectedChatSessionID && data.worker_session_id) {
+        state.chatWorkerSessionID = data.worker_session_id;
+        updateChatSessionInfo();
       }
       fetchSessions();
     }
@@ -2156,6 +2163,9 @@
   const chatInput = document.getElementById("chatInput");
   const chatSendBtn = document.getElementById("chatSendBtn");
   const newChatBtn = document.getElementById("newChatBtn");
+  const chatSessionInfo = document.getElementById("chatSessionInfo");
+  const chatSessionIdText = document.getElementById("chatSessionIdText");
+  const chatCopySessionBtn = document.getElementById("chatCopySessionBtn");
 
   function renderChatMessages() {
     if (!chatMessagesEl) return;
@@ -2180,12 +2190,32 @@
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
   }
 
+  function updateChatSessionInfo() {
+    if (!chatSessionInfo) return;
+    if (state.chatWorkerSessionID) {
+      chatSessionIdText.textContent = "Session: " + state.chatWorkerSessionID;
+      chatSessionInfo.hidden = false;
+    } else {
+      chatSessionInfo.hidden = true;
+      chatSessionIdText.textContent = "";
+    }
+  }
+
   async function attachChatSession(sessionID) {
     if (!sessionID) return;
     state.selectedChatSessionID = sessionID;
     state.chatMessages = [];
+    state.chatWorkerSessionID = "";
     renderSessions();
     renderChatMessages();
+    updateChatSessionInfo();
+
+    // Initialize workerSessionID from session list if available
+    const sess = state.sessions.find((s) => s.session_id === sessionID);
+    if (sess && sess.worker_session_id) {
+      state.chatWorkerSessionID = sess.worker_session_id;
+      updateChatSessionInfo();
+    }
 
     sendWS({
       type: "attach",
@@ -2271,6 +2301,18 @@
     }
     if (newChatBtn) {
       newChatBtn.addEventListener("click", createChatSession);
+    }
+    if (chatCopySessionBtn) {
+      chatCopySessionBtn.addEventListener("click", async () => {
+        if (!state.chatWorkerSessionID) return;
+        try {
+          await navigator.clipboard.writeText(state.chatWorkerSessionID);
+          chatCopySessionBtn.textContent = "Copied!";
+          setTimeout(() => { chatCopySessionBtn.textContent = "Copy"; }, 1500);
+        } catch (_err) {
+          alert("Copy failed");
+        }
+      });
     }
     renderChatMessages();
   }
