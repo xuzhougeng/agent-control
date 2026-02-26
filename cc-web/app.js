@@ -108,6 +108,7 @@
   const resumeInput = document.getElementById("resumeInput");
   const envInput = document.getElementById("envInput");
   const currentSessionLabel = document.getElementById("currentSessionLabel");
+  const resumeHint = document.getElementById("resumeHint");
   const sidebarToggleBtn = document.getElementById("sidebarToggleBtn");
   const sidebarBackdrop = document.getElementById("sidebarBackdrop");
   const mobileMedia = window.matchMedia("(max-width: 900px)");
@@ -658,11 +659,11 @@
       state.chatWorkerSessionID = "";
       renderChatMessages();
       updateChatSessionInfo();
-      if (chatResumeHint) chatResumeHint.hidden = true;
     } else if (state.selectedSessionID === sessionID) {
       state.selectedSessionID = "";
       state.pendingFirstOutputSessionID = "";
       if (currentSessionLabel) currentSessionLabel.textContent = "Session: (none)";
+      if (resumeHint) resumeHint.hidden = true;
       if (term) {
         term.reset();
         term.scrollToBottom();
@@ -879,6 +880,7 @@
     state.pendingFirstOutputSessionID = sessionID;
     state.selectedSessionID = sessionID;
     currentSessionLabel.textContent = `Session: ${sessionID} (loading...)`;
+    if (resumeHint) resumeHint.hidden = false;
     renderSessions();
     term.reset();
     term.scrollToBottom();
@@ -2167,7 +2169,6 @@
   const chatSessionInfo = document.getElementById("chatSessionInfo");
   const chatSessionIdText = document.getElementById("chatSessionIdText");
   const chatCopySessionBtn = document.getElementById("chatCopySessionBtn");
-  const chatResumeHint = document.getElementById("chatResumeHint");
 
   function renderChatMessages() {
     if (!chatMessagesEl) return;
@@ -2211,7 +2212,6 @@
     renderSessions();
     renderChatMessages();
     updateChatSessionInfo();
-    if (chatResumeHint) chatResumeHint.hidden = false;
 
     // Initialize workerSessionID from session list if available
     const sess = state.sessions.find((s) => s.session_id === sessionID);

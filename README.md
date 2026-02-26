@@ -151,6 +151,22 @@ Open `http://127.0.0.1:18080/admin` (optional) to access the admin dashboard:
 
 Or login with the Tenant A UI token returned by `/tenant/tokens` (curl flow above).
 
+## Resuming a Session in CLI (PTY Mode)
+
+Web UI 中显示的 Session ID（如侧边栏和底部工具栏中的 ID）是**系统内部生成的标识符**，与 Claude Code 内部的 Session ID 不同，**不能**直接用于 `claude --resume`。
+
+要从 Web 终端恢复到本地 CLI：
+
+1. 在 Web 终端中输入 `/status`，Claude 会输出当前会话信息，其中包含真实的 Session ID。
+2. 复制该 ID。
+3. 在本地终端中执行：
+
+```bash
+claude --resume <claude-session-id>
+```
+
+> 页面终端上方也有此提示。
+
 ## Token Model (Latest)
 
 - Recommended: use `-admin-token` to create a tenant token, then use `POST /tenant/tokens` to issue UI + Agent tokens.
@@ -244,25 +260,6 @@ echo worker 仅用于测试。正式使用时，将 `-chat-worker` 指向你自�
 - **stdout**（每行一个 JSON）：`{"message_id":"uuid","content":"回复内容"}`
 
 只要你的程序遵循这个协议，就能无缝接入。
-
-### 5. 从 Chat 模式恢复到 CLI 模式
-
-Chat 页面顶部会显示一条提示，引导你获取 Claude 的真实 Session ID 以便在 CLI 中恢复会话。
-
-> **注意**：Chat 页面上展示的 Session ID 是系统内部生成的标识符，**不能**直接用于 `claude --resume`。
-> Claude Code 在运行时会创建自己的内部 session，其 ID 与系统 ID 不同。
-
-**操作步骤**：
-
-1. 在 Chat 对话框中发送 `/status`，Claude 会返回当前会话的详细信息，其中包含真实的 Session ID。
-2. 复制该 Session ID。
-3. 在终端中执行：
-
-```bash
-claude --resume <claude-session-id>
-```
-
-这样就能在 CLI 中继续 Chat 模式下的对话上下文。
 
 ## Current Capabilities
 
