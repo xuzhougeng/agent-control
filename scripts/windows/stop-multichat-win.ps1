@@ -36,15 +36,15 @@ function To-IntOrNull {
 function Stop-IfRunning {
   param(
     [string]$Name,
-    [int]$Pid
+    [int]$ProcessId
   )
-  $proc = Get-Process -Id $Pid -ErrorAction SilentlyContinue
+  $proc = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
   if ($null -eq $proc) {
-    Write-Host "$Name already stopped (pid=$Pid)"
+    Write-Host "$Name already stopped (pid=$ProcessId)"
     return
   }
-  Write-Host "stopping $Name (pid=$Pid)"
-  Stop-Process -Id $Pid -Force
+  Write-Host "stopping $Name (pid=$ProcessId)"
+  Stop-Process -Id $ProcessId -Force
 }
 
 $ptyPid = To-IntOrNull $data.agents.pty.pid
@@ -56,9 +56,9 @@ $controlPid = To-IntOrNull $data.control.pid
 if ($null -eq $controlPid) { $controlPid = To-IntOrNull $data.control_pid }
 if ($null -eq $echoPid) { $echoPid = To-IntOrNull $data.agent_pid }
 
-if ($null -ne $echoPid) { Stop-IfRunning -Name "agent-chat-echo" -Pid $echoPid }
-if ($null -ne $claudePid) { Stop-IfRunning -Name "agent-chat-claude" -Pid $claudePid }
-if ($null -ne $ptyPid) { Stop-IfRunning -Name "agent-pty" -Pid $ptyPid }
-if ($null -ne $controlPid) { Stop-IfRunning -Name "cc-control" -Pid $controlPid }
+if ($null -ne $echoPid) { Stop-IfRunning -Name "agent-chat-echo" -ProcessId $echoPid }
+if ($null -ne $claudePid) { Stop-IfRunning -Name "agent-chat-claude" -ProcessId $claudePid }
+if ($null -ne $ptyPid) { Stop-IfRunning -Name "agent-pty" -ProcessId $ptyPid }
+if ($null -ne $controlPid) { Stop-IfRunning -Name "cc-control" -ProcessId $controlPid }
 
 Write-Host "stop completed."
