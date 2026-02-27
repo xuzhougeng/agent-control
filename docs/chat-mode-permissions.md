@@ -42,6 +42,11 @@
 - `CC_CLAUDE_INJECT_RUNTIME_CONTEXT`
   - 是否注入运行时上下文（默认开启，`1`/`true`）
 
+注意（非常重要）：
+- `cc-chat-claude` 直接读取的是 `CC_CLAUDE_*` 变量。
+- `CLAUDE_PATH`、`CHAT_PROFILE_FILE` 是启动脚本（如 `run-multichat.sh` / `run-multichat-win.ps1`）的输入变量；脚本会转成 `CC_CLAUDE_CMD`、`CC_CLAUDE_PROFILE_FILE` 传给 worker。
+- 如果你是手工执行 `./bin/cc-agent -chat-worker ./bin/cc-chat-claude`，请直接设置 `CC_CLAUDE_CMD` 和 `CC_CLAUDE_PROFILE_FILE`。
+
 ---
 
 ## 3) 推荐策略（先从最小权限开始）
@@ -81,6 +86,25 @@ bash ./run-multichat.sh
 
 - 脚本会同时启动 `*-chat-claude` 和 `*-chat-echo`
 - 只有 `*-chat-claude` 会使用这些 `CC_CLAUDE_*` 配置
+- `CLAUDE_PATH` / `CHAT_PROFILE_FILE` 仅用于脚本入口参数；不是 worker 直接读取变量
+
+### 4.3 手工启动 `cc-agent`（不走脚本）
+
+若你直接运行：
+
+```bash
+./bin/cc-agent ... -chat-worker ./bin/cc-chat-claude
+```
+
+请使用：
+
+```bash
+export CC_CLAUDE_CMD="/home/xzg/.local/bin/claude"
+export CC_CLAUDE_PROFILE_FILE="./chat-profile.md"
+export CC_CLAUDE_PERMISSION_MODE="dontAsk"
+export CC_CLAUDE_ALLOWED_TOOLS="Bash(git:*) Read Edit"
+export CC_CLAUDE_DISALLOWED_TOOLS=""
+```
 
 ---
 
@@ -273,3 +297,7 @@ bash ./run-multichat.sh
 1. 变量是否在启动 agent 前设置  
 2. 会话 `env` 是否覆盖了全局配置  
 3. Claude 可执行路径是否正确（`CC_CLAUDE_CMD` / `-ClaudePath`）
+
+`Q: 我设置了 CLAUDE_PATH / CHAT_PROFILE_FILE，但 chat-claude 仍无响应？`  
+`A:` 多数是因为你走的是“手工启动 agent”而不是启动脚本。  
+手工启动时请改用 `CC_CLAUDE_CMD` / `CC_CLAUDE_PROFILE_FILE`。  
