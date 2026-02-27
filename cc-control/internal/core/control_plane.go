@@ -978,7 +978,83 @@ func (cp *ControlPlane) HandleClientResize(actor, tenantID, sessionID string, co
 	return nil
 }
 
-func (cp *ControlPlane) HandleClientChatIn(actor, tenantID, sessionID, content string) error {
+func sanitizeChatContentParts(content string, parts []ChatContentPart) ([]ChatContentPart, error) {
+	if len(parts) == 0 {
+		content = strings.TrimSpace(content)
+		if content == "" {
+			return nil, errors.New("empty chat message")
+		}
+		return []ChatContentPart{{Type: "text", Text: content}}, nil
+	}
+
+	out := make([]ChatContentPart, 0, len(parts)+1)
+	for _, part := range parts {
+		switch strings.ToLower(strings.TrimSpace(part.Type)) {
+		case "text":
+			text := strings.TrimSpace(part.Text)
+			if text == "" {
+				continue
+			}
+			out = append(out, ChatContentPart{Type: "text", Text: text})
+		case "image":
+			if part.Source == nil {
+				continue
+			}
+			sourceType := strings.ToLower(strings.TrimSpace(part.Source.Type))
+			mediaType := strings.ToLower(strings.TrimSpace(part.Source.MediaType))
+			data := strings.TrimSpace(part.Source.Data)
+			if sourceType != "base64" || mediaType == "" || data == "" {
+				continue
+			}
+			if !strings.HasPrefix(mediaType, "image/") {
+				continue
+			}
+			if _, err := base64.StdEncoding.DecodeString(data); err != nil {
+				continue
+			}
+			out = append(out, ChatContentPart{
+				Type: "image",
+				Source: &ChatImageSource{
+					Type:      "base64",
+					MediaType: mediaType,
+					Data:      data,
+				},
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil, errors.New("empty chat message")
+	}
+	return out, nil
+}
+
+func chatPartsPlainText(parts []ChatContentPart) string {
+	lines := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.Type == "text" {
+			text := strings.TrimSpace(part.Text)
+			if text != "" {
+				lines = append(lines, text)
+			}
+			continue
+		}
+		if part.Type == "image" && part.Source != nil {
+			lines = append(lines, "[image:"+part.Source.MediaType+"]")
+		}
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n\n"))
+}
+
+func (cp *ControlPlane) HandleClientChatIn(actor, tenantID, sessionID, content string, contentParts []ChatContentPart) error {
+	parts, err := sanitizeChatContentParts(content, contentParts)
+	if err != nil {
+		return err
+	}
+	plainContent := chatPartsPlainText(parts)
+	meta, _ := json.Marshal(map[string]any{
+		"content_parts": parts,
+	})
+
 	cp.mu.Lock()
 	sess, ok := cp.sessions[sessionID]
 	if !ok {
@@ -1008,7 +1084,8 @@ func (cp *ControlPlane) HandleClientChatIn(actor, tenantID, sessionID, content s
 		MessageID: msgID,
 		SessionID: sessionID,
 		Role:      "user",
-		Content:   content,
+		Content:   plainContent,
+		Meta:      meta,
 		TsMS:      time.Now().UnixMilli(),
 	}
 	cp.appendChatMessage(sessionID, chatMsg)
@@ -1019,8 +1096,9 @@ func (cp *ControlPlane) HandleClientChatIn(actor, tenantID, sessionID, content s
 	cp.broadcastToAttached(sessionID, userBroadcast)
 
 	payload, _ := json.Marshal(map[string]any{
-		"message_id": msgID,
-		"content":    content,
+		"message_id":    msgID,
+		"content":       plainContent,
+		"content_parts": parts,
 	})
 	agentMsg := NewEnvelope("chat_in", sess.ServerID, sessionID)
 	agentMsg.Data = payload
@@ -1034,7 +1112,8 @@ func (cp *ControlPlane) HandleClientChatIn(actor, tenantID, sessionID, content s
 		Kind:      "chat_in",
 		Meta: map[string]any{
 			"message_id": msgID,
-			"length":     len(content),
+			"length":     len(plainContent),
+			"parts":      len(parts),
 		},
 	})
 	return nil

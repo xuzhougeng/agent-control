@@ -67,8 +67,13 @@
         </div>
         <div id="chatMessages" class="chat-messages"></div>
         <div class="chat-input-bar">
+          <input id="chatImageInput" type="file" accept="image/*" multiple hidden>
+          <button id="chatAttachBtn" type="button" class="btn-secondary chat-attach-btn">Screenshot</button>
           <textarea id="chatInput" class="chat-input" rows="1" placeholder="Type a message…"></textarea>
           <button id="chatSendBtn" class="btn-primary chat-send-btn">Send</button>
+        </div>
+        <div id="chatAttachmentBar" class="chat-attachment-bar" hidden>
+          <div id="chatAttachmentList" class="chat-attachment-list"></div>
         </div>
       </div>
     </section>

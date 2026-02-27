@@ -8,9 +8,22 @@ import (
 )
 
 type Message struct {
-	MessageID string `json:"message_id"`
-	Content   string `json:"content"`
-	SessionID string `json:"session_id,omitempty"`
+	MessageID    string        `json:"message_id"`
+	Content      string        `json:"content"`
+	ContentParts []ContentPart `json:"content_parts,omitempty"`
+	SessionID    string        `json:"session_id,omitempty"`
+}
+
+type ImageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+}
+
+type ContentPart struct {
+	Type   string       `json:"type"`
+	Text   string       `json:"text,omitempty"`
+	Source *ImageSource `json:"source,omitempty"`
 }
 
 func main() {
@@ -22,9 +35,13 @@ func main() {
 		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
 			continue
 		}
+		content := msg.Content
+		if content == "" && len(msg.ContentParts) > 0 {
+			content = "[parts]"
+		}
 		reply := Message{
 			MessageID: msg.MessageID,
-			Content:   "[echo] " + msg.Content,
+			Content:   "[echo] " + content,
 			SessionID: sessionID,
 		}
 		data, _ := json.Marshal(reply)

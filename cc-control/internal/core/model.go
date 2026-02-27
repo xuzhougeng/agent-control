@@ -117,3 +117,15 @@ type ChatMessage struct {
 	Meta      json.RawMessage `json:"meta,omitempty"`
 	TsMS      int64           `json:"ts_ms"`
 }
+
+type ChatImageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+}
+
+type ChatContentPart struct {
+	Type   string           `json:"type"`
+	Text   string           `json:"text,omitempty"`
+	Source *ChatImageSource `json:"source,omitempty"`
+}

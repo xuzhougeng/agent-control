@@ -355,9 +355,22 @@ func (m *SessionManager) writeChatSession(sessionID string, req ChatInPayload) e
 	if csess == nil {
 		return errors.New("session not found")
 	}
+	parts := make([]echocli.ContentPart, 0, len(req.ContentParts))
+	for _, p := range req.ContentParts {
+		cp := echocli.ContentPart{Type: p.Type, Text: p.Text}
+		if p.Source != nil {
+			cp.Source = &echocli.ImageSource{
+				Type:      p.Source.Type,
+				MediaType: p.Source.MediaType,
+				Data:      p.Source.Data,
+			}
+		}
+		parts = append(parts, cp)
+	}
 	return csess.Write(echocli.Message{
-		MessageID: req.MessageID,
-		Content:   req.Content,
+		MessageID:    req.MessageID,
+		Content:      req.Content,
+		ContentParts: parts,
 	})
 }
 

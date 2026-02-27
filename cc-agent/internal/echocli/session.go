@@ -11,10 +11,23 @@ import (
 )
 
 type Message struct {
-	MessageID string          `json:"message_id"`
-	Content   string          `json:"content"`
-	SessionID string          `json:"session_id,omitempty"`
-	Meta      json.RawMessage `json:"meta,omitempty"`
+	MessageID    string          `json:"message_id"`
+	Content      string          `json:"content"`
+	ContentParts []ContentPart   `json:"content_parts,omitempty"`
+	SessionID    string          `json:"session_id,omitempty"`
+	Meta         json.RawMessage `json:"meta,omitempty"`
+}
+
+type ImageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+}
+
+type ContentPart struct {
+	Type   string       `json:"type"`
+	Text   string       `json:"text,omitempty"`
+	Source *ImageSource `json:"source,omitempty"`
 }
 
 type Session struct {

@@ -109,6 +109,15 @@
   color: var(--accent-hover);
 }
 
+.chat-markdown img {
+  max-width: min(100%, 420px);
+  max-height: 360px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: #ffffff;
+  object-fit: contain;
+}
+
 .chat-markdown hr {
   border: 0;
   border-top: 1px solid var(--border-light);
@@ -218,6 +227,55 @@
   flex-shrink: 0;
   min-height: 40px;
   padding: 0 20px;
+}
+
+.chat-attach-btn {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.chat-attachment-bar {
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  padding: 8px 16px;
+}
+
+.chat-attachment-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-attachment-item {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.chat-attachment-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-attachment-remove {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.68);
+  color: #fff;
+  line-height: 1;
+  cursor: pointer;
+  font-size: 14px;
 }
 
 .chat-empty {

@@ -54,7 +54,7 @@ func TestCreateSession_ChatType(t *testing.T) {
 func TestHandleClientChatIn(t *testing.T) {
 	cp, conn, sessionID := setupChatTestCP(t)
 
-	err := cp.HandleClientChatIn("ui:test", "t1", sessionID, "hello")
+	err := cp.HandleClientChatIn("ui:test", "t1", sessionID, "hello", nil)
 	if err != nil {
 		t.Fatalf("chat_in failed: %v", err)
 	}
@@ -64,14 +64,18 @@ func TestHandleClientChatIn(t *testing.T) {
 		if m.Type == "chat_in" {
 			found = true
 			var payload struct {
-				MessageID string `json:"message_id"`
-				Content   string `json:"content"`
+				MessageID    string            `json:"message_id"`
+				Content      string            `json:"content"`
+				ContentParts []ChatContentPart `json:"content_parts"`
 			}
 			if err := json.Unmarshal(m.Data, &payload); err != nil {
 				t.Fatalf("unmarshal chat_in: %v", err)
 			}
 			if payload.Content != "hello" {
 				t.Fatalf("expected content 'hello', got %q", payload.Content)
+			}
+			if len(payload.ContentParts) != 1 || payload.ContentParts[0].Type != "text" || payload.ContentParts[0].Text != "hello" {
+				t.Fatalf("unexpected content parts: %+v", payload.ContentParts)
 			}
 		}
 	}
@@ -85,6 +89,72 @@ func TestHandleClientChatIn(t *testing.T) {
 	}
 	if len(msgs) != 1 || msgs[0].Role != "user" || msgs[0].Content != "hello" {
 		t.Fatalf("unexpected history: %+v", msgs)
+	}
+}
+
+func TestHandleClientChatIn_WithImageParts(t *testing.T) {
+	cp, conn, sessionID := setupChatTestCP(t)
+	imgData := "AQIDBA=="
+	parts := []ChatContentPart{
+		{Type: "text", Text: "describe this"},
+		{
+			Type: "image",
+			Source: &ChatImageSource{
+				Type:      "base64",
+				MediaType: "image/png",
+				Data:      imgData,
+			},
+		},
+	}
+
+	err := cp.HandleClientChatIn("ui:test", "t1", sessionID, "", parts)
+	if err != nil {
+		t.Fatalf("chat_in with image failed: %v", err)
+	}
+
+	var payload struct {
+		Content      string            `json:"content"`
+		ContentParts []ChatContentPart `json:"content_parts"`
+	}
+	found := false
+	for _, m := range conn.msgs {
+		if m.Type != "chat_in" {
+			continue
+		}
+		found = true
+		if err := json.Unmarshal(m.Data, &payload); err != nil {
+			t.Fatalf("unmarshal chat_in payload: %v", err)
+		}
+		break
+	}
+	if !found {
+		t.Fatal("no chat_in message sent to agent")
+	}
+	if payload.Content != "describe this\n\n[image:image/png]" {
+		t.Fatalf("unexpected plain content: %q", payload.Content)
+	}
+	if len(payload.ContentParts) != 2 {
+		t.Fatalf("unexpected content parts count: %+v", payload.ContentParts)
+	}
+	if payload.ContentParts[1].Source == nil || payload.ContentParts[1].Source.Data != imgData {
+		t.Fatalf("unexpected image payload: %+v", payload.ContentParts[1].Source)
+	}
+
+	msgs, err := cp.GetChatHistory("t1", sessionID)
+	if err != nil {
+		t.Fatalf("get history: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("unexpected history len: %d", len(msgs))
+	}
+	var meta struct {
+		ContentParts []ChatContentPart `json:"content_parts"`
+	}
+	if err := json.Unmarshal(msgs[0].Meta, &meta); err != nil {
+		t.Fatalf("unmarshal user meta: %v", err)
+	}
+	if len(meta.ContentParts) != 2 {
+		t.Fatalf("unexpected history meta parts: %+v", meta.ContentParts)
 	}
 }
 
@@ -157,7 +227,7 @@ func TestChatIn_RejectsNonChatSession(t *testing.T) {
 		t.Fatalf("create pty session: %v", err)
 	}
 
-	err = cp.HandleClientChatIn("ui:test", "t1", sess.SessionID, "hello")
+	err = cp.HandleClientChatIn("ui:test", "t1", sess.SessionID, "hello", nil)
 	if err == nil {
 		t.Fatal("expected error for chat_in on pty session")
 	}

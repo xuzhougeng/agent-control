@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -218,9 +219,14 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			var req struct {
-				Content string `json:"content"`
+				Content      string                 `json:"content"`
+				ContentParts []core.ChatContentPart `json:"content_parts"`
 			}
-			if err := json.Unmarshal(msg.Data, &req); err != nil || req.Content == "" {
+			if err := json.Unmarshal(msg.Data, &req); err != nil {
+				sub.Send <- errorEnvelope("bad_chat_in_payload", msg.SessionID)
+				continue
+			}
+			if strings.TrimSpace(req.Content) == "" && len(req.ContentParts) == 0 {
 				sub.Send <- errorEnvelope("bad_chat_in_payload", msg.SessionID)
 				continue
 			}
@@ -232,7 +238,7 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				sub.Send <- errorEnvelope("no_attached_session", "")
 				continue
 			}
-			if err := h.CP.HandleClientChatIn(sub.Actor, rec.TenantID, sessionID, req.Content); err != nil {
+			if err := h.CP.HandleClientChatIn(sub.Actor, rec.TenantID, sessionID, req.Content, req.ContentParts); err != nil {
 				sub.Send <- errorEnvelope(err.Error(), sessionID)
 			}
 		default:

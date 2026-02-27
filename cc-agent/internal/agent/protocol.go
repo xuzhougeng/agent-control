@@ -69,8 +69,21 @@ type StartChatPayload struct {
 }
 
 type ChatInPayload struct {
-	MessageID string `json:"message_id"`
-	Content   string `json:"content"`
+	MessageID    string            `json:"message_id"`
+	Content      string            `json:"content"`
+	ContentParts []ChatContentPart `json:"content_parts,omitempty"`
+}
+
+type ChatImageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+}
+
+type ChatContentPart struct {
+	Type   string           `json:"type"`
+	Text   string           `json:"text,omitempty"`
+	Source *ChatImageSource `json:"source,omitempty"`
 }
 
 type ChatOutPayload struct {

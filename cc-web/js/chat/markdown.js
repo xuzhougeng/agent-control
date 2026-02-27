@@ -9,6 +9,17 @@ function sanitizeMarkdownHref(rawHref) {
   return "";
 }
 
+function sanitizeMarkdownImageSrc(rawSrc) {
+  const decoded = decodeHtmlEntities(String(rawSrc || "")).trim().replace(/^<+|>+$/g, "");
+  if (!decoded) return "";
+  if (/^https?:\/\//i.test(decoded)) return escapeHtml(decoded);
+  if (/^\//.test(decoded)) return escapeHtml(decoded);
+  if (/^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(decoded)) {
+    return escapeHtml(decoded);
+  }
+  return "";
+}
+
 function renderInlineMarkdown(raw) {
   let html = escapeHtml(raw == null ? "" : raw);
   const placeholders = [];
@@ -19,6 +30,11 @@ function renderInlineMarkdown(raw) {
   };
 
   html = html.replace(/`([^`\n]+)`/g, (_m, code) => stash(`<code>${code}</code>`));
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, target) => {
+    const src = sanitizeMarkdownImageSrc(target);
+    if (!src) return alt;
+    return stash(`<img src="${src}" alt="${alt}" loading="lazy">`);
+  });
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, target) => {
     const href = sanitizeMarkdownHref(target);
     if (!href) return label;

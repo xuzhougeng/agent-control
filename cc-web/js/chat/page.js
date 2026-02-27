@@ -7,6 +7,10 @@ import { renderSessionList } from "../shared/session-list.js";
 import { renderChatMarkdown } from "./markdown.js";
 
 export function initChatPage() {
+  const MAX_SCREENSHOTS_PER_MESSAGE = 3;
+  const MAX_SCREENSHOT_BYTES = 900 * 1024;
+  const MAX_SCREENSHOT_EDGE = 1800;
+
   const state = {
     token: localStorage.getItem("ui_token") || "admin-dev-token",
     ws: null,
@@ -16,6 +20,7 @@ export function initChatPage() {
     selectedChatSessionID: "",
     chatMessages: [],
     chatWorkerSessionID: "",
+    pendingScreenshots: [],
   };
 
   const api = createUIApi(() => state.token);
@@ -32,6 +37,10 @@ export function initChatPage() {
   const chatMessagesEl = document.getElementById("chatMessages");
   const chatInput = document.getElementById("chatInput");
   const chatSendBtn = document.getElementById("chatSendBtn");
+  const chatAttachBtn = document.getElementById("chatAttachBtn");
+  const chatImageInput = document.getElementById("chatImageInput");
+  const chatAttachmentBar = document.getElementById("chatAttachmentBar");
+  const chatAttachmentList = document.getElementById("chatAttachmentList");
   const chatSessionInfo = document.getElementById("chatSessionInfo");
   const chatSessionIdText = document.getElementById("chatSessionIdText");
   const chatCopySessionBtn = document.getElementById("chatCopySessionBtn");
@@ -78,6 +87,118 @@ export function initChatPage() {
     return wsClient.send(msg);
   }
 
+  function estimateDataURLBytes(dataURL) {
+    const idx = dataURL.indexOf(",");
+    if (idx <= 0) return 0;
+    const b64 = dataURL.slice(idx + 1);
+    const padding = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+    return Math.floor((b64.length * 3) / 4) - padding;
+  }
+
+  function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("read_failed"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadImage(dataURL) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("image_decode_failed"));
+      img.src = dataURL;
+    });
+  }
+
+  async function optimizeScreenshot(file) {
+    const sourceDataURL = await readFileAsDataURL(file);
+    const img = await loadImage(sourceDataURL);
+    const scale = Math.min(1, MAX_SCREENSHOT_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+    const width = Math.max(1, Math.round(img.naturalWidth * scale));
+    const height = Math.max(1, Math.round(img.naturalHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("canvas_not_supported");
+    ctx.drawImage(img, 0, 0, width, height);
+
+    let dataURL = canvas.toDataURL(file.type || "image/png");
+    if (estimateDataURLBytes(dataURL) > MAX_SCREENSHOT_BYTES) {
+      dataURL = canvas.toDataURL("image/jpeg", 0.85);
+    }
+    if (estimateDataURLBytes(dataURL) > MAX_SCREENSHOT_BYTES) {
+      dataURL = canvas.toDataURL("image/jpeg", 0.72);
+    }
+    if (estimateDataURLBytes(dataURL) > MAX_SCREENSHOT_BYTES) {
+      throw new Error("image_too_large");
+    }
+    return dataURL;
+  }
+
+  function renderPendingScreenshots() {
+    if (!chatAttachmentBar || !chatAttachmentList) return;
+    chatAttachmentList.innerHTML = "";
+    if (!state.pendingScreenshots.length) {
+      chatAttachmentBar.hidden = true;
+      return;
+    }
+    chatAttachmentBar.hidden = false;
+    for (let i = 0; i < state.pendingScreenshots.length; i += 1) {
+      const entry = state.pendingScreenshots[i];
+      const item = document.createElement("div");
+      item.className = "chat-attachment-item";
+      item.title = entry.name;
+
+      const img = document.createElement("img");
+      img.src = entry.dataURL;
+      img.alt = entry.name || `screenshot-${i + 1}`;
+      item.appendChild(img);
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "chat-attachment-remove";
+      removeBtn.textContent = "×";
+      removeBtn.title = "Remove";
+      removeBtn.addEventListener("click", () => {
+        state.pendingScreenshots.splice(i, 1);
+        renderPendingScreenshots();
+      });
+      item.appendChild(removeBtn);
+      chatAttachmentList.appendChild(item);
+    }
+  }
+
+  async function addScreenshotFiles(files) {
+    const fileList = Array.isArray(files) ? files : Array.from(files || []);
+    if (!fileList.length) return;
+
+    const slots = MAX_SCREENSHOTS_PER_MESSAGE - state.pendingScreenshots.length;
+    if (slots <= 0) {
+      alert(`Only ${MAX_SCREENSHOTS_PER_MESSAGE} screenshots per message`);
+      return;
+    }
+
+    const accepted = fileList.filter((f) => f && /^image\//i.test(f.type)).slice(0, slots);
+    for (const file of accepted) {
+      try {
+        const dataURL = await optimizeScreenshot(file);
+        state.pendingScreenshots.push({
+          name: file.name || "screenshot",
+          dataURL,
+        });
+      } catch (err) {
+        console.error("[chat] screenshot failed", err);
+        alert(`Failed to attach ${file.name || "image"} (too large or invalid image)`);
+      }
+    }
+    renderPendingScreenshots();
+  }
+
   function applyUIToken(token) {
     state.token = token || "";
     if (tokenInput) tokenInput.value = state.token;
@@ -98,6 +219,51 @@ export function initChatPage() {
     return operations;
   }
 
+  function getChatContentParts(meta) {
+    if (!meta || typeof meta !== "object" || !Array.isArray(meta.content_parts)) return [];
+    const parts = [];
+    for (const part of meta.content_parts) {
+      if (!part || typeof part !== "object") continue;
+      if (part.type === "text" && typeof part.text === "string" && part.text.trim()) {
+        parts.push({ type: "text", text: part.text });
+        continue;
+      }
+      if (part.type !== "image") continue;
+      const source = part.source;
+      if (!source || typeof source !== "object") continue;
+      if (source.type !== "base64") continue;
+      if (typeof source.media_type !== "string" || !/^image\//i.test(source.media_type)) continue;
+      if (typeof source.data !== "string" || !source.data.trim()) continue;
+      parts.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: source.media_type,
+          data: source.data,
+        },
+      });
+    }
+    return parts;
+  }
+
+  function buildMarkdownFromParts(parts, fallbackText) {
+    if (!Array.isArray(parts) || !parts.length) return fallbackText || "";
+    const lines = [];
+    for (const part of parts) {
+      if (part.type === "text") {
+        lines.push(part.text);
+        continue;
+      }
+      if (part.type === "image" && part.source) {
+        const mediaType = String(part.source.media_type || "").trim();
+        const data = String(part.source.data || "").trim();
+        if (!mediaType || !data) continue;
+        lines.push(`![screenshot](data:${mediaType};base64,${data})`);
+      }
+    }
+    return lines.join("\n\n") || fallbackText || "";
+  }
+
   function renderChatMessages() {
     if (!chatMessagesEl) return;
     chatMessagesEl.innerHTML = "";
@@ -114,7 +280,8 @@ export function initChatPage() {
       bubble.className = `chat-bubble ${m.role === "user" ? "user" : "assistant"}`;
       const body = document.createElement("div");
       body.className = "chat-markdown";
-      body.innerHTML = renderChatMarkdown(m.content);
+      const markdown = buildMarkdownFromParts(getChatContentParts(m.meta), m.content);
+      body.innerHTML = renderChatMarkdown(markdown);
       bubble.appendChild(body);
 
       if (m.role === "assistant") {
@@ -243,7 +410,9 @@ export function initChatPage() {
       state.selectedChatSessionID = "";
       state.chatMessages = [];
       state.chatWorkerSessionID = "";
+      state.pendingScreenshots = [];
       renderChatMessages();
+      renderPendingScreenshots();
       updateChatSessionInfo();
     }
     await fetchSessions();
@@ -254,8 +423,10 @@ export function initChatPage() {
     state.selectedChatSessionID = sessionID;
     state.chatMessages = [];
     state.chatWorkerSessionID = "";
+    state.pendingScreenshots = [];
     renderSessions();
     renderChatMessages();
+    renderPendingScreenshots();
     updateChatSessionInfo();
 
     const sess = state.sessions.find((s) => s.session_id === sessionID);
@@ -281,15 +452,40 @@ export function initChatPage() {
 
   function sendChatMessage() {
     if (!chatInput) return;
-    const content = chatInput.value.trim();
-    if (!content) return;
+    const text = chatInput.value.trim();
+    if (!text && !state.pendingScreenshots.length) return;
     if (!state.selectedChatSessionID) {
       alert("Select or create a chat session first");
       return;
     }
-    sendWS({ type: "chat_in", session_id: state.selectedChatSessionID, data: { content } });
+    const contentParts = [];
+    if (text) {
+      contentParts.push({ type: "text", text });
+    }
+    for (const entry of state.pendingScreenshots) {
+      const m = String(entry.dataURL || "").match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
+      if (!m) continue;
+      contentParts.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: m[1].toLowerCase(),
+          data: m[2],
+        },
+      });
+    }
+    sendWS({
+      type: "chat_in",
+      session_id: state.selectedChatSessionID,
+      data: {
+        content: text,
+        content_parts: contentParts,
+      },
+    });
     chatInput.value = "";
     chatInput.style.height = "auto";
+    state.pendingScreenshots = [];
+    renderPendingScreenshots();
   }
 
   async function createChatSession() {
@@ -324,6 +520,11 @@ export function initChatPage() {
   refreshSessionsBtn?.addEventListener("click", fetchSessions);
   newChatBtn?.addEventListener("click", createChatSession);
   chatSendBtn?.addEventListener("click", sendChatMessage);
+  chatAttachBtn?.addEventListener("click", () => chatImageInput?.click());
+  chatImageInput?.addEventListener("change", async () => {
+    await addScreenshotFiles(chatImageInput.files);
+    chatImageInput.value = "";
+  });
 
   if (chatInput) {
     chatInput.addEventListener("keydown", (e) => {
@@ -335,6 +536,19 @@ export function initChatPage() {
     chatInput.addEventListener("input", () => {
       chatInput.style.height = "auto";
       chatInput.style.height = `${Math.min(chatInput.scrollHeight, 120)}px`;
+    });
+    chatInput.addEventListener("paste", async (e) => {
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageFiles = [];
+      for (const item of items) {
+        if (item.kind === "file" && /^image\//i.test(item.type)) {
+          const file = item.getAsFile();
+          if (file) imageFiles.push(file);
+        }
+      }
+      if (!imageFiles.length) return;
+      e.preventDefault();
+      await addScreenshotFiles(imageFiles);
     });
   }
 
@@ -353,6 +567,7 @@ export function initChatPage() {
 
   sidebar.mount();
   renderChatMessages();
+  renderPendingScreenshots();
   if (localStorage.getItem("ui_token")) {
     wsClient.connect();
     refreshAll();

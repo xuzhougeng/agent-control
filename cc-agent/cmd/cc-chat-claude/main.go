@@ -15,10 +15,23 @@ import (
 )
 
 type Message struct {
-	MessageID string          `json:"message_id"`
-	Content   string          `json:"content"`
-	SessionID string          `json:"session_id,omitempty"`
-	Meta      json.RawMessage `json:"meta,omitempty"`
+	MessageID    string          `json:"message_id"`
+	Content      string          `json:"content"`
+	ContentParts []ContentPart   `json:"content_parts,omitempty"`
+	SessionID    string          `json:"session_id,omitempty"`
+	Meta         json.RawMessage `json:"meta,omitempty"`
+}
+
+type ImageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+}
+
+type ContentPart struct {
+	Type   string       `json:"type"`
+	Text   string       `json:"text,omitempty"`
+	Source *ImageSource `json:"source,omitempty"`
 }
 
 func main() {
@@ -43,11 +56,11 @@ func main() {
 		if err := json.Unmarshal([]byte(line), &msg); err != nil {
 			continue
 		}
-		if strings.TrimSpace(msg.Content) == "" {
+		if strings.TrimSpace(msg.Content) == "" && len(msg.ContentParts) == 0 {
 			continue
 		}
 
-		reply, meta := handleMessage(cfg, sessionID, &sessionReady, msg.Content)
+		reply, meta := handleMessage(cfg, sessionID, &sessionReady, msg.Content, msg.ContentParts)
 		out := Message{MessageID: msg.MessageID, Content: reply, SessionID: sessionID, Meta: meta}
 		data, _ := json.Marshal(out)
 		writer.Write(data)
@@ -56,8 +69,8 @@ func main() {
 	}
 }
 
-func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, content string) (string, json.RawMessage) {
-	input := buildStreamInput(content)
+func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, content string, parts []ContentPart) (string, json.RawMessage) {
+	input := buildStreamInput(content, parts)
 	useResume := *sessionReady
 	var lastErr string
 	var lastMeta json.RawMessage
@@ -146,14 +159,50 @@ func runClaude(cfg claudecli.Config, sessionID string, resume bool, input string
 	return res.Reply, meta, "", nil
 }
 
-func buildStreamInput(content string) string {
+func buildStreamInput(content string, parts []ContentPart) string {
+	contentItems := make([]map[string]any, 0, len(parts)+1)
+	for _, p := range parts {
+		switch strings.ToLower(strings.TrimSpace(p.Type)) {
+		case "text":
+			text := strings.TrimSpace(p.Text)
+			if text == "" {
+				continue
+			}
+			contentItems = append(contentItems, map[string]any{
+				"type": "text",
+				"text": text,
+			})
+		case "image":
+			if p.Source == nil {
+				continue
+			}
+			sourceType := strings.ToLower(strings.TrimSpace(p.Source.Type))
+			mediaType := strings.ToLower(strings.TrimSpace(p.Source.MediaType))
+			data := strings.TrimSpace(p.Source.Data)
+			if sourceType != "base64" || mediaType == "" || data == "" {
+				continue
+			}
+			contentItems = append(contentItems, map[string]any{
+				"type": "image",
+				"source": map[string]any{
+					"type":       "base64",
+					"media_type": mediaType,
+					"data":       data,
+				},
+			})
+		}
+	}
+	if len(contentItems) == 0 && strings.TrimSpace(content) != "" {
+		contentItems = append(contentItems, map[string]any{
+			"type": "text",
+			"text": strings.TrimSpace(content),
+		})
+	}
 	payload := map[string]any{
 		"type": "user",
 		"message": map[string]any{
-			"role": "user",
-			"content": []map[string]string{
-				{"type": "text", "text": content},
-			},
+			"role":    "user",
+			"content": contentItems,
 		},
 	}
 	data, _ := json.Marshal(payload)
