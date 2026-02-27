@@ -2217,6 +2217,152 @@
       .replaceAll("'", "&#039;");
   }
 
+  function decodeHtmlEntities(input) {
+    const el = document.createElement("textarea");
+    el.innerHTML = input;
+    return el.value;
+  }
+
+  function sanitizeMarkdownHref(rawHref) {
+    const decoded = decodeHtmlEntities(String(rawHref || ""))
+      .trim()
+      .replace(/^<+|>+$/g, "");
+    if (!decoded) {
+      return "";
+    }
+    const href = decoded.split(/\s+/)[0];
+    if (/^(https?:\/\/|mailto:)/i.test(href)) {
+      return escapeHtml(href);
+    }
+    if (/^(\/|#)/.test(href)) {
+      return escapeHtml(href);
+    }
+    return "";
+  }
+
+  function renderInlineMarkdown(raw) {
+    let html = escapeHtml(raw == null ? "" : raw);
+    const placeholders = [];
+    const stash = (markup) => {
+      const token = `@@MD${placeholders.length}@@`;
+      placeholders.push(markup);
+      return token;
+    };
+
+    // Protect inline code and links first, then apply emphasis.
+    html = html.replace(/`([^`\n]+)`/g, (_m, code) => stash(`<code>${code}</code>`));
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, target) => {
+      const href = sanitizeMarkdownHref(target);
+      if (!href) {
+        return label;
+      }
+      return stash(`<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+    });
+
+    html = html.replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, "<strong>$2</strong>");
+    html = html.replace(/~~(?=\S)([\s\S]*?\S)~~/g, "<del>$1</del>");
+    html = html.replace(/(^|[^*])\*(?=\S)([\s\S]*?\S)\*(?!\*)/g, "$1<em>$2</em>");
+    html = html.replace(/(^|[^_])_(?=\S)([\s\S]*?\S)_(?!_)/g, "$1<em>$2</em>");
+
+    html = html.replace(/@@MD(\d+)@@/g, (_m, idx) => placeholders[Number(idx)] || "");
+    return html;
+  }
+
+  function isMarkdownBlockBoundary(line) {
+    if (!line.trim()) return true;
+    if (/^\s*```/.test(line)) return true;
+    if (/^\s*#{1,6}\s+/.test(line)) return true;
+    if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(line)) return true;
+    if (/^\s*>\s?/.test(line)) return true;
+    if (/^\s*[-+*]\s+/.test(line)) return true;
+    if (/^\s*\d+\.\s+/.test(line)) return true;
+    return false;
+  }
+
+  function renderChatMarkdown(raw) {
+    const text = String(raw == null ? "" : raw).replace(/\r\n?/g, "\n");
+    const lines = text.split("\n");
+    const blocks = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      if (!line.trim()) {
+        i += 1;
+        continue;
+      }
+
+      if (/^\s*```/.test(line)) {
+        const lang = line.trim().slice(3).trim().split(/\s+/)[0] || "";
+        i += 1;
+        const codeLines = [];
+        while (i < lines.length && !/^\s*```/.test(lines[i])) {
+          codeLines.push(lines[i]);
+          i += 1;
+        }
+        if (i < lines.length) i += 1;
+        const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : "";
+        blocks.push(`<pre class="chat-md-code"><code${langClass}>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+        continue;
+      }
+
+      const heading = line.match(/^\s*(#{1,6})\s+(.*)$/);
+      if (heading) {
+        const level = heading[1].length;
+        blocks.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+        i += 1;
+        continue;
+      }
+
+      if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(line)) {
+        blocks.push("<hr>");
+        i += 1;
+        continue;
+      }
+
+      if (/^\s*>\s?/.test(line)) {
+        const quoteLines = [];
+        while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+          quoteLines.push(lines[i].replace(/^\s*>\s?/, ""));
+          i += 1;
+        }
+        const quoteHTML = renderInlineMarkdown(quoteLines.join("\n")).replace(/\n/g, "<br>");
+        blocks.push(`<blockquote>${quoteHTML}</blockquote>`);
+        continue;
+      }
+
+      if (/^\s*[-+*]\s+/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^\s*[-+*]\s+/.test(lines[i])) {
+          items.push(`<li>${renderInlineMarkdown(lines[i].replace(/^\s*[-+*]\s+/, ""))}</li>`);
+          i += 1;
+        }
+        blocks.push(`<ul>${items.join("")}</ul>`);
+        continue;
+      }
+
+      if (/^\s*\d+\.\s+/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+          items.push(`<li>${renderInlineMarkdown(lines[i].replace(/^\s*\d+\.\s+/, ""))}</li>`);
+          i += 1;
+        }
+        blocks.push(`<ol>${items.join("")}</ol>`);
+        continue;
+      }
+
+      const para = [];
+      while (i < lines.length && !isMarkdownBlockBoundary(lines[i])) {
+        para.push(lines[i]);
+        i += 1;
+      }
+      blocks.push(`<p>${renderInlineMarkdown(para.join("\n")).replace(/\n/g, "<br>")}</p>`);
+    }
+
+    return blocks.join("");
+  }
+
   // ── Chat page functions ──────────────────────────────────
   const chatMessagesEl = document.getElementById("chatMessages");
   const chatInput = document.getElementById("chatInput");
@@ -2239,7 +2385,10 @@
     for (const m of state.chatMessages) {
       const bubble = document.createElement("div");
       bubble.className = `chat-bubble ${m.role === "user" ? "user" : "assistant"}`;
-      bubble.textContent = m.content;
+      const body = document.createElement("div");
+      body.className = "chat-markdown";
+      body.innerHTML = renderChatMarkdown(m.content);
+      bubble.appendChild(body);
       if (m.role === "assistant") {
         const operations = getChatOperations(m.meta);
         if (operations.length) {
