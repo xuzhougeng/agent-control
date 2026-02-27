@@ -1,156 +1,197 @@
 # Agent Control 架构
 
-## 系统总览
+本文档基于当前代码实现（`cc-control/` + `cc-agent/` + `cc-web/`）描述系统结构与关键数据流。
+
+## 1. 系统总览
 
 ```mermaid
 flowchart TB
     subgraph Clients["客户端"]
-        Browser["Browser\n(xterm.js / cc-web)"]
+        Browser["Browser (cc-web)\n/index /chat /admin /tenant"]
         App["AgentControl App\n(macOS / iOS)"]
     end
 
     subgraph Control["控制面"]
-        CC["cc-control\nREST + WebSocket"]
+        CC["cc-control\nREST + WS + Token + Audit"]
     end
 
-    subgraph Agents["Agent 节点"]
-        A1["cc-agent\nsrv-01"]
-        A2["cc-agent\nsrv-02"]
+    subgraph Nodes["执行节点"]
+        A1["cc-agent (srv-01)"]
+        A2["cc-agent (srv-02)"]
     end
 
-    Browser -->|"REST / WS\n(UI Token)"| CC
-    App -->|"REST / WS\n(UI Token)"| CC
+    subgraph Runtime["Agent 本地运行时"]
+        PTY["PTY 会话\n(claude-path + --resume)"]
+        CHAT["Chat Worker\n(NDJSON stdin/stdout)"]
+    end
+
+    Browser -->|"HTTP /api/* + WS /ws/client\n(UI Token)"| CC
+    App -->|"HTTP /api/* + WS /ws/client\n(UI Token)"| CC
     CC <-->|"WS /ws/agent\n(Agent Token)"| A1
     CC <-->|"WS /ws/agent\n(Agent Token)"| A2
+    A1 --> PTY
+    A1 --> CHAT
 ```
 
-## 多用户隔离（匿名租户）
+## 2. 组件职责
 
-- `agent_token` 与 `ui_token` 均绑定 `tenant_id`，中心服务器只按 tenant 维度隔离，不关心真实身份。
-- UI 角色：`viewer` / `operator` / `owner`。
-- `admin_token` 用于生成/撤销 tenant token。
-- `tenant_token` 用于该租户自助签发 UI/Agent token（每次生成会刷新旧 token）。
-- token 默认内存态；可通过 `-token-db` / `TOKEN_DB` 持久化到 SQLite 以跨重启保留。
+| 组件 | 主要职责 |
+|---|---|
+| `cc-control` | 统一入口；维护 server/session 状态；REST 管理接口；WS 转发；审批事件；审计日志 |
+| `cc-agent` | 与控制面建立出站 WS；处理 `start_session/start_chat/pty_in/resize/stop_session/chat_in` |
+| `cc-web` | 静态前端；终端页（PTY）与聊天页（Chat）；Admin/Tenant token 管理页 |
+| `app/AgentControlMac` | 原生 macOS/iOS 客户端，通过同一 REST/WS 协议接入 |
 
-## 组件与目录
+## 3. 认证与租户隔离
 
-```mermaid
-flowchart LR
-    subgraph Repo["agent-control 仓库"]
-        CC_DIR["cc-control/"]
-        AGENT_DIR["cc-agent/"]
-        UI_DIR["cc-web/"]
-        APP_DIR["app/AgentControlMac/"]
-    end
+系统按 `tenant_id` 做强隔离，服务端不依赖真实用户身份。
 
-    CC_DIR -->|"控制面\nHTTP + WS"| CC_SVC["cc-control 进程"]
-    AGENT_DIR -->|"每机一个\n出站 WS + PTY"| AGENT_SVC["cc-agent 进程"]
-    UI_DIR -->|"静态前端"| BROWSER["浏览器"]
-    APP_DIR -->|"原生客户端"| NATIVE["macOS/iOS App"]
+- Token 类型：`ui` / `agent` / `tenant` / `admin`
+- UI 角色：`viewer` / `operator` / `owner`
+- `admin_token`：管理租户与 token（`/admin/*`）
+- `tenant_token`：自助签发当前租户 UI/Agent token（`/tenant/tokens`）
+- `ui_token`：访问 `/api/*` 与 `/ws/client`
+- `agent_token`：连接 `/ws/agent`
+
+Token 默认在内存中；配置 `-token-db`（或 `TOKEN_DB`）后会持久化到 SQLite。
+
+## 4. 控制面内部模型
+
+`ControlPlane` 内部维护以下核心状态（内存态）：
+
+- `servers`: `server_id -> Server`
+- `sessions`: `session_id -> Session`
+- `sessionEvents`: `session_id -> []SessionEvent`
+- `sessionHubs`: `session_id -> {ring buffer + subscribers}`
+- `agentConns`: `server_id -> WS sender`
+- `chatHistory`: `session_id -> []ChatMessage`（最多 200 条）
+
+关键机制：
+
+- Ring buffer：为 PTY 会话缓存最近输出，`attach` 时支持快照回放。
+- 心跳与离线判定：agent 5s 心跳，超时按 `-offline-after-sec` 标离线。
+- 速率限制：按 token 维度限速（UI/Agent/Tenant）。
+- 审计：关键动作写入 `audit.jsonl`。
+
+## 5. 通信面与协议
+
+统一 WS 封包：
+
+```json
+{
+  "type": "xxx",
+  "server_id": "optional",
+  "session_id": "optional",
+  "seq": 123,
+  "ts_ms": 1730000000000,
+  "data": {},
+  "data_b64": "optional"
+}
 ```
 
-## 核心数据流（创建会话与终端）
+| 通道 | 方向 | 关键消息 |
+|---|---|---|
+| REST `/api/*` | UI/App -> Control | `GET /api/servers`、`POST /api/sessions`、`POST /api/sessions/{id}/stop`、`DELETE /api/sessions/{id}` |
+| WS `/ws/client` | UI/App <-> Control | `attach`、`term_in`、`resize`、`action`、`chat_in`；下行 `term_out`、`chat_msg`、`event`、`session_update` |
+| WS `/ws/agent` | Agent <-> Control | 上行 `register/heartbeat/pty_out/pty_exit/chat_out/chat_exit/error`；下行 `start_session/start_chat/pty_in/resize/stop_session` |
+
+## 6. 会话生命周期
+
+### 6.1 PTY 模式（`session_type=pty`）
 
 ```mermaid
 sequenceDiagram
     participant UI as Browser/App
     participant CP as cc-control
     participant Agent as cc-agent
+    participant PTY as Local PTY
 
-    Agent->>CP: WS /ws/agent (register + heartbeat)
-    CP-->>Agent: register_ok
-    UI->>CP: GET /api/servers
-    CP-->>UI: servers
-    UI->>CP: POST /api/sessions
-    CP->>Agent: start_session(session_id, cwd, env, cmd)
-    Agent-->>CP: pty_out (流式)
-    CP-->>UI: session 列表更新
-    UI->>CP: WS /ws/client attach(session_id)
-    CP-->>UI: term_out (回放 + 实时)
-    UI->>CP: term_in（手动按键）/ action(approve|reject)（可选）
-    CP->>Agent: pty_in("y\\n"/"n\\n"/Enter/Esc)（可选）
-    UI->>CP: POST /api/sessions/{id}/stop
+    UI->>CP: POST /api/sessions (pty)
+    CP->>Agent: start_session(cwd, cmd, env, cols, rows)
+    Agent->>PTY: spawn command
+    PTY-->>Agent: stdout/stderr chunks
+    Agent-->>CP: pty_out(seq, data_b64)
+    CP-->>UI: term_out + session_update(running)
+    UI->>CP: term_in / resize / action
+    CP->>Agent: pty_in / resize
+    UI->>CP: POST stop 或 DELETE
     CP->>Agent: stop_session
     Agent-->>CP: pty_exit
     CP-->>UI: session_update(exited)
 ```
 
-> 说明：`approval_needed`/Pending Approvals 属于 **启发式 prompt detection**（`cc-control -enable-prompt-detection`），默认关闭；关闭时不会自动产生 Pending Approvals，但终端交互（`term_in`）仍可正常使用。
+补充：
 
-## 部署拓扑：直连（方案 A）
+- `resume_id` 可在创建时传入，控制面会拼接 `--resume <id>` 启动命令。
+- 控制面也会从 PTY 输出里自动探测并更新 `resume_id`（`resume detector`）。
+
+### 6.2 Chat 模式（`session_type=chat`）
+
+```mermaid
+sequenceDiagram
+    participant UI as Browser/App
+    participant CP as cc-control
+    participant Agent as cc-agent
+    participant Worker as Chat Worker
+
+    UI->>CP: POST /api/sessions (chat)
+    CP->>Agent: start_chat(cwd, env)
+    Agent->>Worker: start configured worker cmd
+    UI->>CP: WS chat_in(content)
+    CP-->>UI: chat_msg(role=user)
+    CP->>Agent: chat_in(message_id, content)
+    Agent->>Worker: NDJSON stdin
+    Worker-->>Agent: NDJSON stdout
+    Agent-->>CP: chat_out(message_id, content)
+    CP-->>UI: chat_msg(role=assistant)
+```
+
+补充：
+
+- Chat worker 命令通常由 agent 启动参数 `-chat-worker` 决定。
+- Windows server 默认会话类型为 `chat`；`pty` 当前不支持 Windows。
+
+### 6.3 审批事件（可选）
+
+- `-enable-prompt-detection=true` 时，控制面会对 PTY 输出做启发式匹配，命中后生成 `event.kind=approval_needed`。
+- `action.kind=approve/reject` 会转成终端输入。
+- 普通提示输入：`y\n` / `n\n`
+- Claude/Cursor 菜单提示输入：`Enter` / `Esc`
+- 该检测默认关闭；关闭后不自动产生 Pending Approvals，但手动 `term_in` 不受影响。
+
+## 7. 状态一致性与故障处理
+
+- UI 连接 `/ws/client` 后会收到 `debug_probe`（可忽略）与全局未解决审批事件重放。
+- `attach` 成功后返回 `attach_ok`，并回放 ring buffer 快照。
+- `pty_out` 使用 `seq` 去重，避免乱序/重复片段回灌。
+- Agent 断线后服务器标记 offline；重连后通过 `register` 恢复可用。
+- 删除会话采用 Stop+Delete 语义：运行中会先发 stop，再删除控制面记录。
+
+## 8. 部署拓扑
+
+### 8.1 直连（开发/内网）
 
 ```mermaid
 flowchart TB
-    subgraph Public["公网服务器 1.2.3.4"]
-        CC["cc-control :18080\n监听 0.0.0.0"]
-    end
-
-    subgraph Intranet["内网"]
-        A1["内网机器 A\ncc-agent"]
-        A2["内网机器 B\ncc-agent"]
-    end
-
-    A1 -->|"ws:// (outbound)"| CC
-    A2 -->|"ws:// (outbound)"| CC
+    CC["cc-control :18080"]
+    A1["cc-agent A"] -->|"ws://"| CC
+    A2["cc-agent B"] -->|"ws://"| CC
+    UI["Browser/App"] -->|"http/ws"| CC
 ```
 
-## 部署拓扑：Nginx + TLS（方案 B）
+### 8.2 Nginx + TLS（生产）
 
 ```mermaid
 flowchart TB
-    subgraph Public["公网服务器"]
-        LE["Let's Encrypt"]
-        Nginx["Nginx :443"]
-        CC["cc-control :18080"]
-        Nginx --> LE
-        Nginx --> CC
-    end
-
-    subgraph Intranet["内网"]
-        A1["内网机器 A\ncc-agent"]
-        A2["内网机器 B\ncc-agent"]
-    end
-
-    A1 -->|"wss:// (outbound)"| Nginx
-    A2 -->|"wss:// (outbound)"| Nginx
+    N["Nginx :443"] --> CC["cc-control :18080"]
+    A1["cc-agent A"] -->|"wss://"| N
+    A2["cc-agent B"] -->|"wss://"| N
+    UI["Browser/App"] -->|"https/wss"| N
 ```
 
-## 依赖与技术栈
+## 9. 技术栈与依赖
 
-各子项目使用的依赖库如下，便于后续开发与升级。
-
-### 前端（cc-web/）
-
-- **技术**：原生 HTML/CSS/JavaScript，无构建工具，无 `package.json`。
-- **运行时依赖**（通过 CDN 引入，见 `cc-web/index.html`）：
-  - **xterm.js** — 终端模拟（`xterm/lib/xterm.js`、`xterm/css/xterm.css`）
-  - **xterm-addon-fit** — 终端自适应窗口大小（`xterm-addon-fit/lib/xterm-addon-fit.js`）
-
-### 控制面（cc-control/）
-
-- **语言**：Go 1.25
-- **依赖**（`cc-control/go.mod`）：
-
-| 依赖 | 用途 |
-|------|------|
-| `github.com/google/uuid` | 生成 session_id 等唯一标识 |
-| `github.com/gorilla/websocket` | WebSocket 服务端（/ws/agent、/ws/client） |
-| `modernc.org/sqlite` | SQLite 驱动（`-token-db` 持久化 token） |
-
-### Agent 节点（cc-agent/）
-
-- **语言**：Go 1.25
-- **依赖**（`cc-agent/go.mod`）：
-
-| 依赖 | 用途 |
-|------|------|
-| `github.com/creack/pty` | 创建 PTY，与 shell/子进程交互 |
-| `github.com/gorilla/websocket` | 出站 WebSocket 连接控制面 |
-
-### macOS / iOS 客户端（app/AgentControlMac/）
-
-- **语言**：Swift，Xcode 项目 + Swift Package Manager
-- **直接依赖**（SPM）：
-  - **SwiftTerm**（`migueldeicaza/SwiftTerm`）— 终端渲染与输入，macOS 用 `NSViewRepresentable`，iOS 用 `UIViewRepresentable`
-- **传递依赖**（`Package.resolved` 中）：
-  - **swift-argument-parser** — 由 SwiftTerm 引入
+- `cc-control`（Go 1.25）：`gorilla/websocket`、`google/uuid`、`modernc.org/sqlite`
+- `cc-agent`（Go 1.25）：`gorilla/websocket`、`creack/pty`
+- `cc-web`：原生 HTML/CSS/JS + `xterm.js`（CDN）
+- `app/AgentControlMac`：Swift + SwiftTerm
