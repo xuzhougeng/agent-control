@@ -5,6 +5,7 @@ param(
   [string]$ServerIDPrefix = "",
   [string]$AllowRoot = "",
   [string]$ClaudePath = "",
+  [string]$ChatProfileFile = "",
   $StartAgent = $true
 )
 
@@ -289,7 +290,19 @@ try {
 
   if ($startAgentEnabled) {
     $resolvedClaudePath = Resolve-ClaudePath -Preferred $ClaudePath
+    if ([string]::IsNullOrWhiteSpace($ChatProfileFile)) {
+      $defaultProfile = Join-Path $bundleRoot "chat-profile.md"
+      if (Test-Path $defaultProfile) {
+        $ChatProfileFile = $defaultProfile
+      }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ChatProfileFile) -and -not (Test-Path $ChatProfileFile)) {
+      throw "Chat profile file not found: $ChatProfileFile"
+    }
     Write-Host "Claude path: $resolvedClaudePath"
+    if (-not [string]::IsNullOrWhiteSpace($ChatProfileFile)) {
+      Write-Host "Chat profile file: $ChatProfileFile"
+    }
 
     $commonArgs = @(
       "-control-url", "ws://127.0.0.1:$ControlPort/ws/agent",
@@ -308,7 +321,10 @@ try {
       -StdoutPath $chatClaudeAgentLogOut `
       -StderrPath $chatClaudeAgentLogErr `
       -Args $chatClaudeArgs `
-      -ExtraEnv @{ "CC_CLAUDE_CMD" = $resolvedClaudePath }
+      -ExtraEnv @{
+        "CC_CLAUDE_CMD" = $resolvedClaudePath
+        "CC_CLAUDE_PROFILE_FILE" = $ChatProfileFile
+      }
 
     Write-Host "Starting cc-agent #3 chat-echo ($chatEchoServerID)..."
     $chatEchoArgs = @($commonArgs + @("-server-id", $chatEchoServerID, "-chat-worker", $chatEchoWorkerExe))
@@ -356,6 +372,7 @@ try {
       }
     }
     resolved_claude_path = if ([string]::IsNullOrWhiteSpace($resolvedClaudePath)) { $null } else { $resolvedClaudePath }
+    chat_profile_file = if ([string]::IsNullOrWhiteSpace($ChatProfileFile)) { $null } else { $ChatProfileFile }
     urls = [ordered]@{
       web_terminal = "$baseUrl/"
       web_chat = "$baseUrl/chat"

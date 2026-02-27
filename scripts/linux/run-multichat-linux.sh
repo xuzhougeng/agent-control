@@ -16,6 +16,7 @@ CHAT_CLAUDE_SERVER_ID="${CHAT_CLAUDE_SERVER_ID:-${SERVER_ID_PREFIX}-chat-claude}
 CHAT_ECHO_SERVER_ID="${CHAT_ECHO_SERVER_ID:-${SERVER_ID_PREFIX}-chat-echo}"
 ALLOW_ROOT="${ALLOW_ROOT:-$BUNDLE_ROOT}"
 CLAUDE_PATH="${CLAUDE_PATH:-}"
+CHAT_PROFILE_FILE="${CHAT_PROFILE_FILE:-}"
 START_AGENT="${START_AGENT:-1}"
 
 BIN_DIR="$BUNDLE_ROOT/bin"
@@ -168,8 +169,18 @@ if [[ "$START_AGENT" == "1" ]]; then
     echo "cannot find Claude executable. Set CLAUDE_PATH to full path, or ensure 'claude-code'/'claude' is in PATH." >&2
     exit 1
   fi
+  if [[ -z "$CHAT_PROFILE_FILE" && -f "$BUNDLE_ROOT/chat-profile.md" ]]; then
+    CHAT_PROFILE_FILE="$BUNDLE_ROOT/chat-profile.md"
+  fi
+  if [[ -n "$CHAT_PROFILE_FILE" && ! -f "$CHAT_PROFILE_FILE" ]]; then
+    echo "chat profile file not found: $CHAT_PROFILE_FILE" >&2
+    exit 1
+  fi
 
   echo "Claude path: $RESOLVED_CLAUDE_PATH"
+  if [[ -n "$CHAT_PROFILE_FILE" ]]; then
+    echo "Chat profile file: $CHAT_PROFILE_FILE"
+  fi
 
   echo "Starting cc-agent #1 PTY (${PTY_SERVER_ID})..."
   nohup "$AGENT_BIN" \
@@ -182,7 +193,9 @@ if [[ "$START_AGENT" == "1" ]]; then
   PTY_AGENT_PID=$!
 
   echo "Starting cc-agent #2 chat-claude (${CHAT_CLAUDE_SERVER_ID})..."
-  env CC_CLAUDE_CMD="$RESOLVED_CLAUDE_PATH" \
+  env \
+    CC_CLAUDE_CMD="$RESOLVED_CLAUDE_PATH" \
+    CC_CLAUDE_PROFILE_FILE="$CHAT_PROFILE_FILE" \
     nohup "$AGENT_BIN" \
       -control-url "ws://127.0.0.1:${CONTROL_PORT}/ws/agent" \
       -agent-token "$AGENT_TOKEN" \
@@ -228,6 +241,7 @@ jq -n \
   --arg echo_stdout "$ECHO_AGENT_STDOUT" \
   --arg echo_stderr "$ECHO_AGENT_STDERR" \
   --arg resolved_claude_path "${RESOLVED_CLAUDE_PATH:-}" \
+  --arg chat_profile_file "${CHAT_PROFILE_FILE:-}" \
   --arg web_terminal "${BASE_URL}/" \
   --arg web_chat "${BASE_URL}/chat" \
   --arg admin "${BASE_URL}/admin" \
@@ -264,6 +278,7 @@ jq -n \
       }
     },
     resolved_claude_path: (if $resolved_claude_path == "" then null else $resolved_claude_path end),
+    chat_profile_file: (if $chat_profile_file == "" then null else $chat_profile_file end),
     urls: {
       web_terminal: $web_terminal,
       web_chat: $web_chat,

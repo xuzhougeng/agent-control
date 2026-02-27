@@ -300,6 +300,17 @@ func (m *SessionManager) startChat(sessionID string, req StartChatPayload) error
 		env = make(map[string]string)
 	}
 	env["CC_CHAT_SESSION_ID"] = sessionID
+	env["CC_AGENT_SERVER_ID"] = m.cfg.ServerID
+	env["CC_AGENT_HOSTNAME"] = m.cfg.Hostname
+	env["CC_AGENT_OS"] = runtimeGOOS
+	env["CC_AGENT_ARCH"] = runtime.GOARCH
+	env["CC_AGENT_SESSION_CWD"] = req.Cwd
+	if len(m.cfg.AllowRoots) > 0 {
+		env["CC_AGENT_ALLOW_ROOTS"] = strings.Join(m.cfg.AllowRoots, ",")
+	}
+	if len(m.cfg.Tags) > 0 {
+		env["CC_AGENT_TAGS"] = strings.Join(m.cfg.Tags, ",")
+	}
 	csess, err := echocli.Start(sessionID, req.Cwd, workerCmd, workerArgs, env)
 	if err != nil {
 		m.sendError(sessionID, "chat_start_failed:"+err.Error())

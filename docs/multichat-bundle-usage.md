@@ -75,6 +75,12 @@ bash ./stop-multichat.sh
 CONTROL_PORT=18080 SERVER_ID_PREFIX=srv-linux-01 START_AGENT=1 bash ./run-multichat.sh
 ```
 
+指定个性化提示词文件：
+
+```bash
+CHAT_PROFILE_FILE=./chat-profile.md bash ./run-multichat.sh
+```
+
 Claude 路径自动探测顺序：`CLAUDE_PATH` -> `claude-code` -> `claude`。
 如果探测不到，请显式指定：
 
@@ -120,7 +126,7 @@ powershell -ExecutionPolicy Bypass -File .\stop-multichat-win.ps1
 可选参数（示例）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 -ControlPort 18080 -ServerIDPrefix srv-win-01 -StartAgent 1
+powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 -ControlPort 18080 -ServerIDPrefix srv-win-01 -ChatProfileFile .\chat-profile.md -StartAgent 1
 ```
 
 说明：如果你是从 `cmd.exe` 调用 `powershell -File`，不要使用 `-StartAgent:$true` 这种写法，建议用 `-StartAgent 1` 或 `-StartAgent true`。

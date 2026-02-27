@@ -70,6 +70,8 @@ build_one() {
 
   echo "==> copying web assets"
   cp -R "$REPO_ROOT/cc-web/." "$web_dir/"
+  cp "$REPO_ROOT/scripts/chat-profile.example.md" "$bundle_dir/chat-profile.example.md"
+  cp "$REPO_ROOT/scripts/chat-profile.example.md" "$bundle_dir/chat-profile.md"
 
   if [[ "$goos" == "windows" ]]; then
     cp "$REPO_ROOT/scripts/windows/run-multichat-win.ps1" "$bundle_dir/run-multichat-win.ps1"
@@ -85,6 +87,7 @@ Stop (PowerShell):
 
 Output:
   .\run\tokens-and-process.json
+  .\chat-profile.md (auto-loaded by chat-claude agent if present)
 
 This starts 1 control-plane + 3 agents:
 - <prefix>-pty
@@ -107,6 +110,7 @@ Stop:
 
 Output:
   ./run/tokens-and-process.json
+  ./chat-profile.md (auto-loaded by chat-claude agent if present)
 
 This starts 1 control-plane + 3 agents:
 - <prefix>-pty

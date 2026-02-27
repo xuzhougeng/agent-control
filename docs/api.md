@@ -357,6 +357,8 @@ Base URL：`http://127.0.0.1:18080`
 - `CC_CLAUDE_ADD_DIR`：逗号分隔的允许目录（会转成多个 `--add-dir`）
 - `CC_CLAUDE_BETAS`
 - `CC_CLAUDE_TIMEOUT_MS`
+- `CC_CLAUDE_PROFILE_FILE`（从文件加载个性化提示词）
+- `CC_CLAUDE_INJECT_RUNTIME_CONTEXT`（是否注入运行时上下文，默认开启）
 
 ### 8) 删除会话
 

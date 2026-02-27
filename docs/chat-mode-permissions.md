@@ -37,6 +37,10 @@
   - 系统提示词策略
 - `CC_CLAUDE_TIMEOUT_MS`
   - 超时毫秒数
+- `CC_CLAUDE_PROFILE_FILE`
+  - 个性化提示词文件路径（启动时读取并注入）
+- `CC_CLAUDE_INJECT_RUNTIME_CONTEXT`
+  - 是否注入运行时上下文（默认开启，`1`/`true`）
 
 ---
 
@@ -65,6 +69,7 @@ CC_CLAUDE_ALLOWED_TOOLS="Bash(git:*) Read Edit"
 
 ```bash
 export CLAUDE_PATH="$(which claude-code)"
+export CHAT_PROFILE_FILE="./chat-profile.md"
 export CC_CLAUDE_PERMISSION_MODE="dontAsk"
 export CC_CLAUDE_ALLOWED_TOOLS="Bash(git:*) Read Edit"
 export CC_CLAUDE_ADD_DIR="/workspace/repo,/workspace/repo/docs"
@@ -96,7 +101,7 @@ $env:CC_CLAUDE_PERMISSION_MODE = "dontAsk"
 $env:CC_CLAUDE_ALLOWED_TOOLS = "Bash(git:*) Read Edit"
 $env:CC_CLAUDE_ADD_DIR = "D:\repo,D:\repo\docs"
 
-powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 -ClaudePath "C:\path\to\claude.exe" -StartAgent 1
+powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 -ClaudePath "C:\path\to\claude.exe" -ChatProfileFile ".\chat-profile.md" -StartAgent 1
 ```
 
 ---
@@ -114,7 +119,18 @@ CC_CLAUDE_PERMISSION_MODE=dontAsk,CC_CLAUDE_ALLOWED_TOOLS=Bash(git:*) Read Edit
 
 ---
 
-## 7) 如何判断权限是否生效
+## 7) 启动时文件注入（推荐）
+
+你可以把个性化内容写到一个文件里（例如 `chat-profile.md`），启动时加载：
+
+- Linux：`CHAT_PROFILE_FILE=./chat-profile.md bash ./run-multichat.sh`
+- Windows：`-ChatProfileFile .\chat-profile.md`
+
+如果 bundle 根目录存在 `chat-profile.md`，当前脚本会自动加载它。
+
+---
+
+## 8) 如何判断权限是否生效
 
 若权限过紧，`chat-claude` 回复里通常会出现类似：
 
@@ -128,7 +144,7 @@ CC_CLAUDE_PERMISSION_MODE=dontAsk,CC_CLAUDE_ALLOWED_TOOLS=Bash(git:*) Read Edit
 
 ---
 
-## 8) 常见问题
+## 9) 常见问题
 
 `Q: 为什么 Windows 上 PTY 不可用，但 Chat 可用？`  
 `A:` 当前设计就是 Windows 先走 Multi-Chat；PTY 创建会被明确拒绝。
