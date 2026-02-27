@@ -137,9 +137,9 @@ sequenceDiagram
     UI->>CP: POST /api/sessions (chat)
     CP->>Agent: start_chat(cwd, env)
     Agent->>Worker: start configured worker cmd
-    UI->>CP: WS chat_in(content)
+    UI->>CP: WS chat_in(content, content_parts?)
     CP-->>UI: chat_msg(role=user)
-    CP->>Agent: chat_in(message_id, content)
+    CP->>Agent: chat_in(message_id, content, content_parts?)
     Agent->>Worker: NDJSON stdin
     Worker-->>Agent: NDJSON stdout
     Agent-->>CP: chat_out(message_id, content)

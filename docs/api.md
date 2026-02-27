@@ -469,10 +469,27 @@ Base URL：`http://127.0.0.1:18080`
   "type": "chat_in",
   "session_id": "SESSION_ID",
   "data": {
-    "content": "your message here"
+    "content": "describe image",
+    "content_parts": [
+      {"type": "text", "text": "describe image"},
+      {
+        "type": "image",
+        "source": {
+          "type": "base64",
+          "media_type": "image/png",
+          "data": "BASE64_DATA"
+        }
+      }
+    ]
   }
 }
 ```
+
+说明：
+
+- `content_parts` 为可选，支持 `text` 与 `image(base64)`。
+- 向后兼容：仅传 `content` 仍可用。
+- `image.source` 当前仅支持 `type=base64` 且 `media_type` 需为 `image/*`。
 
 ### 服务端 -> 客户端
 
