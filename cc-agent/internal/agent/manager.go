@@ -322,6 +322,7 @@ func (m *SessionManager) startChat(sessionID string, req StartChatPayload) error
 			MessageID:       msg.MessageID,
 			Content:         msg.Content,
 			WorkerSessionID: msg.SessionID,
+			Meta:            msg.Meta,
 		})
 		env := NewEnvelope("chat_out", m.cfg.ServerID, sessionID)
 		env.Data = payload

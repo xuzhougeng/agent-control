@@ -1,5 +1,7 @@
 package core
 
+import "encoding/json"
+
 type SessionType string
 
 const (
@@ -108,9 +110,10 @@ type PTYExit struct {
 }
 
 type ChatMessage struct {
-	MessageID string `json:"message_id"`
-	SessionID string `json:"session_id"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	TsMS      int64  `json:"ts_ms"`
+	MessageID string          `json:"message_id"`
+	SessionID string          `json:"session_id"`
+	Role      string          `json:"role"`
+	Content   string          `json:"content"`
+	Meta      json.RawMessage `json:"meta,omitempty"`
+	TsMS      int64           `json:"ts_ms"`
 }

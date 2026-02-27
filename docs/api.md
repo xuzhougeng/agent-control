@@ -335,6 +335,7 @@ Base URL：`http://127.0.0.1:18080`
       "session_id": "uuid",
       "role": "user|assistant",
       "content": "message text",
+      "meta": {"operations": ["optional step"]},
       "ts_ms": 1730000000000
     }
   ]
@@ -478,7 +479,7 @@ Base URL：`http://127.0.0.1:18080`
 - `debug_probe`：调试探针，可忽略。
 - `attach_ok`：attach 成功确认。
 - `term_out`：终端输出（`data_b64`）。
-- `chat_msg`：聊天消息（仅 `session_type=chat`），`data` 包含 `{message_id, role, content, ts_ms}`。
+- `chat_msg`：聊天消息（仅 `session_type=chat`），`data` 包含 `{message_id, role, content, meta?, ts_ms}`。
 - `event`：业务事件，重点是 `approval_needed`。
 - `session_update`：会话状态更新（含 `awaiting_approval`、`pending_event_id`、`session_type`）。
 - `error`：错误消息，`data.message` 为错误文本。

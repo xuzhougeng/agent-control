@@ -91,9 +91,12 @@ func TestHandleClientChatIn(t *testing.T) {
 func TestHandleChatOut(t *testing.T) {
 	cp, _, sessionID := setupChatTestCP(t)
 
-	payload, _ := json.Marshal(map[string]string{
+	payload, _ := json.Marshal(map[string]any{
 		"message_id": "m1",
 		"content":    "echo hello",
+		"meta": map[string]any{
+			"operations": []string{"tool_use: Bash", "result: status=ok"},
+		},
 	})
 	cp.HandleChatOut("srv", sessionID, payload)
 
@@ -103,6 +106,15 @@ func TestHandleChatOut(t *testing.T) {
 	}
 	if len(msgs) != 1 || msgs[0].Role != "assistant" || msgs[0].Content != "echo hello" {
 		t.Fatalf("unexpected history: %+v", msgs)
+	}
+	var meta struct {
+		Operations []string `json:"operations"`
+	}
+	if err := json.Unmarshal(msgs[0].Meta, &meta); err != nil {
+		t.Fatalf("unmarshal meta: %v", err)
+	}
+	if len(meta.Operations) != 2 {
+		t.Fatalf("unexpected meta operations: %+v", meta.Operations)
 	}
 }
 

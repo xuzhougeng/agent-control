@@ -257,7 +257,8 @@ export CC_CLAUDE_MODEL=sonnet
 echo worker 仅用于测试。正式使用时，将 `-chat-worker` 指向你自己的程序即可。worker 协议是 NDJSON：
 
 - **stdin**（每行一个 JSON）：`{"message_id":"uuid","content":"用户消息"}`
-- **stdout**（每行一个 JSON）：`{"message_id":"uuid","content":"回复内容"}`
+- **stdout**（每行一个 JSON）：`{"message_id":"uuid","content":"回复内容","meta":{"operations":["step 1","step 2"]}}`
+  - `meta` 为可选字段，可回传中间步骤/工具调用摘要（Chat UI 会展示）。
 
 只要你的程序遵循这个协议，就能无缝接入。
 

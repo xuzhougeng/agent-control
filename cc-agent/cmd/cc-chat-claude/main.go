@@ -15,9 +15,10 @@ import (
 )
 
 type Message struct {
-	MessageID string `json:"message_id"`
-	Content   string `json:"content"`
-	SessionID string `json:"session_id,omitempty"`
+	MessageID string          `json:"message_id"`
+	Content   string          `json:"content"`
+	SessionID string          `json:"session_id,omitempty"`
+	Meta      json.RawMessage `json:"meta,omitempty"`
 }
 
 func main() {
@@ -46,8 +47,8 @@ func main() {
 			continue
 		}
 
-		reply := handleMessage(cfg, sessionID, &sessionReady, msg.Content)
-		out := Message{MessageID: msg.MessageID, Content: reply, SessionID: sessionID}
+		reply, meta := handleMessage(cfg, sessionID, &sessionReady, msg.Content)
+		out := Message{MessageID: msg.MessageID, Content: reply, SessionID: sessionID, Meta: meta}
 		data, _ := json.Marshal(out)
 		writer.Write(data)
 		writer.WriteString("\n")
@@ -55,15 +56,19 @@ func main() {
 	}
 }
 
-func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, content string) string {
+func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, content string) (string, json.RawMessage) {
 	input := buildStreamInput(content)
 	useResume := *sessionReady
 	var lastErr string
+	var lastMeta json.RawMessage
 	for i := 0; i < 2; i++ {
-		reply, errText, err := runClaude(cfg, sessionID, useResume, input)
+		reply, meta, errText, err := runClaude(cfg, sessionID, useResume, input)
 		if err == nil && errText == "" {
 			*sessionReady = true
-			return reply
+			return reply, meta
+		}
+		if len(meta) > 0 {
+			lastMeta = meta
 		}
 		if errText != "" {
 			lastErr = errText
@@ -85,10 +90,10 @@ func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, c
 	if lastErr == "" {
 		lastErr = "claude execution failed"
 	}
-	return "Claude error: " + lastErr
+	return "Claude error: " + lastErr, lastMeta
 }
 
-func runClaude(cfg claudecli.Config, sessionID string, resume bool, input string) (string, string, error) {
+func runClaude(cfg claudecli.Config, sessionID string, resume bool, input string) (string, json.RawMessage, string, error) {
 	args := claudecli.BaseArgs(cfg)
 	if sessionID != "" {
 		if resume {
@@ -110,34 +115,35 @@ func runClaude(cfg claudecli.Config, sessionID string, resume bool, input string
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", "", err
+		return "", nil, "", err
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return "", "", err
+		return "", nil, "", err
 	}
 	if err := cmd.Start(); err != nil {
-		return "", "", err
+		return "", nil, "", err
 	}
 	_, _ = stdin.Write([]byte(input))
 	_ = stdin.Close()
 
 	res, parseErr := claudecli.ParseStreamJSON(stdout)
 	waitErr := cmd.Wait()
+	meta := buildMeta(res.Operations)
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return "", "", fmt.Errorf("timeout after %dms", timeout)
+		return "", nil, "", fmt.Errorf("timeout after %dms", timeout)
 	}
 	if parseErr != nil {
-		return "", "", parseErr
+		return "", nil, "", parseErr
 	}
 	if res.IsError {
-		return "", res.ErrText, nil
+		return "", meta, res.ErrText, nil
 	}
 	if waitErr != nil {
-		return "", "", waitErr
+		return "", meta, "", waitErr
 	}
-	return res.Reply, "", nil
+	return res.Reply, meta, "", nil
 }
 
 func buildStreamInput(content string) string {
@@ -162,4 +168,34 @@ func shouldRetryWithResume(errText string) bool {
 func shouldRetryWithSessionID(errText string) bool {
 	low := strings.ToLower(errText)
 	return strings.Contains(low, "no conversation found")
+}
+
+func buildMeta(operations []string) json.RawMessage {
+	clean := make([]string, 0, len(operations))
+	for _, op := range operations {
+		op = strings.TrimSpace(op)
+		if op == "" {
+			continue
+		}
+		if len(op) > 240 {
+			op = op[:237] + "..."
+		}
+		clean = append(clean, op)
+	}
+	if len(clean) == 0 {
+		return nil
+	}
+	if len(clean) > 20 {
+		extra := len(clean) - 20
+		clean = append(clean[:20], fmt.Sprintf("... %d more steps", extra))
+	}
+	payload := map[string]any{
+		"source":     "claude-stream-json",
+		"operations": clean,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil
+	}
+	return data
 }

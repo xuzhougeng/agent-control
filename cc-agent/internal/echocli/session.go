@@ -11,9 +11,10 @@ import (
 )
 
 type Message struct {
-	MessageID string `json:"message_id"`
-	Content   string `json:"content"`
-	SessionID string `json:"session_id,omitempty"`
+	MessageID string          `json:"message_id"`
+	Content   string          `json:"content"`
+	SessionID string          `json:"session_id,omitempty"`
+	Meta      json.RawMessage `json:"meta,omitempty"`
 }
 
 type Session struct {

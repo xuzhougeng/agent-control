@@ -2240,6 +2240,24 @@
       const bubble = document.createElement("div");
       bubble.className = `chat-bubble ${m.role === "user" ? "user" : "assistant"}`;
       bubble.textContent = m.content;
+      if (m.role === "assistant") {
+        const operations = getChatOperations(m.meta);
+        if (operations.length) {
+          const opsBox = document.createElement("div");
+          opsBox.className = "chat-bubble-ops";
+          const opsTitle = document.createElement("div");
+          opsTitle.className = "chat-bubble-ops-title";
+          opsTitle.textContent = "Intermediate steps";
+          opsBox.appendChild(opsTitle);
+          for (let i = 0; i < operations.length; i += 1) {
+            const item = document.createElement("div");
+            item.className = "chat-bubble-op-item";
+            item.textContent = `${i + 1}. ${operations[i]}`;
+            opsBox.appendChild(item);
+          }
+          bubble.appendChild(opsBox);
+        }
+      }
       const meta = document.createElement("div");
       meta.className = "chat-bubble-meta";
       meta.textContent = new Date(m.ts_ms).toLocaleTimeString();
@@ -2247,6 +2265,23 @@
       chatMessagesEl.appendChild(bubble);
     }
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+
+  function getChatOperations(meta) {
+    if (!meta || typeof meta !== "object") {
+      return [];
+    }
+    if (!Array.isArray(meta.operations)) {
+      return [];
+    }
+    const operations = [];
+    for (const op of meta.operations) {
+      if (typeof op !== "string") continue;
+      const text = op.trim();
+      if (!text) continue;
+      operations.push(text);
+    }
+    return operations;
   }
 
   function updateChatSessionInfo() {

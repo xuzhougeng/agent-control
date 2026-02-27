@@ -1042,9 +1042,10 @@ func (cp *ControlPlane) HandleClientChatIn(actor, tenantID, sessionID, content s
 
 func (cp *ControlPlane) HandleChatOut(serverID, sessionID string, data json.RawMessage) {
 	var payload struct {
-		MessageID       string `json:"message_id"`
-		Content         string `json:"content"`
-		WorkerSessionID string `json:"worker_session_id,omitempty"`
+		MessageID       string          `json:"message_id"`
+		Content         string          `json:"content"`
+		WorkerSessionID string          `json:"worker_session_id,omitempty"`
+		Meta            json.RawMessage `json:"meta,omitempty"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return
@@ -1065,6 +1066,7 @@ func (cp *ControlPlane) HandleChatOut(serverID, sessionID string, data json.RawM
 		SessionID: sessionID,
 		Role:      "assistant",
 		Content:   payload.Content,
+		Meta:      payload.Meta,
 		TsMS:      time.Now().UnixMilli(),
 	}
 	cp.appendChatMessage(sessionID, chatMsg)
