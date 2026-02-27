@@ -165,6 +165,12 @@
   border-bottom-left-radius: 4px;
 }
 
+.chat-bubble.assistant.progress {
+  background: #f5f9fd;
+  border-style: dashed;
+  color: #355a7a;
+}
+
 .chat-bubble-meta {
   font-size: 11px;
   color: var(--text-muted);

@@ -18,7 +18,15 @@ type StreamResult struct {
 	Operations []string
 }
 
+type StreamUpdate struct {
+	Operation string
+}
+
 func ParseStreamJSON(r io.Reader) (StreamResult, error) {
+	return ParseStreamJSONWithUpdates(r, nil)
+}
+
+func ParseStreamJSONWithUpdates(r io.Reader, onUpdate func(StreamUpdate)) (StreamResult, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 
@@ -38,6 +46,9 @@ func ParseStreamJSON(r io.Reader) (StreamResult, error) {
 			return
 		}
 		operations = append(operations, op)
+		if onUpdate != nil {
+			onUpdate(StreamUpdate{Operation: op})
+		}
 	}
 
 	for scanner.Scan() {

@@ -71,7 +71,7 @@ export function initChatPage() {
         const cm = msg.data;
         if (cm.session_id === state.selectedChatSessionID) {
           state.chatMessages.push(cm);
-          if (cm.role === "assistant") {
+          if (cm.role === "assistant" && !isProgressMessage(cm)) {
             completePendingTurn();
           }
           renderChatMessages();
@@ -95,6 +95,12 @@ export function initChatPage() {
 
   function sendWS(msg) {
     return wsClient.send(msg);
+  }
+
+  function isProgressMessage(chatMsg) {
+    const meta = chatMsg && typeof chatMsg === "object" ? chatMsg.meta : null;
+    if (!meta || typeof meta !== "object") return false;
+    return meta.source === "claude-stream-json" && meta.progress === true;
   }
 
   function clearPendingSlowTimer() {
@@ -343,6 +349,9 @@ export function initChatPage() {
     for (const m of state.chatMessages) {
       const bubble = document.createElement("div");
       bubble.className = `chat-bubble ${m.role === "user" ? "user" : "assistant"}`;
+      if (m.role === "assistant" && isProgressMessage(m)) {
+        bubble.classList.add("progress");
+      }
       const body = document.createElement("div");
       body.className = "chat-markdown";
       const markdown = buildMarkdownFromParts(getChatContentParts(m.meta), m.content);

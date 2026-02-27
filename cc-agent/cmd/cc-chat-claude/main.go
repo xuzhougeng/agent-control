@@ -60,7 +60,22 @@ func main() {
 			continue
 		}
 
-		reply, meta := handleMessage(cfg, sessionID, &sessionReady, msg.Content, msg.ContentParts)
+		seq := 0
+		emit := func(content string, meta json.RawMessage) {
+			seq++
+			out := Message{
+				MessageID: fmt.Sprintf("%s/%d", msg.MessageID, seq),
+				Content:   content,
+				SessionID: sessionID,
+				Meta:      meta,
+			}
+			data, _ := json.Marshal(out)
+			writer.Write(data)
+			writer.WriteString("\n")
+			writer.Flush()
+		}
+
+		reply, meta := handleMessage(cfg, sessionID, &sessionReady, msg.Content, msg.ContentParts, emit)
 		out := Message{MessageID: msg.MessageID, Content: reply, SessionID: sessionID, Meta: meta}
 		data, _ := json.Marshal(out)
 		writer.Write(data)
@@ -69,13 +84,18 @@ func main() {
 	}
 }
 
-func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, content string, parts []ContentPart) (string, json.RawMessage) {
+func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, content string, parts []ContentPart, emit func(content string, meta json.RawMessage)) (string, json.RawMessage) {
 	input := buildStreamInput(content, parts)
 	useResume := *sessionReady
 	var lastErr string
 	var lastMeta json.RawMessage
 	for i := 0; i < 2; i++ {
-		reply, meta, errText, err := runClaude(cfg, sessionID, useResume, input)
+		reply, meta, errText, err := runClaude(cfg, sessionID, useResume, input, func(op string) {
+			if emit == nil {
+				return
+			}
+			emit(op, buildProgressMeta())
+		})
 		if err == nil && errText == "" {
 			*sessionReady = true
 			return reply, meta
@@ -106,7 +126,7 @@ func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, c
 	return "Claude error: " + lastErr, lastMeta
 }
 
-func runClaude(cfg claudecli.Config, sessionID string, resume bool, input string) (string, json.RawMessage, string, error) {
+func runClaude(cfg claudecli.Config, sessionID string, resume bool, input string, onOperation func(op string)) (string, json.RawMessage, string, error) {
 	args := claudecli.BaseArgs(cfg)
 	if sessionID != "" {
 		if resume {
@@ -140,7 +160,16 @@ func runClaude(cfg claudecli.Config, sessionID string, resume bool, input string
 	_, _ = stdin.Write([]byte(input))
 	_ = stdin.Close()
 
-	res, parseErr := claudecli.ParseStreamJSON(stdout)
+	res, parseErr := claudecli.ParseStreamJSONWithUpdates(stdout, func(update claudecli.StreamUpdate) {
+		if onOperation == nil {
+			return
+		}
+		op := strings.TrimSpace(update.Operation)
+		if op == "" {
+			return
+		}
+		onOperation(op)
+	})
 	waitErr := cmd.Wait()
 	meta := buildMeta(res.Operations)
 
@@ -241,6 +270,20 @@ func buildMeta(operations []string) json.RawMessage {
 	payload := map[string]any{
 		"source":     "claude-stream-json",
 		"operations": clean,
+		"final":      true,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+func buildProgressMeta() json.RawMessage {
+	payload := map[string]any{
+		"source":   "claude-stream-json",
+		"progress": true,
+		"ts_ms":    time.Now().UnixMilli(),
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
