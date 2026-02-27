@@ -5,6 +5,10 @@
 1. 如何在任意支持 Bash 的环境里打包测试包
 2. 如何在 Linux / Windows 目标机上直接运行测试包
 
+Chat 权限控制专项文档见：
+
+- `docs/chat-mode-permissions.md`
+
 ---
 
 ## 1) 一键打包（Bash）
