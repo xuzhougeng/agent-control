@@ -1162,6 +1162,29 @@ body.sidebar-open .sidebar-backdrop {
   border-top: 1px solid var(--border-light);
 }
 
+.chat-md-table-wrap {
+  overflow-x: auto;
+}
+
+.chat-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 320px;
+  border: 1px solid var(--border-light);
+}
+
+.chat-markdown th,
+.chat-markdown td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.chat-markdown th {
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 700;
+}
+
 .chat-bubble.user {
   align-self: flex-end;
   background: linear-gradient(135deg, #2f5089, #3b6ec9);

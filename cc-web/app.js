@@ -2279,6 +2279,38 @@
     return false;
   }
 
+  function splitMarkdownTableRow(rawLine) {
+    let line = String(rawLine == null ? "" : rawLine).trim();
+    if (line.startsWith("|")) line = line.slice(1);
+    if (line.endsWith("|")) line = line.slice(0, -1);
+    return line.split("|").map((cell) => cell.trim());
+  }
+
+  function isMarkdownTableDivider(line) {
+    const cells = splitMarkdownTableRow(line);
+    if (cells.length < 2) return false;
+    return cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+  }
+
+  function parseTableAlignments(dividerLine) {
+    return splitMarkdownTableRow(dividerLine).map((cell) => {
+      const left = cell.startsWith(":");
+      const right = cell.endsWith(":");
+      if (left && right) return "center";
+      if (right) return "right";
+      return "left";
+    });
+  }
+
+  function isMarkdownTableStart(lines, idx) {
+    if (idx < 0 || idx + 1 >= lines.length) return false;
+    const header = lines[idx];
+    const divider = lines[idx + 1];
+    if (!header || !divider) return false;
+    if (header.indexOf("|") < 0) return false;
+    return isMarkdownTableDivider(divider);
+  }
+
   function renderChatMarkdown(raw) {
     const text = String(raw == null ? "" : raw).replace(/\r\n?/g, "\n");
     const lines = text.split("\n");
@@ -2352,8 +2384,39 @@
         continue;
       }
 
+      if (isMarkdownTableStart(lines, i)) {
+        const headerCells = splitMarkdownTableRow(lines[i]);
+        const aligns = parseTableAlignments(lines[i + 1]);
+        i += 2;
+        const bodyRows = [];
+        while (i < lines.length) {
+          const rowLine = lines[i];
+          if (!rowLine.trim()) break;
+          if (rowLine.indexOf("|") < 0) break;
+          if (isMarkdownTableDivider(rowLine)) break;
+          const cells = splitMarkdownTableRow(rowLine);
+          bodyRows.push(cells);
+          i += 1;
+        }
+
+        const headerHTML = headerCells.map((cell, colIdx) => {
+          const align = aligns[colIdx] || "left";
+          return `<th style="text-align:${align}">${renderInlineMarkdown(cell)}</th>`;
+        }).join("");
+        const bodyHTML = bodyRows.map((row) => {
+          const rowHTML = headerCells.map((_unused, colIdx) => {
+            const align = aligns[colIdx] || "left";
+            const text = row[colIdx] || "";
+            return `<td style="text-align:${align}">${renderInlineMarkdown(text)}</td>`;
+          }).join("");
+          return `<tr>${rowHTML}</tr>`;
+        }).join("");
+        blocks.push(`<div class="chat-md-table-wrap"><table><thead><tr>${headerHTML}</tr></thead><tbody>${bodyHTML}</tbody></table></div>`);
+        continue;
+      }
+
       const para = [];
-      while (i < lines.length && !isMarkdownBlockBoundary(lines[i])) {
+      while (i < lines.length && !isMarkdownBlockBoundary(lines[i]) && !isMarkdownTableStart(lines, i)) {
         para.push(lines[i]);
         i += 1;
       }
