@@ -15,6 +15,10 @@ import (
 	"cc-agent/internal/security"
 )
 
+const ptyUnsupportedOnWindowsMessage = "PTY is not supported on Windows yet; use session_type=chat"
+
+var runtimeGOOS = runtime.GOOS
+
 type Config struct {
 	ServerID       string
 	Hostname       string
@@ -170,6 +174,11 @@ func (m *SessionManager) startSession(sessionID string, req StartSessionPayload)
 	}
 
 	env := security.FilterEnv(req.Env, m.cfg.EnvAllowKeys, m.cfg.EnvAllowPrefix)
+	if strings.EqualFold(runtimeGOOS, "windows") {
+		err := errors.New(ptyUnsupportedOnWindowsMessage)
+		m.sendError(sessionID, "start_failed:"+err.Error())
+		return err
+	}
 	sess, err := pty.Start(sessionID, req.Cwd, m.cfg.ClaudePath, args, env, req.Cols, req.Rows)
 	if err != nil {
 		m.sendError(sessionID, "start_failed:"+err.Error())

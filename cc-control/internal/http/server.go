@@ -176,16 +176,32 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request, rec *aut
 		actor := "ui:" + rec.TokenID
 		sess, err := s.CP.CreateSession(actor, rec.TenantID, req)
 		if err != nil {
-			code := http.StatusInternalServerError
-			if strings.Contains(err.Error(), "offline") {
-				code = http.StatusServiceUnavailable
-			}
+			code := sessionCreateErrorStatusCode(err)
 			http.Error(w, err.Error(), code)
 			return
 		}
 		writeJSON(w, http.StatusCreated, sess)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func sessionCreateErrorStatusCode(err error) int {
+	if err == nil {
+		return http.StatusInternalServerError
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "offline"):
+		return http.StatusServiceUnavailable
+	case strings.Contains(msg, "server_id and cwd are required"):
+		return http.StatusBadRequest
+	case strings.Contains(msg, "invalid session_type"):
+		return http.StatusBadRequest
+	case strings.Contains(msg, "not supported on Windows"):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
 	}
 }
 

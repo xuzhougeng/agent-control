@@ -14,6 +14,7 @@
   };
 
   const adminTokenCacheKey = "admin_token_cache";
+  const windowsPTYUnsupportedError = "PTY is not supported on Windows yet; use session_type=chat";
 
   function loadAdminTokenCache() {
     try {
@@ -66,6 +67,11 @@
     selectedChatSessionID: "",
     chatWorkerSessionID: "",
   };
+
+  const initialServerID = new URLSearchParams(window.location.search).get("server_id");
+  if (initialServerID) {
+    state.selectedServerID = initialServerID;
+  }
 
   const tokenInput = document.getElementById("tokenInput");
   const saveTokenBtn = document.getElementById("saveTokenBtn");
@@ -297,6 +303,10 @@
         alert("select a server first");
         return;
       }
+      const selectedServer = getSelectedServer();
+      if (maybeRedirectWindowsServerToChat(selectedServer)) {
+        return;
+      }
       const cwd = cwdInput.value.trim();
       if (!cwd) {
         alert("cwd is required");
@@ -319,7 +329,7 @@
         body: JSON.stringify(body),
       });
       if (!resp.ok) {
-        alert(await resp.text());
+        alert(formatSessionCreateError(await resp.text()));
         return;
       }
       const session = await resp.json();
@@ -490,8 +500,15 @@
     }
     const body = await resp.json();
     state.servers = body.servers || [];
+    if (state.selectedServerID && !state.servers.some((s) => s.server_id === state.selectedServerID)) {
+      state.selectedServerID = "";
+    }
     if (!state.selectedServerID && state.servers.length) {
       state.selectedServerID = state.servers[0].server_id;
+    }
+    const selectedServer = getSelectedServer();
+    if (isControllerPage && maybeRedirectWindowsServerToChat(selectedServer)) {
+      return;
     }
     renderServers();
   }
@@ -512,6 +529,38 @@
     li.className = "list-empty";
     li.textContent = text;
     list.appendChild(li);
+  }
+
+  function getServerByID(serverID) {
+    if (!serverID) return null;
+    return state.servers.find((s) => s.server_id === serverID) || null;
+  }
+
+  function getSelectedServer() {
+    return getServerByID(state.selectedServerID);
+  }
+
+  function isWindowsServer(server) {
+    return String((server && server.os) || "").toLowerCase() === "windows";
+  }
+
+  function maybeRedirectWindowsServerToChat(server) {
+    if (!isControllerPage || !isWindowsServer(server)) {
+      return false;
+    }
+    const serverID = (server && server.server_id) || state.selectedServerID || "";
+    alert("Selected server is Windows. PTY is not supported yet; switching to Chat mode.");
+    const query = serverID ? `?server_id=${encodeURIComponent(serverID)}` : "";
+    window.location.href = `/chat${query}`;
+    return true;
+  }
+
+  function formatSessionCreateError(rawText) {
+    const msg = String(rawText || "").trim();
+    if (msg.includes(windowsPTYUnsupportedError)) {
+      return "PTY is not supported on Windows yet; please use Chat mode at /chat.";
+    }
+    return msg || "request failed";
   }
 
   function renderServers() {
@@ -539,6 +588,9 @@
       li.addEventListener("click", async () => {
         state.selectedServerID = s.server_id;
         renderServers();
+        if (maybeRedirectWindowsServerToChat(s)) {
+          return;
+        }
         await fetchSessions();
         closeSidebarOnMobile();
       });
@@ -689,6 +741,10 @@
       alert("select a server first");
       return;
     }
+    const selectedServer = getServerByID(serverID);
+    if (maybeRedirectWindowsServerToChat(selectedServer)) {
+      return;
+    }
     const cwd = (source.cwd || "").trim();
     if (!cwd) {
       alert("cwd is required");
@@ -707,7 +763,7 @@
       body: JSON.stringify(body),
     });
     if (!resp.ok) {
-      alert(await resp.text());
+      alert(formatSessionCreateError(await resp.text()));
       return;
     }
     const session = await resp.json();

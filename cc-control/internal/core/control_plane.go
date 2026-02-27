@@ -55,6 +55,7 @@ func newSessionHub(ringBytes int) *SessionHub {
 }
 
 const MaxChatHistory = 200
+const errPTYUnsupportedOnWindows = "PTY is not supported on Windows yet; use session_type=chat"
 
 type ControlPlane struct {
 	mu sync.RWMutex
@@ -313,10 +314,7 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 		return nil, errors.New("server_id and cwd are required")
 	}
 	sessType := req.SessionType
-	if sessType == "" {
-		sessType = SessionTypePTY
-	}
-	if sessType != SessionTypePTY && sessType != SessionTypeChat {
+	if sessType != "" && sessType != SessionTypePTY && sessType != SessionTypeChat {
 		return nil, errors.New("invalid session_type")
 	}
 	cp.mu.Lock()
@@ -329,6 +327,21 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 	if tenantID != "" && server.TenantID != tenantID {
 		cp.mu.Unlock()
 		return nil, errors.New("server not in tenant")
+	}
+	if sessType == "" {
+		if strings.EqualFold(server.OS, "windows") {
+			sessType = SessionTypeChat
+		} else {
+			sessType = SessionTypePTY
+		}
+	}
+	if sessType != SessionTypePTY && sessType != SessionTypeChat {
+		cp.mu.Unlock()
+		return nil, errors.New("invalid session_type")
+	}
+	if sessType == SessionTypePTY && strings.EqualFold(server.OS, "windows") {
+		cp.mu.Unlock()
+		return nil, errors.New(errPTYUnsupportedOnWindows)
 	}
 	sessionID := uuid.NewString()
 
@@ -1176,15 +1189,15 @@ func (cp *ControlPlane) broadcastSessionUpdate(sessionID string) {
 	}
 	serverID := sess.ServerID
 	body, _ := json.Marshal(map[string]any{
-		"session_id":         sess.SessionID,
-		"session_type":       sess.SessionType,
-		"status":             sess.Status,
-		"exit_code":          sess.ExitCode,
-		"exit_reason":        sess.ExitReason,
-		"resume_id":          sess.ResumeID,
-		"awaiting_approval":  sess.AwaitingApproval,
-		"pending_event_id":   sess.PendingEventID,
-		"worker_session_id":  sess.WorkerSessionID,
+		"session_id":        sess.SessionID,
+		"session_type":      sess.SessionType,
+		"status":            sess.Status,
+		"exit_code":         sess.ExitCode,
+		"exit_reason":       sess.ExitReason,
+		"resume_id":         sess.ResumeID,
+		"awaiting_approval": sess.AwaitingApproval,
+		"pending_event_id":  sess.PendingEventID,
+		"worker_session_id": sess.WorkerSessionID,
 	})
 	cp.mu.RUnlock()
 

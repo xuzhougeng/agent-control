@@ -94,3 +94,55 @@ func TestStartSessionMissingSessionID(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestStartSessionWindowsRejectsPTYAndSendsError(t *testing.T) {
+	root := t.TempDir()
+	roots, err := security.NormalizeRoots([]string{root})
+	if err != nil {
+		t.Fatalf("normalize roots: %v", err)
+	}
+	mgr := NewSessionManager(Config{
+		ServerID:       "srv-test",
+		AllowRoots:     roots,
+		ClaudePath:     "/bin/sh",
+		EnvAllowPrefix: "CC_",
+	})
+
+	origGOOS := runtimeGOOS
+	runtimeGOOS = "windows"
+	defer func() {
+		runtimeGOOS = origGOOS
+	}()
+
+	var sent []Envelope
+	mgr.SetSendFunc(func(msg Envelope) error {
+		sent = append(sent, msg)
+		return nil
+	})
+
+	err = mgr.startSession("s1", StartSessionPayload{
+		Cwd: root,
+	})
+	if err == nil {
+		t.Fatal("expected windows pty start to fail")
+	}
+	if !strings.Contains(err.Error(), ptyUnsupportedOnWindowsMessage) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sent) == 0 {
+		t.Fatal("expected an error envelope to be sent")
+	}
+	if sent[0].Type != "error" {
+		t.Fatalf("expected first sent envelope type=error, got %q", sent[0].Type)
+	}
+	var payload struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(sent[0].Data, &payload); err != nil {
+		t.Fatalf("decode sent error payload: %v", err)
+	}
+	wantMessage := "start_failed:" + ptyUnsupportedOnWindowsMessage
+	if payload.Message != wantMessage {
+		t.Fatalf("unexpected error payload message: %q", payload.Message)
+	}
+}

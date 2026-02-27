@@ -294,7 +294,11 @@ Base URL：`http://127.0.0.1:18080`
 }
 ```
 
-- `session_type`：可选，`"pty"`（默认）或 `"chat"`。`chat` 类型不需要 `cols/rows`。
+- `session_type`：可选，`"pty"` 或 `"chat"`。`chat` 类型不需要 `cols/rows`。
+- 未传 `session_type` 时：
+  - 非 Windows server 默认 `pty`
+  - Windows server 默认 `chat`
+- Windows server 暂不支持 `session_type=pty`；若显式传 `pty` 会返回 `400`，错误文本：`PTY is not supported on Windows yet; use session_type=chat`。
 - 成功：`201`，返回 `session` 对象（含 `session_id`、`session_type`）。
 
 ### 5) 停止会话
@@ -340,6 +344,8 @@ Base URL：`http://127.0.0.1:18080`
 #### Chat Worker（Claude Code 无头模式）
 
 `session_type=chat` 的推荐实现是使用无头 worker 调用 Claude Code。无头模式不支持交互式审批菜单（1/2/3），因此应在会话创建时通过参数/策略一次性限定能力（例如 `dontAsk` + allowed tools）。
+
+> 当前推荐先以 Multi-Chat 路径落地（例如 `cc-chat-echo`），GPT 模式可后续单独扩展。
 
 可用的环境变量（由 `StartSessionRequest.env` 透传到 worker）：
 
