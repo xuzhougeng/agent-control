@@ -313,3 +313,34 @@
   padding: 2px 10px;
   font-size: 11px;
 }
+
+.chat-run-state {
+  margin: 8px auto 0;
+  width: calc(100% - 32px);
+  max-width: 920px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  background: #f6f9fc;
+}
+
+.chat-run-state.running {
+  border-color: #9fbfdd;
+  background: #ecf4fb;
+  color: #1f496f;
+}
+
+.chat-run-state.slow {
+  border-color: #d4be82;
+  background: #fff7df;
+  color: #73561c;
+}
+
+.chat-run-state.error {
+  border-color: var(--danger);
+  background: #fdeeee;
+  color: #8a2727;
+}

@@ -10,6 +10,7 @@ export function initChatPage() {
   const MAX_SCREENSHOTS_PER_MESSAGE = 3;
   const MAX_SCREENSHOT_BYTES = 900 * 1024;
   const MAX_SCREENSHOT_EDGE = 1800;
+  const SLOW_RESPONSE_MS = 12000;
 
   const state = {
     token: localStorage.getItem("ui_token") || "admin-dev-token",
@@ -21,6 +22,8 @@ export function initChatPage() {
     chatMessages: [],
     chatWorkerSessionID: "",
     pendingScreenshots: [],
+    pendingTurns: 0,
+    pendingSlowTimer: null,
   };
 
   const api = createUIApi(() => state.token);
@@ -44,6 +47,7 @@ export function initChatPage() {
   const chatSessionInfo = document.getElementById("chatSessionInfo");
   const chatSessionIdText = document.getElementById("chatSessionIdText");
   const chatCopySessionBtn = document.getElementById("chatCopySessionBtn");
+  const chatRunState = document.getElementById("chatRunState");
 
   const sidebar = createSidebarController({
     isControllerPage: false,
@@ -67,6 +71,9 @@ export function initChatPage() {
         const cm = msg.data;
         if (cm.session_id === state.selectedChatSessionID) {
           state.chatMessages.push(cm);
+          if (cm.role === "assistant") {
+            completePendingTurn();
+          }
           renderChatMessages();
         }
         return;
@@ -77,6 +84,9 @@ export function initChatPage() {
           state.chatWorkerSessionID = data.worker_session_id;
           updateChatSessionInfo();
         }
+        if (data.session_id === state.selectedChatSessionID && (data.status === "error" || data.status === "exited")) {
+          failPendingTurns(data.exit_reason || `session ${data.status}`);
+        }
         fetchSessions();
       }
     },
@@ -85,6 +95,61 @@ export function initChatPage() {
 
   function sendWS(msg) {
     return wsClient.send(msg);
+  }
+
+  function clearPendingSlowTimer() {
+    if (!state.pendingSlowTimer) return;
+    clearTimeout(state.pendingSlowTimer);
+    state.pendingSlowTimer = null;
+  }
+
+  function setRunState(kind, text) {
+    if (!chatRunState) return;
+    const content = String(text || "").trim();
+    if (!content) {
+      chatRunState.hidden = true;
+      chatRunState.className = "chat-run-state";
+      chatRunState.textContent = "";
+      return;
+    }
+    chatRunState.hidden = false;
+    chatRunState.className = `chat-run-state ${kind || ""}`.trim();
+    chatRunState.textContent = content;
+  }
+
+  function beginPendingTurn() {
+    state.pendingTurns += 1;
+    if (state.pendingTurns > 1) {
+      setRunState("running", `Running... (${state.pendingTurns} requests pending)`);
+      return;
+    }
+    setRunState("running", "Running... waiting for assistant response");
+    clearPendingSlowTimer();
+    state.pendingSlowTimer = setTimeout(() => {
+      if (state.pendingTurns > 0) {
+        setRunState("slow", "Still running... this is taking longer than usual");
+      }
+    }, SLOW_RESPONSE_MS);
+  }
+
+  function completePendingTurn() {
+    if (state.pendingTurns <= 0) {
+      return;
+    }
+    state.pendingTurns -= 1;
+    if (state.pendingTurns > 0) {
+      setRunState("running", `Running... (${state.pendingTurns} requests pending)`);
+      return;
+    }
+    clearPendingSlowTimer();
+    setRunState("", "");
+  }
+
+  function failPendingTurns(reason) {
+    if (state.pendingTurns <= 0) return;
+    state.pendingTurns = 0;
+    clearPendingSlowTimer();
+    setRunState("error", `Execution failed: ${reason || "unknown error"}`);
   }
 
   function estimateDataURLBytes(dataURL) {
@@ -424,6 +489,9 @@ export function initChatPage() {
     state.chatMessages = [];
     state.chatWorkerSessionID = "";
     state.pendingScreenshots = [];
+    state.pendingTurns = 0;
+    clearPendingSlowTimer();
+    setRunState("", "");
     renderSessions();
     renderChatMessages();
     renderPendingScreenshots();
@@ -474,7 +542,7 @@ export function initChatPage() {
         },
       });
     }
-    sendWS({
+    const sent = sendWS({
       type: "chat_in",
       session_id: state.selectedChatSessionID,
       data: {
@@ -482,6 +550,11 @@ export function initChatPage() {
         content_parts: contentParts,
       },
     });
+    if (!sent) {
+      setRunState("error", "Failed to send: WebSocket disconnected");
+      return;
+    }
+    beginPendingTurn();
     chatInput.value = "";
     chatInput.style.height = "auto";
     state.pendingScreenshots = [];
