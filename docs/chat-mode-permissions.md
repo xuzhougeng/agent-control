@@ -144,7 +144,126 @@ CC_CLAUDE_PERMISSION_MODE=dontAsk,CC_CLAUDE_ALLOWED_TOOLS=Bash(git:*) Read Edit
 
 ---
 
-## 9) 常见问题
+## 9) 场景应用：Windows AI 助手（系统状态分析/配置）
+
+目标：让 Chat 模式下的 Claude 作为 Windows 运维助手，能够分析系统状态，并在可控范围内执行配置命令。
+
+### 9.1 只读分析模式（推荐先用）
+
+适合先验证能力，不改动系统：
+
+```powershell
+$env:CC_CLAUDE_PERMISSION_MODE = "dontAsk"
+$env:CC_CLAUDE_ALLOWED_TOOLS = "Read Bash(Get-*:*) Bash(ipconfig:*) Bash(systeminfo:*) Bash(wmic:*)"
+$env:CC_CLAUDE_DISALLOWED_TOOLS = "Bash(Set-*:*) Bash(New-*:*) Bash(Remove-*:*) Bash(sc:*) Bash(reg:*)"
+```
+
+典型问题：
+- 分析 CPU / 内存 / 磁盘占用
+- 检查端口监听和进程关联
+- 汇总系统版本、网络配置、服务状态
+
+### 9.2 可配置模式（按需开启）
+
+仅在你明确需要“让助手改配置”时开启：
+
+```powershell
+$env:CC_CLAUDE_PERMISSION_MODE = "dontAsk"
+$env:CC_CLAUDE_ALLOWED_TOOLS = "Read Edit Bash(Get-*:*) Bash(Set-*:*) Bash(New-*:*) Bash(sc:*) Bash(reg:*) Bash(netsh:*)"
+```
+
+建议同时限制目录（避免误写）：
+
+```powershell
+$env:CC_CLAUDE_ADD_DIR = "D:\multichat-test-windows-amd64,D:\multichat-test-windows-amd64\run"
+```
+
+### 9.3 配合 chat-profile 注入系统提示词
+
+可在 `chat-profile.md` 里写入固定策略，例如：
+
+```md
+# Windows Assistant Profile
+
+你运行在 Windows 终端运维场景中。
+先做信息收集，再给出变更方案；未经用户确认，不执行高风险写操作。
+输出时先给结论，再列命令与影响范围。
+```
+
+启动时加载：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 `
+  -ClaudePath "C:\path\to\claude.exe" `
+  -ChatProfileFile ".\chat-profile.md" `
+  -StartAgent 1
+```
+
+### 9.4 注意事项
+
+- Chat 模式没有交互审批面板，权限控制要在启动前设置好。
+- 涉及 `Set-*`、`reg`、`sc`、`netsh` 等命令时，建议先在“只读分析模式”完成检查，再切到“可配置模式”。
+- 某些系统配置命令需要管理员权限；若权限不足，命令会失败，这是预期行为。
+
+### 9.5 高权限模式（几乎全开放）
+
+适合受控测试机或隔离环境，目标是让助手“几乎可以做任何事情”：
+
+```powershell
+$env:CC_CLAUDE_PERMISSION_MODE = "dontAsk"
+$env:CC_CLAUDE_ALLOWED_TOOLS = "Bash(*) Read Edit"
+$env:CC_CLAUDE_DISALLOWED_TOOLS = ""
+```
+
+如果你希望它可访问更大范围目录，可放宽：
+
+```powershell
+$env:CC_CLAUDE_ADD_DIR = "D:\"
+```
+
+启动示例：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 `
+  -ClaudePath "C:\path\to\claude.exe" `
+  -ChatProfileFile ".\chat-profile.md" `
+  -StartAgent 1
+```
+
+风险提示（务必阅读）：
+- 该模式下，模型可执行高风险命令（含系统配置改动、服务/网络策略修改等）。
+- 仅建议在测试环境使用，不建议在生产机直接启用。
+- 建议配合快照/备份；至少保留 `run/*.log` 便于审计与回滚分析。
+
+---
+
+## 10) Linux 高权限模式（与 Windows 对齐）
+
+目标与 Windows 高权限模式一致：在受控测试机上尽量放开能力。
+
+```bash
+export CC_CLAUDE_PERMISSION_MODE="dontAsk"
+export CC_CLAUDE_ALLOWED_TOOLS="Bash(*) Read Edit"
+export CC_CLAUDE_DISALLOWED_TOOLS=""
+export CC_CLAUDE_ADD_DIR="/"
+```
+
+启动示例：
+
+```bash
+export CLAUDE_PATH="$(which claude-code || which claude)"
+export CHAT_PROFILE_FILE="./chat-profile.md"
+bash ./run-multichat.sh
+```
+
+风险提示（与 Windows 相同）：
+- 该模式会显著提高命令执行范围，可能触发高风险系统改动。
+- 仅建议在测试环境或隔离环境使用，不建议在生产机启用。
+- 建议保留 `run/*.log`，并在执行前准备快照/备份。
+
+---
+
+## 11) 常见问题
 
 `Q: 为什么 Windows 上 PTY 不可用，但 Chat 可用？`  
 `A:` 当前设计就是 Windows 先走 Multi-Chat；PTY 创建会被明确拒绝。
