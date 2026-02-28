@@ -46,6 +46,7 @@ npm run test:web:e2e:real-claude
 
 - `CC_WEB_E2E_CLAUDE_PATH=/home/xzg/.local/bin/claude`
 - `CC_WEB_E2E_CLAUDE_HOME=$HOME`
+- `CC_WEB_E2E_VIDEO=on`（整条流程录屏）
 
 真实 Claude smoke 当前只覆盖一条窄用例：
 
@@ -90,6 +91,8 @@ CC_WEB_E2E_PORT=18120 npm run test:web:e2e
 默认会为每条用例保存整页 screenshot，方便直接检查页面状态，输出目录是：
 
 - `test-results/`
+
+录屏文件（当 `CC_WEB_E2E_VIDEO=on`）默认也会写在 `test-results/` 下的每个 case 目录里，文件名通常是 `video.webm`。
 
 如果你只想在失败时保留 screenshot：
 
@@ -177,6 +180,8 @@ npx playwright test --ui --config=tests/web-e2e/playwright.config.mjs
   - real Claude 模式下的 Claude CLI 路径，默认 `/home/xzg/.local/bin/claude`
 - `CC_WEB_E2E_CLAUDE_HOME`
   - real Claude 模式下 agent/chat worker 使用的 `HOME`
+- `CC_WEB_E2E_VIDEO`
+  - Playwright 录屏模式，支持 `on` / `off` / `retain-on-failure`
 
 ## 常见问题
 
