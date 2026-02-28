@@ -1552,6 +1552,18 @@ body.right-drawer-open .sidebar-backdrop {
 
   button, input, select { min-height: 42px; font-size: 16px; }
 
+  .chat-input-bar {
+    padding: 10px 10px 12px;
+    gap: 6px;
+  }
+  .chat-attach-btn {
+    padding: 0 8px;
+    font-size: 13px;
+  }
+  .chat-send-btn {
+    padding: 0 14px;
+  }
+
   .admin-stats-grid { grid-template-columns: 1fr 1fr; }
   .admin-tabs { flex-wrap: wrap; }
   .admin-filter-row { flex-direction: column; }

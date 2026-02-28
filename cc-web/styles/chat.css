@@ -213,6 +213,7 @@
 
 .chat-input {
   flex: 1;
+  min-width: 0;
   resize: none;
   border: 1px solid rgba(201, 183, 159, 0.82);
   background: rgba(255, 253, 249, 0.96);
