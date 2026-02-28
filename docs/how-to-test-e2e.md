@@ -50,16 +50,19 @@ npm run test:web:e2e:real-claude
 真实 Claude smoke 当前只覆盖一条窄用例：
 
 1. 在 Terminal 视图创建 session
-2. 向 PTY 发送 `hi`
-3. 等待 `10s`
-4. 切到 Chat 并点击 `Switch to Chat`
-5. 在 Chat 再发送 `hi`
-6. 校验会话不会进入 `Execution failed: exited`
+2. 点击该 session，并将左侧抽屉折叠回去
+3. 点击 Terminal 视图，等待 `5s`
+4. 向 PTY 发送 `hi`
+5. 再等待 `10s`
+6. 切到 Chat 并点击 `Switch to Chat`
+7. 在 Chat 再发送 `hi`
+8. 校验会话不会进入 `Execution failed: exited`
 
 这条 smoke 还会为每个关键步骤单独落盘 screenshot，包括：
 
 - workspace ready
 - session created
+- terminal wait 5s before hi
 - sent hi
 - after 10s wait
 - before/after switch to chat
