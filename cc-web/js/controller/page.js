@@ -11,10 +11,12 @@ import { renderServerList } from "../shared/server-list.js";
 import { renderSessionList } from "../shared/session-list.js";
 
 export function initControllerPage() {
+  const query = new URLSearchParams(window.location.search);
   const state = {
     token: localStorage.getItem("ui_token") || "admin-dev-token",
     ws: null,
-    selectedServerID: new URLSearchParams(window.location.search).get("server_id") || "",
+    selectedServerID: query.get("server_id") || "",
+    requestedSessionID: query.get("session_id") || "",
     selectedSessionID: "",
     pendingFirstOutputSessionID: "",
     approvals: new Map(),
@@ -32,7 +34,7 @@ export function initControllerPage() {
   const approvalCount = document.getElementById("approvalCount");
   const approvalDetails = document.getElementById("approvalDetails");
   const cwdInput = document.getElementById("cwdInput");
-  const resumeInput = document.getElementById("resumeInput");
+  const sessionIDInput = document.getElementById("sessionIdInput");
   const envInput = document.getElementById("envInput");
 
   function sendWS(msg) {
@@ -94,6 +96,12 @@ export function initControllerPage() {
     if (msg.includes(WINDOWS_PTY_UNSUPPORTED_ERROR)) {
       return "PTY is not supported on Windows yet; please use Chat mode at /chat.";
     }
+    if (msg.includes("invalid session_id")) {
+      return "session_id must be a valid UUID.";
+    }
+    if (msg.includes("session_id already exists")) {
+      return "session_id already exists.";
+    }
     return msg || "request failed";
   }
 
@@ -129,20 +137,18 @@ export function initControllerPage() {
           </div>
         </div>
         <div class="session-sub">${escapeHtml(s.cwd || "-")}</div>
-        ${s.resume_id || s.exit_reason
-          ? `<div class="session-detail">${s.resume_id ? `<span>resume ${escapeHtml(s.resume_id)}</span>` : ""}${s.exit_reason ? `<span>reason ${escapeHtml(s.exit_reason)}</span>` : ""}</div>`
+        ${s.exit_reason
+          ? `<div class="session-detail"><span>reason ${escapeHtml(s.exit_reason)}</span></div>`
           : ""}
         <div class="session-actions">
-          ${s.resume_id ? `<button type="button" data-action="resume" class="btn-secondary">Resume</button>` : ""}
+          <button type="button" data-action="chat" class="btn-secondary">Open Chat</button>
           <button type="button" data-action="delete" class="btn-danger" ${canDelete ? "" : "disabled"}>Delete</button>
         </div>
       `;
-      if (s.resume_id) {
-        li.querySelector('[data-action="resume"]').addEventListener("click", async (e) => {
-          e.stopPropagation();
-          await resumeSession(s);
-        });
-      }
+      li.querySelector('[data-action="chat"]').addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await switchSessionToChat(s);
+      });
       li.querySelector('[data-action="delete"]').addEventListener("click", async (e) => {
         e.stopPropagation();
         await deleteSession(s);
@@ -200,6 +206,13 @@ export function initControllerPage() {
     if (!resp.ok) return;
     state.sessions = (await resp.json()).sessions || [];
     renderSessions();
+    if (state.requestedSessionID && !state.selectedSessionID) {
+      const target = state.sessions.find((s) => s.session_id === state.requestedSessionID);
+      if (target) {
+        state.requestedSessionID = "";
+        attachSession(target.session_id);
+      }
+    }
   }
 
   async function refreshAll() {
@@ -237,32 +250,26 @@ export function initControllerPage() {
     await fetchSessions();
   }
 
-  async function resumeSession(source) {
-    const resumeID = (source.resume_id || "").trim();
-    if (!resumeID) return alert("resume id is required");
+  async function switchSessionToChat(source) {
+    if (!source?.session_id) return;
     const serverID = source.server_id || state.selectedServerID;
     if (!serverID) return alert("select a server first");
-    if (maybeRedirectWindowsServerToChat(getServerByID(serverID))) return;
     const cwd = (source.cwd || "").trim();
     if (!cwd) return alert("cwd is required");
-
-    const term = terminal.getTerm();
-    const body = {
+    const sessionID = source.session_id;
+    const delResp = await api(`/api/sessions/${encodeURIComponent(sessionID)}`, { method: "DELETE" });
+    if (!delResp.ok) return alert(await delResp.text());
+    const createBody = {
+      session_id: sessionID,
       server_id: serverID,
+      session_type: "chat",
       cwd,
-      resume_id: resumeID,
       env: parseEnv(envInput.value),
-      cols: term.cols,
-      rows: term.rows,
     };
-
-    const resp = await api("/api/sessions", { method: "POST", body: JSON.stringify(body) });
+    const resp = await api("/api/sessions", { method: "POST", body: JSON.stringify(createBody) });
     if (!resp.ok) return alert(formatSessionCreateError(await resp.text()));
-
-    const session = await resp.json();
     state.selectedServerID = serverID;
-    await fetchSessions();
-    attachSession(session.session_id);
+    window.location.href = `/chat?server_id=${encodeURIComponent(serverID)}&session_id=${encodeURIComponent(sessionID)}`;
   }
 
   function handleWS(msg) {
@@ -313,7 +320,7 @@ export function initControllerPage() {
     const cwd = cwdInput.value.trim();
     if (!cwd) return alert("cwd is required");
 
-    const resumeID = resumeInput.value.trim();
+    const customSessionID = sessionIDInput.value.trim().toLowerCase();
     const term = terminal.getTerm();
     const body = {
       server_id: state.selectedServerID,
@@ -322,7 +329,7 @@ export function initControllerPage() {
       cols: term.cols,
       rows: term.rows,
     };
-    if (resumeID) body.resume_id = resumeID;
+    if (customSessionID) body.session_id = customSessionID;
 
     const resp = await api("/api/sessions", { method: "POST", body: JSON.stringify(body) });
     if (!resp.ok) return alert(formatSessionCreateError(await resp.text()));

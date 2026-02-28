@@ -8,7 +8,7 @@ export function createTerminalController({
   let term = null;
   let fitAddon = null;
   const currentSessionLabel = document.getElementById("currentSessionLabel");
-  const resumeHint = document.getElementById("resumeHint");
+  const sessionHint = document.getElementById("sessionHint");
 
   function init() {
     term = new Terminal({
@@ -64,7 +64,7 @@ export function createTerminalController({
   function resetForSession(sessionID) {
     if (!term) return;
     currentSessionLabel.textContent = `Session: ${sessionID} (loading...)`;
-    if (resumeHint) resumeHint.hidden = false;
+    if (sessionHint) sessionHint.hidden = false;
     term.reset();
     term.scrollToBottom();
   }
@@ -72,7 +72,7 @@ export function createTerminalController({
   function clearSession() {
     if (!term) return;
     currentSessionLabel.textContent = "Session: (none)";
-    if (resumeHint) resumeHint.hidden = true;
+    if (sessionHint) sessionHint.hidden = true;
     term.reset();
     term.scrollToBottom();
   }

@@ -6,7 +6,7 @@ struct NewSessionSheet: View {
     var onCreated: (() -> Void)?
 
     @State private var cwd = ""
-    @State private var resumeID = ""
+    @State private var sessionID = ""
     @State private var envString = ""
     @State private var isCreating = false
 
@@ -65,8 +65,8 @@ struct NewSessionSheet: View {
                     }
                 }
 
-                Section("Resume ID (optional)") {
-                    TextField("UUID to resume a previous session", text: $resumeID)
+                Section("Session ID (optional)") {
+                    TextField("UUID to reuse for this session", text: $sessionID)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
@@ -81,7 +81,7 @@ struct NewSessionSheet: View {
                     Text("Comma-separated KEY=VALUE pairs.")
                 }
             }
-            .navigationTitle("New Session")
+            .navigationTitle("New PTY Session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -108,7 +108,7 @@ struct NewSessionSheet: View {
     #if os(macOS)
     private var macOSBody: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("New Session")
+            Text("New PTY Session")
                 .font(.headline)
 
             HStack(spacing: 4) {
@@ -125,8 +125,8 @@ struct NewSessionSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Resume ID (optional)").font(.caption).foregroundColor(.secondary)
-                TextField("uuid", text: $resumeID)
+                Text("Session ID (optional)").font(.caption).foregroundColor(.secondary)
+                TextField("uuid", text: $sessionID)
                     .textFieldStyle(.roundedBorder)
             }
 
@@ -158,7 +158,7 @@ struct NewSessionSheet: View {
         Task {
             await appState.createSession(
                 cwd: cwd,
-                resumeID: resumeID.isEmpty ? nil : resumeID,
+                sessionID: sessionID.isEmpty ? nil : sessionID,
                 env: parseEnv(envString)
             )
             dismiss()

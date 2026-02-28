@@ -11,16 +11,17 @@ export function initChatPage() {
   const MAX_SCREENSHOT_BYTES = 900 * 1024;
   const MAX_SCREENSHOT_EDGE = 1800;
   const SLOW_RESPONSE_MS = 12000;
+  const query = new URLSearchParams(window.location.search);
 
   const state = {
     token: localStorage.getItem("ui_token") || "admin-dev-token",
     ws: null,
     servers: [],
     sessions: [],
-    selectedServerID: new URLSearchParams(window.location.search).get("server_id") || "",
-    selectedChatSessionID: "",
+    selectedServerID: query.get("server_id") || "",
+    requestedSessionID: query.get("session_id") || "",
+    selectedChatSessionID: query.get("session_id") || "",
     chatMessages: [],
-    chatWorkerSessionID: "",
     pendingScreenshots: [],
     pendingTurns: 0,
     pendingSlowTimer: null,
@@ -80,10 +81,6 @@ export function initChatPage() {
       }
       if (msg.type === "session_update" && msg.data) {
         const data = msg.data;
-        if (data.session_id === state.selectedChatSessionID && data.worker_session_id) {
-          state.chatWorkerSessionID = data.worker_session_id;
-          updateChatSessionInfo();
-        }
         if (data.session_id === state.selectedChatSessionID && (data.status === "error" || data.status === "exited")) {
           failPendingTurns(data.exit_reason || `session ${data.status}`);
         }
@@ -95,6 +92,29 @@ export function initChatPage() {
 
   function sendWS(msg) {
     return wsClient.send(msg);
+  }
+
+  function getServerByID(serverID) {
+    if (!serverID) return null;
+    return state.servers.find((s) => s.server_id === serverID) || null;
+  }
+
+  function isWindowsServer(server) {
+    return String((server && server.os) || "").toLowerCase() === "windows";
+  }
+
+  function formatSessionCreateError(rawText) {
+    const msg = String(rawText || "").trim();
+    if (msg.includes("invalid session_id")) {
+      return "session_id must be a valid UUID.";
+    }
+    if (msg.includes("session_id already exists")) {
+      return "session_id already exists.";
+    }
+    if (msg.includes("not supported on Windows")) {
+      return "PTY is not supported on Windows yet.";
+    }
+    return msg || "request failed";
   }
 
   function isProgressMessage(chatMsg) {
@@ -389,8 +409,8 @@ export function initChatPage() {
 
   function updateChatSessionInfo() {
     if (!chatSessionInfo) return;
-    if (state.chatWorkerSessionID) {
-      chatSessionIdText.textContent = `Session: ${state.chatWorkerSessionID}`;
+    if (state.selectedChatSessionID) {
+      chatSessionIdText.textContent = `Session: ${state.selectedChatSessionID}`;
       chatSessionInfo.hidden = false;
     } else {
       chatSessionInfo.hidden = true;
@@ -426,9 +446,15 @@ export function initChatPage() {
         </div>
         <div class="session-sub">${escapeHtml(s.cwd || "-")}</div>
         <div class="session-actions">
+          <button type="button" data-action="terminal" class="btn-secondary">Open Terminal</button>
           <button type="button" data-action="delete" class="btn-danger" ${canDelete ? "" : "disabled"}>Delete</button>
         </div>
       `;
+      const terminalBtn = li.querySelector('[data-action="terminal"]');
+      terminalBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await switchSessionToTerminal(s);
+      });
       const deleteBtn = li.querySelector('[data-action="delete"]');
       deleteBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -461,6 +487,13 @@ export function initChatPage() {
     const body = await resp.json();
     state.sessions = body.sessions || [];
     renderSessions();
+    if (state.requestedSessionID && !state.chatMessages.length) {
+      const target = state.sessions.find((s) => s.session_id === state.requestedSessionID);
+      if (target) {
+        state.requestedSessionID = "";
+        await attachChatSession(target.session_id);
+      }
+    }
   }
 
   async function refreshAll() {
@@ -483,7 +516,6 @@ export function initChatPage() {
     if (state.selectedChatSessionID === session.session_id) {
       state.selectedChatSessionID = "";
       state.chatMessages = [];
-      state.chatWorkerSessionID = "";
       state.pendingScreenshots = [];
       renderChatMessages();
       renderPendingScreenshots();
@@ -492,11 +524,48 @@ export function initChatPage() {
     await fetchSessions();
   }
 
+  async function switchSessionToTerminal(session) {
+    if (!session?.session_id) return;
+    const serverID = session.server_id || state.selectedServerID;
+    if (!serverID) {
+      alert("select a server first");
+      return;
+    }
+    if (isWindowsServer(getServerByID(serverID))) {
+      alert("PTY is not supported on Windows yet.");
+      return;
+    }
+    const cwd = (session.cwd || "").trim();
+    if (!cwd) {
+      alert("cwd is required");
+      return;
+    }
+    const sessionID = session.session_id;
+    const delResp = await api(`/api/sessions/${encodeURIComponent(sessionID)}`, { method: "DELETE" });
+    if (!delResp.ok) {
+      alert(await delResp.text());
+      return;
+    }
+    const createBody = {
+      session_id: sessionID,
+      server_id: serverID,
+      cwd,
+      env: parseEnv(envInput ? envInput.value : ""),
+      cols: 120,
+      rows: 30,
+    };
+    const createResp = await api("/api/sessions", { method: "POST", body: JSON.stringify(createBody) });
+    if (!createResp.ok) {
+      alert(formatSessionCreateError(await createResp.text()));
+      return;
+    }
+    window.location.href = `/?server_id=${encodeURIComponent(serverID)}&session_id=${encodeURIComponent(sessionID)}`;
+  }
+
   async function attachChatSession(sessionID) {
     if (!sessionID) return;
     state.selectedChatSessionID = sessionID;
     state.chatMessages = [];
-    state.chatWorkerSessionID = "";
     state.pendingScreenshots = [];
     state.pendingTurns = 0;
     clearPendingSlowTimer();
@@ -505,12 +574,6 @@ export function initChatPage() {
     renderChatMessages();
     renderPendingScreenshots();
     updateChatSessionInfo();
-
-    const sess = state.sessions.find((s) => s.session_id === sessionID);
-    if (sess?.worker_session_id) {
-      state.chatWorkerSessionID = sess.worker_session_id;
-      updateChatSessionInfo();
-    }
 
     sendWS({ type: "attach", data: { session_id: sessionID, since_seq: 0 } });
 
@@ -583,12 +646,14 @@ export function initChatPage() {
     const body = {
       server_id: state.selectedServerID,
       session_type: "chat",
+      session_id: (document.getElementById("sessionIdInput")?.value || "").trim().toLowerCase(),
       cwd,
       env: parseEnv(envInput ? envInput.value : ""),
     };
+    if (!body.session_id) delete body.session_id;
     const resp = await api("/api/sessions", { method: "POST", body: JSON.stringify(body) });
     if (!resp.ok) {
-      alert(await resp.text());
+      alert(formatSessionCreateError(await resp.text()));
       return;
     }
     const session = await resp.json();
@@ -635,9 +700,9 @@ export function initChatPage() {
   }
 
   chatCopySessionBtn?.addEventListener("click", async () => {
-    if (!state.chatWorkerSessionID) return;
+    if (!state.selectedChatSessionID) return;
     try {
-      await navigator.clipboard.writeText(state.chatWorkerSessionID);
+      await navigator.clipboard.writeText(state.selectedChatSessionID);
       chatCopySessionBtn.textContent = "Copied!";
       setTimeout(() => {
         chatCopySessionBtn.textContent = "Copy";
@@ -650,6 +715,7 @@ export function initChatPage() {
   sidebar.mount();
   renderChatMessages();
   renderPendingScreenshots();
+  updateChatSessionInfo();
   if (localStorage.getItem("ui_token")) {
     wsClient.connect();
     refreshAll();

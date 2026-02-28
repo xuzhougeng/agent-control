@@ -177,11 +177,11 @@ struct HomeTabView: View {
     private func sessionsSection(title: String, sessions: [Session]) -> some View {
         Section(title) {
             ForEach(sessions) { session in
-                SessionRow(session: session, isSelected: session.sessionID == appState.selectedSessionID)
+                SessionRow(session: session, isSelected: isSelected(session))
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        appState.attachSession(session.sessionID)
-                        selectedTab = .terminal
+                        appState.openSession(session)
+                        selectedTab = session.isChat ? .chat : .terminal
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
@@ -189,7 +189,7 @@ struct HomeTabView: View {
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
-                        if session.isRunning {
+                        if session.isPTY, session.isRunning {
                             Button {
                                 Task { await appState.stopSession(session.sessionID) }
                             } label: {
@@ -199,17 +199,6 @@ struct HomeTabView: View {
                         }
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        if let rid = session.resumeID, !rid.isEmpty, !session.isRunning {
-                            Button {
-                                Task {
-                                    await appState.resumeSession(session)
-                                    selectedTab = .terminal
-                                }
-                            } label: {
-                                Label("Resume", systemImage: "play.fill")
-                            }
-                            .tint(.green)
-                        }
                     }
             }
         }
@@ -246,6 +235,13 @@ struct HomeTabView: View {
         let url = UserDefaults.standard.string(forKey: "baseURL") ?? "http://127.0.0.1:18080"
         return URLComponents(string: url)?.host ?? url
     }
+
+    private func isSelected(_ session: Session) -> Bool {
+        if session.isChat {
+            return session.sessionID == appState.selectedChatSessionID
+        }
+        return session.sessionID == appState.selectedSessionID
+    }
 }
 
 // MARK: - Session search filter
@@ -256,8 +252,7 @@ extension Array where Element == Session {
         let q = query.lowercased()
         return filter {
             $0.shortID.lowercased().contains(q) ||
-            $0.cwd.lowercased().contains(q) ||
-            ($0.resumeID?.lowercased().contains(q) ?? false)
+            $0.cwd.lowercased().contains(q)
         }
     }
 }

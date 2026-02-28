@@ -1,6 +1,40 @@
 import Foundation
 import Combine
 
+enum AppDetailPage: String, CaseIterable {
+    case terminal
+    case chat
+}
+
+enum ChatRunState: Equatable {
+    case idle
+    case running(pending: Int)
+    case slow(pending: Int)
+    case error(String)
+
+    var text: String {
+        switch self {
+        case .idle:
+            return ""
+        case .running(let pending):
+            if pending > 1 { return "Running... (\(pending) requests pending)" }
+            return "Running... waiting for assistant response"
+        case .slow:
+            return "Still running... this is taking longer than usual"
+        case .error(let reason):
+            return "Execution failed: \(reason)"
+        }
+    }
+}
+
+struct ChatAttachment: Identifiable {
+    let id = UUID()
+    let name: String
+    let mediaType: String
+    let base64Data: String
+    let rawData: Data
+}
+
 @MainActor
 final class AppState: ObservableObject {
     // MARK: - Published state
@@ -9,6 +43,10 @@ final class AppState: ObservableObject {
     @Published var approvals: [String: SessionEvent] = [:]  // keyed by eventID
     @Published var selectedServerID: String?
     @Published var selectedSessionID: String?
+    @Published var selectedChatSessionID: String?
+    @Published var selectedPage: AppDetailPage = .terminal
+    @Published var chatMessages: [ChatMessage] = []
+    @Published var chatRunState: ChatRunState = .idle
     @Published var wsConnected = false
     @Published var showNewSessionSheet = false
     @Published var connectionHint: String?
@@ -28,9 +66,21 @@ final class AppState: ObservableObject {
     private var shouldAutoConnect = true
     /// Startup race guard: replay resize until PTY is fully ready.
     private var resizeReplayTask: Task<Void, Never>?
+    private var chatSlowTask: Task<Void, Never>?
+    private var chatPendingTurns = 0
+
+    private let slowResponseDelayNS: UInt64 = 12_000_000_000
 
     var pendingApprovals: [SessionEvent] {
         approvals.values.filter { !$0.resolved }.sorted { $0.tsMS > $1.tsMS }
+    }
+
+    var ptySessions: [Session] {
+        sessions.filter { $0.isPTY }
+    }
+
+    var chatSessions: [Session] {
+        sessions.filter { $0.isChat }
     }
 
     // MARK: - Init
@@ -43,12 +93,8 @@ final class AppState: ObservableObject {
         wsClient.onConnectionChange = { [weak self] connected in
             guard let self else { return }
             self.wsConnected = connected
-            if connected, let sid = self.selectedSessionID {
-                self.terminalBridge.clear()
-                self.terminalBridge.prepareForAttach()
-                self.wsClient.sendAttach(sessionID: sid)
-                self.sendResize(cols: self.terminalBridge.currentCols, rows: self.terminalBridge.currentRows)
-                self.scheduleResizeReplay(sessionID: sid)
+            if connected {
+                self.onConnectedReattach()
             }
         }
         guard !didStart else { return }
@@ -83,6 +129,9 @@ final class AppState: ObservableObject {
         Task {
             await fetchServers()
             await fetchSessions()
+            if let sid = selectedChatSessionID {
+                await fetchChatHistory(sessionID: sid)
+            }
         }
     }
 
@@ -173,34 +222,40 @@ final class AppState: ObservableObject {
     func fetchSessions() async {
         do {
             sessions = try await apiClient.fetchSessions(serverID: selectedServerID)
+            normalizeSessionSelection()
         } catch { print("[api] fetchSessions: \(error)") }
     }
 
-    func createSession(cwd: String, resumeID: String?, env: [String: String]) async {
+    func createSession(cwd: String, sessionID: String?, env: [String: String]) async {
         guard let serverID = selectedServerID else { return }
         do {
             let sess = try await apiClient.createSession(
-                serverID: serverID, cwd: cwd, resumeID: resumeID, env: env,
-                cols: terminalBridge.currentCols, rows: terminalBridge.currentRows
+                serverID: serverID,
+                cwd: cwd,
+                sessionID: sessionID,
+                env: env,
+                sessionType: .pty,
+                cols: terminalBridge.currentCols,
+                rows: terminalBridge.currentRows
             )
             await fetchSessions()
-            attachSession(sess.sessionID)
+            openSession(sess)
         } catch { print("[api] createSession: \(error)") }
     }
 
-    func resumeSession(_ session: Session) async {
-        guard !session.cwd.isEmpty, let rid = session.resumeID, !rid.isEmpty else { return }
-        let serverID = session.serverID.isEmpty ? (selectedServerID ?? "") : session.serverID
-        guard !serverID.isEmpty else { return }
+    func createChatSession(cwd: String, sessionID: String?, env: [String: String]) async {
+        guard let serverID = selectedServerID else { return }
         do {
-            let sess = try await apiClient.createSession(
-                serverID: serverID, cwd: session.cwd, resumeID: rid, env: [:],
-                cols: terminalBridge.currentCols, rows: terminalBridge.currentRows
+            let session = try await apiClient.createSession(
+                serverID: serverID,
+                cwd: cwd,
+                sessionID: sessionID,
+                env: env,
+                sessionType: .chat
             )
-            selectedServerID = serverID
             await fetchSessions()
-            attachSession(sess.sessionID)
-        } catch { print("[api] resumeSession: \(error)") }
+            await attachChatSession(session.sessionID)
+        } catch { print("[api] createChatSession: \(error)") }
     }
 
     func stopSession(_ sessionID: String) async {
@@ -217,9 +272,23 @@ final class AppState: ObservableObject {
                 selectedSessionID = nil
                 terminalBridge.clear()
             }
+            if selectedChatSessionID == sessionID {
+                resetChatSelection()
+            }
             approvals = approvals.filter { $0.value.sessionID != sessionID }
             await fetchSessions()
         } catch { print("[api] deleteSession: \(error)") }
+    }
+
+    func fetchChatHistory(sessionID: String) async {
+        guard !sessionID.isEmpty else { return }
+        do {
+            let messages = try await apiClient.fetchChatHistory(sessionID)
+            guard selectedChatSessionID == sessionID else { return }
+            chatMessages = messages
+        } catch {
+            print("[api] fetchChatHistory: \(error)")
+        }
     }
 
     /// Coalesce rapid session_update pushes: wait 1s of silence before firing REST fetch.
@@ -234,10 +303,23 @@ final class AppState: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
     }
 
+    // MARK: - Navigation helpers
+
+    func openSession(_ session: Session) {
+        if session.isChat {
+            selectedPage = .chat
+            Task { await attachChatSession(session.sessionID) }
+            return
+        }
+        selectedPage = .terminal
+        attachSession(session.sessionID)
+    }
+
     // MARK: - WS actions
 
     func attachSession(_ sessionID: String) {
         selectedSessionID = sessionID
+        selectedPage = .terminal
         terminalBridge.clear()
         terminalBridge.prepareForAttach()
         wsClient.sendAttach(sessionID: sessionID)
@@ -245,18 +327,59 @@ final class AppState: ObservableObject {
         scheduleResizeReplay(sessionID: sessionID)
     }
 
+    func attachChatSession(_ sessionID: String) async {
+        guard !sessionID.isEmpty else { return }
+        selectedChatSessionID = sessionID
+        selectedPage = .chat
+        chatMessages = []
+        chatPendingTurns = 0
+        cancelSlowStateTransition()
+        chatRunState = .idle
+        _ = wsClient.sendAttach(sessionID: sessionID)
+        await fetchChatHistory(sessionID: sessionID)
+    }
+
+    @discardableResult
+    func sendChatMessage(text: String, attachments: [ChatAttachment]) -> Bool {
+        guard let sid = selectedChatSessionID, !sid.isEmpty else {
+            chatRunState = .error("select or create a chat session first")
+            return false
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var parts: [ChatContentPart] = []
+        if !trimmed.isEmpty {
+            parts.append(ChatContentPart(type: "text", text: trimmed, source: nil))
+        }
+        for entry in attachments {
+            let source = ChatImageSource(type: "base64", mediaType: entry.mediaType, data: entry.base64Data)
+            parts.append(ChatContentPart(type: "image", text: nil, source: source))
+        }
+        if parts.isEmpty { return false }
+        guard wsConnected else {
+            chatRunState = .error("WebSocket disconnected")
+            return false
+        }
+        let sent = wsClient.sendChatIn(sessionID: sid, content: trimmed, contentParts: parts)
+        if !sent {
+            chatRunState = .error("WebSocket disconnected")
+            return false
+        }
+        beginPendingChatTurn()
+        return true
+    }
+
     func sendTerminalInput(_ bytes: Data) {
         guard let sid = selectedSessionID else { return }
-        wsClient.sendTermIn(sessionID: sid, dataB64: bytes.base64EncodedString())
+        _ = wsClient.sendTermIn(sessionID: sid, dataB64: bytes.base64EncodedString())
     }
 
     func sendResize(cols: Int, rows: Int) {
         guard let sid = selectedSessionID else { return }
-        wsClient.sendResize(sessionID: sid, cols: cols, rows: rows)
+        _ = wsClient.sendResize(sessionID: sid, cols: cols, rows: rows)
     }
 
     func sendAction(sessionID: String, kind: String) {
-        wsClient.sendAction(sessionID: sessionID, kind: kind)
+        _ = wsClient.sendAction(sessionID: sessionID, kind: kind)
     }
 
     private func scheduleResizeReplay(sessionID: String) {
@@ -281,6 +404,88 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func onConnectedReattach() {
+        if let sid = selectedSessionID, !sid.isEmpty {
+            terminalBridge.clear()
+            terminalBridge.prepareForAttach()
+            wsClient.sendAttach(sessionID: sid)
+            sendResize(cols: terminalBridge.currentCols, rows: terminalBridge.currentRows)
+            scheduleResizeReplay(sessionID: sid)
+        }
+        if let chatID = selectedChatSessionID, !chatID.isEmpty {
+            wsClient.sendAttach(sessionID: chatID)
+        }
+    }
+
+    private func normalizeSessionSelection() {
+        if let sid = selectedSessionID,
+           !sessions.contains(where: { $0.sessionID == sid && $0.isPTY }) {
+            selectedSessionID = nil
+            terminalBridge.clear()
+        }
+        if let sid = selectedChatSessionID {
+            if sessions.first(where: { $0.sessionID == sid && $0.isChat }) == nil {
+                resetChatSelection()
+            }
+        }
+    }
+
+    private func resetChatSelection() {
+        selectedChatSessionID = nil
+        chatMessages = []
+        chatPendingTurns = 0
+        cancelSlowStateTransition()
+        chatRunState = .idle
+    }
+
+    // MARK: - Chat run state
+
+    private func beginPendingChatTurn() {
+        chatPendingTurns += 1
+        chatRunState = .running(pending: chatPendingTurns)
+        if chatPendingTurns == 1 {
+            scheduleSlowStateTransition()
+        }
+    }
+
+    private func completePendingChatTurn() {
+        guard chatPendingTurns > 0 else { return }
+        chatPendingTurns -= 1
+        if chatPendingTurns == 0 {
+            cancelSlowStateTransition()
+            chatRunState = .idle
+            return
+        }
+        chatRunState = .running(pending: chatPendingTurns)
+    }
+
+    private func failPendingChatTurns(reason: String) {
+        guard chatPendingTurns > 0 else { return }
+        chatPendingTurns = 0
+        cancelSlowStateTransition()
+        chatRunState = .error(reason)
+    }
+
+    private func scheduleSlowStateTransition() {
+        cancelSlowStateTransition()
+        chatSlowTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: slowResponseDelayNS)
+            guard !Task.isCancelled else { return }
+            guard self.chatPendingTurns > 0 else { return }
+            self.chatRunState = .slow(pending: self.chatPendingTurns)
+        }
+    }
+
+    private func cancelSlowStateTransition() {
+        chatSlowTask?.cancel()
+        chatSlowTask = nil
+    }
+
+    private func isProgressMessage(_ msg: ChatMessage) -> Bool {
+        msg.meta?.source == "claude-stream-json" && msg.meta?.progress == true
+    }
+
     // MARK: - WS message handler
 
     private func handleWSMessage(_ msg: WSMessage) {
@@ -288,6 +493,14 @@ final class AppState: ObservableObject {
         case .termOut(let sessionID, let data, _):
             if sessionID == selectedSessionID {
                 terminalBridge.feed(data)
+            }
+
+        case .chatMsg(let chatMsg):
+            if chatMsg.sessionID == selectedChatSessionID {
+                chatMessages.append(chatMsg)
+                if chatMsg.isAssistant && !isProgressMessage(chatMsg) {
+                    completePendingChatTurn()
+                }
             }
 
         case .event(let event):
@@ -298,20 +511,28 @@ final class AppState: ObservableObject {
         case .sessionUpdate(let update):
             // Update local session state inline to avoid REST round-trip for every WS push
             if let idx = sessions.firstIndex(where: { $0.sessionID == update.sessionID }) {
-                // Decode a fresh copy with the updated fields
                 let old = sessions[idx]
                 let patched = Session(
-                    sessionID: old.sessionID, serverID: old.serverID,
-                    cwd: old.cwd, cmd: old.cmd,
-                    resumeID: update.resumeID ?? old.resumeID,
-                    envKeys: old.envKeys, status: update.status.isEmpty ? old.status : update.status,
-                    createdBy: old.createdBy, createdAtMS: old.createdAtMS,
+                    sessionID: old.sessionID,
+                    serverID: old.serverID,
+                    sessionType: update.sessionType ?? old.sessionType,
+                    cwd: old.cwd,
+                    cmd: old.cmd,
+                    envKeys: old.envKeys,
+                    status: update.status.isEmpty ? old.status : update.status,
+                    createdBy: old.createdBy,
+                    createdAtMS: old.createdAtMS,
                     exitCode: update.exitCode ?? old.exitCode,
                     exitReason: update.exitReason ?? old.exitReason,
                     awaitingApproval: update.awaitingApproval,
                     pendingEventID: update.pendingEventID ?? old.pendingEventID
                 )
                 sessions[idx] = patched
+            }
+            if update.sessionID == selectedChatSessionID {
+                if update.status == "error" || update.status == "exited" {
+                    failPendingChatTurns(reason: update.exitReason ?? "session \(update.status)")
+                }
             }
             if !update.awaitingApproval {
                 for (key, ev) in approvals where ev.sessionID == update.sessionID && !ev.resolved {
@@ -328,6 +549,9 @@ final class AppState: ObservableObject {
 
         case .error(let sessionID, let message):
             print("[ws] error session=\(sessionID): \(message)")
+            if sessionID == selectedChatSessionID {
+                failPendingChatTurns(reason: message)
+            }
         }
     }
 }

@@ -2,13 +2,14 @@ import SwiftUI
 
 #if os(iOS)
 enum AppTab: Hashable, CaseIterable {
-    case home, terminal, settings
+    case home, terminal, chat, settings
 
     var index: Int {
         switch self {
         case .home: return 0
         case .terminal: return 1
-        case .settings: return 2
+        case .chat: return 2
+        case .settings: return 3
         }
     }
 
@@ -16,6 +17,7 @@ enum AppTab: Hashable, CaseIterable {
         switch index {
         case 0: return .home
         case 1: return .terminal
+        case 2: return .chat
         default: return .settings
         }
     }
@@ -33,13 +35,11 @@ struct ContentView: View {
         #endif
     }
 
-    // MARK: - macOS (unchanged)
-
-    #if os(macOS)
-    private var macOSBody: some View {
-        NavigationSplitView {
-            SidebarView()
-        } detail: {
+    @ViewBuilder
+    private var detailBody: some View {
+        if appState.selectedPage == .chat {
+            ChatDetailView()
+        } else {
             VStack(spacing: 0) {
                 if let hint = appState.connectionHint {
                     ConnectionHintBanner(message: hint)
@@ -48,6 +48,15 @@ struct ContentView: View {
                 Divider()
                 TerminalContainerView()
             }
+        }
+    }
+
+    #if os(macOS)
+    private var macOSBody: some View {
+        NavigationSplitView {
+            SidebarView()
+        } detail: {
+            detailBody
         }
         .toolbar {
             ToolbarItem(placement: .automatic) {
@@ -97,6 +106,9 @@ struct ContentView: View {
                 TerminalTabView(selectedTab: $selectedTab)
                     .tag(AppTab.terminal)
 
+                ChatTabView(selectedTab: $selectedTab)
+                    .tag(AppTab.chat)
+
                 SettingsView(showDismiss: false)
                     .tag(AppTab.settings)
             }
@@ -107,7 +119,7 @@ struct ContentView: View {
                         guard abs(value.translation.width) > abs(value.translation.height),
                               abs(value.translation.width) > 70 else { return }
                         let next = value.translation.width < 0 ? selectedTab.index + 1 : selectedTab.index - 1
-                        guard (0...2).contains(next) else { return }
+                        guard (0...3).contains(next) else { return }
                         withAnimation(.easeInOut(duration: 0.2)) {
                             selectedTab = .from(index: next)
                         }
@@ -122,6 +134,14 @@ struct ContentView: View {
             .onChange(of: selectedTab) { newValue in
                 guard newValue != .terminal else { return }
                 dismissKeyboardAndTerminalFocus()
+            }
+            .onChange(of: appState.selectedPage) { newValue in
+                guard horizontalSizeClass == .compact else { return }
+                let target: AppTab = (newValue == .chat) ? .chat : .terminal
+                guard selectedTab != target else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTab = target
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
                 isKeyboardVisible = true
@@ -150,14 +170,7 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView(onOpenSettings: { showSettings = true })
         } detail: {
-            VStack(spacing: 0) {
-                if let hint = appState.connectionHint {
-                    ConnectionHintBanner(message: hint)
-                }
-                ApprovalPanelView()
-                Divider()
-                TerminalContainerView()
-            }
+            detailBody
         }
         .toolbar {
             ToolbarItem(placement: .automatic) {
@@ -190,6 +203,7 @@ private struct CompactPageDots: View {
         HStack(spacing: 10) {
             dot(for: .home)
             dot(for: .terminal, showBadge: pendingApprovalCount > 0)
+            dot(for: .chat)
             dot(for: .settings)
         }
         .padding(.horizontal, 14)
@@ -223,6 +237,7 @@ private struct CompactPageDots: View {
         switch tab {
         case .home: return "Home"
         case .terminal: return pendingApprovalCount > 0 ? "Terminal, has pending approvals" : "Terminal"
+        case .chat: return "Chat"
         case .settings: return "Settings"
         }
     }

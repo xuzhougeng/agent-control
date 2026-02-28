@@ -654,7 +654,7 @@ li .row {
 }
 
 /* ── Terminal ──────────────────────────────────────────── */
-.resume-hint {
+.session-hint {
   padding: 6px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--accent-soft);
@@ -663,7 +663,7 @@ li .row {
   line-height: 1.5;
 }
 
-.resume-hint code {
+.session-hint code {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 3px;

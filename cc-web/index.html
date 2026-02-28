@@ -45,8 +45,8 @@
           <summary class="section-summary"><h2>New Session</h2></summary>
           <label for="cwdInput">cwd</label>
           <input id="cwdInput" type="text" placeholder="/path/to/repo">
-          <label for="resumeInput">resume id (optional)</label>
-          <input id="resumeInput" type="text" placeholder="763bf36b-94cb-41b9-bc9c-3e6cf83c2cdf">
+          <label for="sessionIdInput">session id (optional UUID)</label>
+          <input id="sessionIdInput" type="text" placeholder="763bf36b-94cb-41b9-bc9c-3e6cf83c2cdf">
           <label for="envInput">env (KEY=VALUE, comma-separated)</label>
           <input id="envInput" type="text" placeholder="CC_PROFILE=dev">
           <button id="newSessionBtn" type="button" class="btn-primary">Create</button>
@@ -73,10 +73,9 @@
         </details>
       </section>
       <section class="terminal-section">
-        <div id="resumeHint" class="resume-hint" hidden>
-          The Session ID shown here is an internal system ID, <strong>not</strong> Claude's session ID.
-          To resume in CLI, type <code>/status</code> in the terminal to find Claude's real session ID,
-          then run <code>claude --resume &lt;id&gt;</code>.
+        <div id="sessionHint" class="session-hint" hidden>
+          The Session ID shown here is the unified session identifier used by both terminal and chat modes.
+          You can reuse it with the same path to recreate the session in another mode.
         </div>
         <div id="terminal"></div>
         <div class="terminal-toolbar">

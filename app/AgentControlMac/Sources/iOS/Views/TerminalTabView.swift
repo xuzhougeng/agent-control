@@ -42,7 +42,8 @@ struct TerminalTabView: View {
             HStack(spacing: 0) {
                 if showSessionDrawer {
                     SessionDrawerView(
-                        isOpen: $showSessionDrawer
+                        isOpen: $showSessionDrawer,
+                        selectedTab: $selectedTab
                     )
                     .environmentObject(appState)
                     .frame(width: min(UIScreen.main.bounds.width * 0.82, 340))
@@ -163,6 +164,7 @@ struct TerminalTabView: View {
 struct SessionDrawerView: View {
     @EnvironmentObject var appState: AppState
     @Binding var isOpen: Bool
+    @Binding var selectedTab: AppTab
 
     var body: some View {
         VStack(spacing: 0) {
@@ -229,7 +231,8 @@ struct SessionDrawerView: View {
 
     private func sessionButton(_ session: Session) -> some View {
         Button {
-            appState.attachSession(session.sessionID)
+            appState.openSession(session)
+            selectedTab = session.isChat ? .chat : .terminal
             withAnimation(.easeInOut(duration: 0.22)) {
                 isOpen = false
             }
@@ -244,7 +247,7 @@ struct SessionDrawerView: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                if session.sessionID == appState.selectedSessionID {
+                if isSelected(session) {
                     Image(systemName: "checkmark")
                         .foregroundColor(.accentColor)
                 }
@@ -252,6 +255,13 @@ struct SessionDrawerView: View {
             }
         }
         .foregroundColor(.primary)
+    }
+
+    private func isSelected(_ session: Session) -> Bool {
+        if session.isChat {
+            return session.sessionID == appState.selectedChatSessionID
+        }
+        return session.sessionID == appState.selectedSessionID
     }
 }
 

@@ -82,14 +82,21 @@ final class APIClient {
     }
 
     func createSession(
-        serverID: String, cwd: String, resumeID: String?,
-        env: [String: String], cols: Int, rows: Int
+        serverID: String, cwd: String, sessionID: String?,
+        env: [String: String], sessionType: SessionType,
+        cols: Int? = nil, rows: Int? = nil
     ) async throws -> Session {
         var body: [String: Any] = [
-            "server_id": serverID, "cwd": cwd,
-            "env": env, "cols": cols, "rows": rows,
+            "server_id": serverID,
+            "session_type": sessionType.rawValue,
+            "cwd": cwd,
+            "env": env,
         ]
-        if let rid = resumeID, !rid.isEmpty { body["resume_id"] = rid }
+        if sessionType == .pty {
+            body["cols"] = cols ?? 120
+            body["rows"] = rows ?? 30
+        }
+        if let sid = sessionID, !sid.isEmpty { body["session_id"] = sid.lowercased() }
         let jsonData = try JSONSerialization.data(withJSONObject: body)
         let data = try await request("/api/sessions", method: "POST", body: jsonData)
         return try JSONDecoder().decode(Session.self, from: data)
@@ -113,6 +120,11 @@ final class APIClient {
         return events
     }
 
+    func fetchChatHistory(_ sessionID: String) async throws -> [ChatMessage] {
+        let data = try await request("/api/sessions/\(sessionID)/chat")
+        return try JSONDecoder().decode(ChatHistoryResponse.self, from: data).messages
+    }
+
     // MARK: - Internal
 
     private func request(_ path: String, method: String = "GET", body: Data? = nil) async throws -> Data {
@@ -130,4 +142,8 @@ final class APIClient {
         }
         return data
     }
+}
+
+private struct ChatHistoryResponse: Decodable {
+    let messages: [ChatMessage]
 }

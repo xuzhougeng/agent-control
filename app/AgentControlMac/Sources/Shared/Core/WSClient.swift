@@ -50,32 +50,60 @@ final class WSClient: NSObject, URLSessionWebSocketDelegate, URLSessionDelegate 
 
     // MARK: - Send helpers
 
-    func send(_ data: Data) {
-        guard let text = String(data: data, encoding: .utf8) else { return }
+    @discardableResult
+    func send(_ data: Data) -> Bool {
+        guard task != nil else { return false }
+        guard let text = String(data: data, encoding: .utf8) else { return false }
         task?.send(.string(text)) { error in
             if let error { print("[ws] send error: \(error)") }
         }
+        return true
     }
 
-    func sendAttach(sessionID: String) {
+    @discardableResult
+    func sendAttach(sessionID: String) -> Bool {
         sendJSON(["type": "attach", "data": ["session_id": sessionID, "since_seq": 0]])
     }
 
-    func sendTermIn(sessionID: String, dataB64: String) {
+    @discardableResult
+    func sendTermIn(sessionID: String, dataB64: String) -> Bool {
         sendJSON(["type": "term_in", "session_id": sessionID, "data_b64": dataB64])
     }
 
-    func sendResize(sessionID: String, cols: Int, rows: Int) {
+    @discardableResult
+    func sendResize(sessionID: String, cols: Int, rows: Int) -> Bool {
         sendJSON(["type": "resize", "session_id": sessionID, "data": ["cols": cols, "rows": rows]])
     }
 
-    func sendAction(sessionID: String, kind: String) {
+    @discardableResult
+    func sendAction(sessionID: String, kind: String) -> Bool {
         sendJSON(["type": "action", "session_id": sessionID, "data": ["kind": kind]])
     }
 
-    private func sendJSON(_ obj: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
-        send(data)
+    @discardableResult
+    func sendChatIn(sessionID: String, content: String, contentParts: [ChatContentPart]) -> Bool {
+        let payload: [String: Any] = [
+            "content": content,
+            "content_parts": contentParts.map { part in
+                var out: [String: Any] = ["type": part.type]
+                if let text = part.text { out["text"] = text }
+                if let source = part.source {
+                    out["source"] = [
+                        "type": source.type,
+                        "media_type": source.mediaType,
+                        "data": source.data,
+                    ]
+                }
+                return out
+            },
+        ]
+        return sendJSON(["type": "chat_in", "session_id": sessionID, "data": payload])
+    }
+
+    @discardableResult
+    private func sendJSON(_ obj: [String: Any]) -> Bool {
+        guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return false }
+        return send(data)
     }
 
     // MARK: - Receive loop

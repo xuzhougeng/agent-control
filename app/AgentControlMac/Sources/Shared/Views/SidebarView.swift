@@ -16,6 +16,22 @@ struct SidebarView: View {
 
     var body: some View {
         List {
+            Section("Pages") {
+                Button {
+                    appState.selectedPage = .terminal
+                } label: {
+                    Label("Terminal", systemImage: "terminal")
+                }
+                .foregroundColor(appState.selectedPage == .terminal ? .accentColor : .primary)
+
+                Button {
+                    appState.selectedPage = .chat
+                } label: {
+                    Label("Chat", systemImage: "bubble.left.and.bubble.right")
+                }
+                .foregroundColor(appState.selectedPage == .chat ? .accentColor : .primary)
+            }
+
             // -- Servers --
             Section {
                 ForEach(appState.servers) { server in
@@ -70,17 +86,19 @@ struct SidebarView: View {
             // -- Sessions --
             Section {
                 ForEach(appState.sessions) { session in
-                    SessionRow(session: session, isSelected: session.sessionID == appState.selectedSessionID)
+                    SessionRow(session: session, isSelected: isSelected(session))
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            appState.attachSession(session.sessionID)
-                            onOpenSessionTerminal?()
+                            appState.openSession(session)
+                            if session.isPTY {
+                                onOpenSessionTerminal?()
+                            }
                         }
                         .contextMenu { sessionContextMenu(session) }
                 }
             } header: {
                 HStack {
-                    Text("Sessions")
+                    Text("Sessions (PTY + Chat)")
                     Spacer()
                     Button { Task { await appState.fetchSessions() } } label: {
                         Image(systemName: "arrow.clockwise")
@@ -114,15 +132,19 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func sessionContextMenu(_ session: Session) -> some View {
-        if let rid = session.resumeID, !rid.isEmpty {
-            Button("Resume") { Task { await appState.resumeSession(session) } }
-        }
-        if session.isRunning {
+        if session.isPTY, session.isRunning {
             Button("Stop") { Task { await appState.stopSession(session.sessionID) } }
         }
         Button("Delete", role: .destructive) {
             Task { await appState.deleteSession(session.sessionID) }
         }
+    }
+
+    private func isSelected(_ session: Session) -> Bool {
+        if session.isChat {
+            return session.sessionID == appState.selectedChatSessionID
+        }
+        return session.sessionID == appState.selectedSessionID
     }
 }
 
@@ -214,11 +236,9 @@ struct SessionRow: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
-                if let rid = session.resumeID, !rid.isEmpty {
-                    Text("resume: \(String(rid.prefix(8)))")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
+                Text(session.isChat ? "chat" : "pty")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
                 if session.awaitingApproval {
                     Text("approval: yes")
                         .font(.caption2)
