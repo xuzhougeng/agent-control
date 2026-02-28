@@ -48,6 +48,7 @@ func Start(id, cwd, workerCmd string, workerArgs []string, env map[string]string
 		return nil, errors.New("worker_cmd is required")
 	}
 	c := exec.Command(workerCmd, workerArgs...)
+	configureWorkerCmd(c)
 	c.Dir = cwd
 	c.Stderr = os.Stderr
 	c.Env = os.Environ()
@@ -174,10 +175,10 @@ func (s *Session) Stop(graceMS, killAfterMS int) {
 	if proc == nil {
 		return
 	}
-	_ = proc.Signal(os.Interrupt)
+	_ = interruptWorkerTree(proc)
 	time.Sleep(time.Duration(graceMS) * time.Millisecond)
 	if s.IsRunning() {
-		_ = proc.Kill()
+		_ = killWorkerTree(proc)
 		waitMore := killAfterMS - graceMS
 		if waitMore > 0 {
 			time.Sleep(time.Duration(waitMore) * time.Millisecond)

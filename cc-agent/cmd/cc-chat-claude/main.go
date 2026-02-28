@@ -10,7 +10,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"cc-agent/internal/claudecli"
@@ -42,6 +45,8 @@ func main() {
 	if sessionID == "" {
 		sessionID = strings.TrimSpace(os.Getenv("CC_CLAUDE_SESSION_ID"))
 	}
+	rootCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
 
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
@@ -49,6 +54,15 @@ func main() {
 	defer writer.Flush()
 
 	sessionReady := false
+	var runMu sync.Mutex
+	currentCancel := func() {}
+	go func() {
+		<-rootCtx.Done()
+		runMu.Lock()
+		cancel := currentCancel
+		runMu.Unlock()
+		cancel()
+	}()
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -77,7 +91,18 @@ func main() {
 			writer.Flush()
 		}
 
-		reply, meta := handleMessage(cfg, sessionID, &sessionReady, msg.Content, msg.ContentParts, emit)
+		runCtx, cancelRun := context.WithCancel(rootCtx)
+		runMu.Lock()
+		currentCancel = cancelRun
+		runMu.Unlock()
+		reply, meta := handleMessage(runCtx, cfg, sessionID, &sessionReady, msg.Content, msg.ContentParts, emit)
+		cancelRun()
+		runMu.Lock()
+		currentCancel = func() {}
+		runMu.Unlock()
+		if errors.Is(runCtx.Err(), context.Canceled) {
+			return
+		}
 		out := Message{MessageID: msg.MessageID, Content: reply, SessionID: sessionID, Meta: meta}
 		data, _ := json.Marshal(out)
 		writer.Write(data)
@@ -86,18 +111,21 @@ func main() {
 	}
 }
 
-func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, content string, parts []ContentPart, emit func(content string, meta json.RawMessage)) (string, json.RawMessage) {
+func handleMessage(ctx context.Context, cfg claudecli.Config, sessionID string, sessionReady *bool, content string, parts []ContentPart, emit func(content string, meta json.RawMessage)) (string, json.RawMessage) {
 	input := buildStreamInput(content, parts)
 	useContinueSession := *sessionReady
 	var lastErr string
 	var lastMeta json.RawMessage
 	for i := 0; i < 2; i++ {
-		reply, meta, errText, err := runClaude(cfg, sessionID, useContinueSession, input, func(op string) {
+		reply, meta, errText, err := runClaude(ctx, cfg, sessionID, useContinueSession, input, func(op string) {
 			if emit == nil {
 				return
 			}
 			emit(op, buildProgressMeta())
 		})
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return "", lastMeta
+		}
 		if err == nil && errText == "" {
 			*sessionReady = true
 			return reply, meta
@@ -128,7 +156,7 @@ func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, c
 	return "Claude error: " + lastErr, lastMeta
 }
 
-func runClaude(cfg claudecli.Config, sessionID string, continueSession bool, input string, onOperation func(op string)) (string, json.RawMessage, string, error) {
+func runClaude(parentCtx context.Context, cfg claudecli.Config, sessionID string, continueSession bool, input string, onOperation func(op string)) (string, json.RawMessage, string, error) {
 	args := claudecli.BaseArgs(cfg)
 	if sessionID != "" {
 		if continueSession {
@@ -138,12 +166,11 @@ func runClaude(cfg claudecli.Config, sessionID string, continueSession bool, inp
 		}
 	}
 
-	ctx := context.Background()
 	timeout := cfg.TimeoutMS
 	if timeout <= 0 {
 		timeout = 10 * 60 * 1000
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(parentCtx, time.Duration(timeout)*time.Millisecond)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, cfg.Cmd, args...)
