@@ -61,6 +61,7 @@ npm run test:web:e2e:real-claude
 8. 校验会话不会进入 `Execution failed: exited`
 9. 再等待 `10s`
 10. 点击 Terminal 并点击 `Switch to Terminal`
+11. 在 Terminal 再发送 `say hi`
 
 这条 smoke 还会为每个关键步骤单独落盘 screenshot，包括：
 
@@ -74,6 +75,22 @@ npm run test:web:e2e:real-claude
 - chat still running
 - after chat wait 10s
 - before/after switch back to terminal
+- sent `say hi` after switching back to terminal
+
+### Terminal 键盘发送注意事项（real-claude）
+
+real-claude 用例里，Terminal 输入默认走“真实键盘路径”：
+
+1. 先点击终端区域聚焦
+2. `keyboard.type(...)`
+3. `Enter` 提交
+
+只有键盘路径在限定时间内没有观测到 `term_in` 时，才回退到 `window.__CC_E2E__.sendTerminalInput(...)`。
+
+排查“看起来输入了 hi，但没有真正发送”时，不要只看截图里的输入行；以测试日志里的这些事件为准：
+
+- `terminal:send:*:keyboard-ok` 或 `terminal:send:*:ws-fallback-ok`
+- `terminal:term-out-observed` / `terminal:final-term-out-observed`
 
 如果你需要覆盖不同账号或不同 Claude 安装路径，可以显式传：
 
