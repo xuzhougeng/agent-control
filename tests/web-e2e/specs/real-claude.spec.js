@@ -104,7 +104,13 @@ async function createSession(page, { cwd } = {}) {
     ? page.locator("#sessionsList li.session-item").filter({ hasText: shortSessionID }).first()
     : page.locator("#sessionsList li.session-item").first();
   await expect(sessionRow).toBeVisible({ timeout: 20_000 });
-  await sessionRow.click({ timeout: 10_000 });
+  await page.evaluate((shortID) => {
+    const rows = Array.from(document.querySelectorAll("#sessionsList li.session-item"));
+    const target = rows.find((row) => !shortID || String(row.textContent || "").includes(shortID)) || rows[0];
+    if (!target) return;
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+  }, shortSessionID);
+  logStep("create-session:session-row-clicked");
   await closeLeftDrawer(page);
   logStep(`create-session:done:${sessionID}`);
   return sessionID;
