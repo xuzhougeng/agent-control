@@ -89,17 +89,56 @@ function sanitizeStepLabel(label) {
 
 async function captureStep(page, testInfo, label, options = {}) {
   const withDrawers = options.withDrawers !== false;
+  let snapshotState = null;
   if (withDrawers) {
-    await openLeftDrawer(page);
-    await openRightDrawer(page);
+    snapshotState = await page.evaluate(() => {
+      const body = document.body;
+      const leftBtn = document.getElementById("leftDrawerToggleBtn");
+      const rightBtn = document.getElementById("rightDrawerToggleBtn");
+      const topBtn = document.getElementById("sidebarToggleBtn");
+      return {
+        leftOpen: body.classList.contains("left-drawer-open"),
+        rightOpen: body.classList.contains("right-drawer-open"),
+        mobileOpen: body.classList.contains("sidebar-open"),
+        leftExpanded: leftBtn?.getAttribute("aria-expanded") || "false",
+        rightExpanded: rightBtn?.getAttribute("aria-expanded") || "false",
+        topExpanded: topBtn?.getAttribute("aria-expanded") || "false",
+      };
+    });
+
+    await page.evaluate(() => {
+      const body = document.body;
+      const leftBtn = document.getElementById("leftDrawerToggleBtn");
+      const rightBtn = document.getElementById("rightDrawerToggleBtn");
+      const topBtn = document.getElementById("sidebarToggleBtn");
+      const backdrop = document.getElementById("sidebarBackdrop");
+      body.classList.add("left-drawer-open", "right-drawer-open");
+      leftBtn?.setAttribute("aria-expanded", "true");
+      rightBtn?.setAttribute("aria-expanded", "true");
+      topBtn?.setAttribute("aria-expanded", "true");
+      if (backdrop) backdrop.hidden = false;
+    });
   }
   await page.screenshot({
     path: testInfo.outputPath(`${sanitizeStepLabel(label)}.png`),
     fullPage: true,
   });
-  if (withDrawers) {
-    await closeRightDrawer(page);
-    await closeLeftDrawer(page);
+  if (withDrawers && snapshotState) {
+    await page.evaluate((state) => {
+      const body = document.body;
+      const leftBtn = document.getElementById("leftDrawerToggleBtn");
+      const rightBtn = document.getElementById("rightDrawerToggleBtn");
+      const topBtn = document.getElementById("sidebarToggleBtn");
+      const backdrop = document.getElementById("sidebarBackdrop");
+
+      body.classList.toggle("left-drawer-open", Boolean(state.leftOpen));
+      body.classList.toggle("right-drawer-open", Boolean(state.rightOpen));
+      body.classList.toggle("sidebar-open", Boolean(state.mobileOpen));
+      leftBtn?.setAttribute("aria-expanded", String(state.leftExpanded));
+      rightBtn?.setAttribute("aria-expanded", String(state.rightExpanded));
+      topBtn?.setAttribute("aria-expanded", String(state.topExpanded));
+      if (backdrop) backdrop.hidden = !(state.leftOpen || state.rightOpen || state.mobileOpen);
+    }, snapshotState);
   }
 }
 
