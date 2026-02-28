@@ -33,6 +33,11 @@ async function waitForWorkspaceReady(page) {
 
 async function createSession(page, { cwd, sessionID } = {}) {
   const root = cwd || repoRoot;
+  const toolsSummary = page.locator("#workspaceToolsDetails summary");
+  const toolsDetails = page.locator("#workspaceToolsDetails");
+  if (!(await toolsDetails.evaluate((el) => el.hasAttribute("open")))) {
+    await toolsSummary.click();
+  }
   await page.getByLabel("cwd").fill(root);
   if (sessionID) {
     await page.getByLabel(/session id/i).fill(sessionID);

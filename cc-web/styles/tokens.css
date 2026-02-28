@@ -1,32 +1,40 @@
 /* ── Design Tokens ─────────────────────────────────────── */
 :root {
-  --bg-base: #f8f9fa;
-  --bg-surface: #ffffff;
-  --bg-elevated: #fdf6ec;
-  --bg-hover: #eef3f7;
-  --bg-selected: #e8eff5;
+  --bg-base: #efe6da;
+  --bg-base-strong: #e4d6c5;
+  --bg-surface: #fffdf9;
+  --bg-elevated: #f6efe6;
+  --bg-panel: #f2e8dc;
+  --bg-hover: #e9f0f3;
+  --bg-selected: #e4edf4;
+  --bg-ink: #111725;
 
-  --border: #e3e8ef;
-  --border-light: #d7dee8;
-  --border-focus: #74a3c7;
+  --border: #d9cebf;
+  --border-light: #e5dacb;
+  --border-strong: #c8b79f;
+  --border-focus: #44697f;
 
-  --text: #1a1a2e;
-  --text-muted: #636e72;
-  --text-dim: #5f6d7a;
+  --text: #1d2430;
+  --text-muted: #6f746f;
+  --text-dim: #59616c;
+  --text-soft: #8a847a;
 
-  --accent: #2980b9;
-  --accent-hover: #3b92c9;
-  --accent-soft: rgba(41, 128, 185, 0.14);
-  --success: #27ae60;
-  --success-bg: rgba(39, 174, 96, 0.14);
-  --danger: #c0392b;
-  --danger-bg: rgba(192, 57, 43, 0.12);
-  --warning: #f0932b;
-  --warning-bg: rgba(240, 147, 43, 0.16);
+  --accent: #315f72;
+  --accent-hover: #274f62;
+  --accent-soft: rgba(49, 95, 114, 0.12);
+  --accent-strong: #1f4356;
+  --success: #2a7a4b;
+  --success-bg: rgba(42, 122, 75, 0.14);
+  --danger: #9f4238;
+  --danger-bg: rgba(159, 66, 56, 0.12);
+  --warning: #b77429;
+  --warning-bg: rgba(183, 116, 41, 0.14);
 
-  --radius: 10px;
-  --radius-sm: 8px;
-  --shadow-card: 0 2px 8px rgba(26, 26, 46, 0.06);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-xs: 8px;
+  --shadow-card: 0 14px 30px rgba(49, 41, 31, 0.08);
+  --shadow-panel: 0 18px 40px rgba(34, 26, 18, 0.08);
 
   color-scheme: light;
 }
@@ -43,9 +51,11 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-family: -apple-system, "Segoe UI", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  line-height: 1.65;
-  background: var(--bg-base);
+  font-family: "Avenir Next", "Segoe UI Variable", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  line-height: 1.55;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 28%),
+    linear-gradient(180deg, var(--bg-base) 0%, var(--bg-base-strong) 100%);
   color: var(--text);
 }
 

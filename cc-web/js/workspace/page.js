@@ -478,25 +478,33 @@ export function initWorkspacePage() {
       renderItem: (s, isSelected) => {
         const isSwitching = state.switchingSessionID === s.session_id;
         const li = document.createElement("li");
-        li.classList.add("session-item");
+        li.classList.add("session-item", "session-item-nav");
         if (isSelected) li.classList.add("selected");
         const statusBadge = s.status === "running" ? "badge badge-running" : "badge";
         const canDelete = s.status !== "running" && !isSwitching;
         const approvalClass = s.awaiting_approval ? "badge-pending" : "badge-muted";
         const modeLabel = s.session_type === "chat" ? "chat" : "pty";
+        const shortSessionID = escapeHtml(s.session_id.slice(0, 8));
+        const shortInstanceID = escapeHtml((s.active_instance_id || "-").slice(0, 8));
         li.innerHTML = `
-          <div class="session-main">
-            <strong class="session-id">${escapeHtml(s.session_id.slice(0, 8))}</strong>
+          <div class="session-main session-main-nav">
+            <div class="session-title-wrap">
+              <span class="session-status-dot ${s.status === "running" ? "is-running" : ""}"></span>
+              <strong class="session-id">${shortSessionID}</strong>
+            </div>
             <div class="session-badges">
               <span class="badge">${escapeHtml(modeLabel)}</span>
               <span class="${statusBadge}">${escapeHtml(s.status)}</span>
-              <span class="badge ${approvalClass}">${s.awaiting_approval ? "approval" : "normal"}</span>
+              ${s.awaiting_approval ? `<span class="badge ${approvalClass}">approval</span>` : ""}
             </div>
           </div>
-          <div class="session-sub">${escapeHtml(s.cwd || "-")}</div>
-          <div class="session-detail"><span>active ${(s.active_instance_id || "-").slice(0, 8)}</span></div>
+          <div class="session-sub session-sub-nav">${escapeHtml(s.cwd || "-")}</div>
+          <div class="session-detail session-detail-nav">
+            <span>instance ${shortInstanceID}</span>
+            <span>${escapeHtml(modeLabel)} active</span>
+          </div>
           ${s.exit_reason
-            ? `<div class="session-detail"><span>reason ${escapeHtml(s.exit_reason)}</span></div>`
+            ? `<div class="session-detail session-detail-nav"><span>reason ${escapeHtml(s.exit_reason)}</span></div>`
             : ""}
           <div class="session-actions">
             <button type="button" data-action="delete" class="btn-danger" ${canDelete ? "" : "disabled"}>Delete</button>
@@ -521,21 +529,21 @@ export function initWorkspacePage() {
     instanceHistoryCount.textContent = String(items.length);
     if (!state.selectedSessionID) {
       const li = document.createElement("li");
-      li.className = "session-item";
+      li.className = "session-item instance-item";
       li.textContent = "Select a session";
       instanceHistoryList.appendChild(li);
       return;
     }
     if (!items.length) {
       const li = document.createElement("li");
-      li.className = "session-item";
+      li.className = "session-item instance-item";
       li.textContent = "No instances";
       instanceHistoryList.appendChild(li);
       return;
     }
     for (const inst of items) {
       const li = document.createElement("li");
-      li.className = "session-item";
+      li.className = "session-item instance-item";
       if (session && session.active_instance_id === inst.instance_id) {
         li.classList.add("selected");
       }

@@ -71,7 +71,7 @@ export function createWorkspaceShell({
         statusBadge.textContent = "No Session";
       }
       if (title) title.textContent = "No session selected";
-      if (hint) hint.textContent = "Select a unified session from the left to inspect or switch modes.";
+      if (hint) hint.textContent = "Pick a session from the left.";
       if (serverText) serverText.textContent = "-";
       if (cwdText) cwdText.textContent = "-";
       if (instanceText) instanceText.textContent = "-";
@@ -99,8 +99,8 @@ export function createWorkspaceShell({
     if (title) title.textContent = session.session_id || "(unknown)";
     if (hint) {
       hint.textContent = matchesView
-        ? `This unified session is currently active in ${targetLabel} mode.`
-        : `This unified session is currently active in ${modeLabel(activeMode)} mode. Use "Switch to ${targetLabel}" to move the Claude conversation into this view.`;
+        ? `Continue in ${targetLabel}.`
+        : `Active in ${modeLabel(activeMode)}. Switch to ${targetLabel} to continue here.`;
     }
     if (serverText) serverText.textContent = session.server_id || "-";
     if (cwdText) cwdText.textContent = session.cwd || "-";

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const port = Number(process.env.CC_WEB_E2E_PORT || 18110);
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const harnessPath = path.join(configDir, "run-harness.sh");
+const screenshotMode = process.env.CC_WEB_E2E_SCREENSHOT || "on";
 
 export default defineConfig({
   testDir: "./specs",
@@ -19,6 +20,10 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${port}`,
     headless: true,
     trace: "retain-on-failure",
+    screenshot: {
+      mode: screenshotMode,
+      fullPage: true,
+    },
   },
   webServer: {
     command: `bash ${JSON.stringify(harnessPath)}`,
