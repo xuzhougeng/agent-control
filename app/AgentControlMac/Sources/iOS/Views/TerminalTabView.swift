@@ -18,10 +18,14 @@ struct TerminalTabView: View {
 
     var body: some View {
         ZStack {
+            WorkspaceRootBackground()
+                .ignoresSafeArea()
+
             if appState.selectedSessionID != nil {
-                VStack(spacing: 0) {
+                WorkspacePanel(inset: 0) {
                     TerminalContainerView()
                 }
+                .padding(12)
                 .ignoresSafeArea(.keyboard)
                 .onAppear { appState.terminalBridge.requestScrollToBottom() }
             } else {
@@ -52,7 +56,7 @@ struct TerminalTabView: View {
                 Spacer(minLength: 0)
             }
         }
-        .navigationTitle(currentSession.map { "Session \($0.shortID)" } ?? "Terminal")
+        .navigationTitle(currentSession.map { "Session \($0.shortID)" } ?? "Terminal Workspace")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if isActive {
@@ -115,36 +119,40 @@ struct TerminalTabView: View {
     // MARK: - Empty state
 
     private var noSessionView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "terminal")
-                .font(.system(size: 48))
-                .foregroundColor(.secondary)
-            Text("No session selected")
-                .font(.title3)
-                .foregroundColor(.secondary)
+        WorkspacePanel(inset: 16) {
+            VStack(spacing: 16) {
+                Image(systemName: "terminal")
+                    .font(.system(size: 44))
+                    .foregroundColor(WorkspaceTheme.textSoft)
+                Text("No session selected")
+                    .font(.title3.weight(.semibold))
+                    .foregroundColor(WorkspaceTheme.textMuted)
 
-            VStack(spacing: 10) {
-                if appState.sessions.contains(where: \.isRunning) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.22)) {
-                            showSessionDrawer = true
+                VStack(spacing: 10) {
+                    if appState.sessions.contains(where: \.isRunning) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.22)) {
+                                showSessionDrawer = true
+                            }
+                        } label: {
+                            Label("Choose Session", systemImage: "list.bullet")
                         }
-                    } label: {
-                        Label("Choose Session", systemImage: "list.bullet")
+                        .buttonStyle(.bordered)
+                        .tint(WorkspaceTheme.accent)
                     }
-                    .buttonStyle(.bordered)
+                    Button {
+                        appState.showNewSessionSheet = true
+                    } label: {
+                        Label("New Session", systemImage: "plus")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(WorkspaceTheme.accent)
+                    .disabled(appState.selectedServerID == nil)
                 }
-                Button {
-                    appState.showNewSessionSheet = true
-                } label: {
-                    Label("New Session", systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(appState.selectedServerID == nil)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(uiColor: .systemBackground))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(18)
     }
 
     private func dismissKeyboardAndCloseOverlays() {
@@ -185,8 +193,8 @@ struct SessionDrawerView: View {
             .padding(.top, 12)
             .padding(.bottom, 8)
 
-            List {
-                Section {
+            ScrollView {
+                VStack(spacing: 8) {
                     Button {
                         appState.showNewSessionSheet = true
                         withAnimation(.easeInOut(duration: 0.22)) {
@@ -194,39 +202,39 @@ struct SessionDrawerView: View {
                         }
                     } label: {
                         Label("New Session", systemImage: "plus")
+                            .frame(maxWidth: .infinity)
                     }
-                    .foregroundColor(.primary)
+                    .buttonStyle(.borderedProminent)
+                    .tint(WorkspaceTheme.accent)
                     .disabled(appState.selectedServerID == nil)
-                }
 
-                let running = appState.sessions.filter(\.isRunning)
-                let stopped = appState.sessions.filter { !$0.isRunning }
+                    let running = appState.sessions.filter(\.isRunning)
+                    let stopped = appState.sessions.filter { !$0.isRunning }
 
-                if !running.isEmpty {
-                    Section("Running") {
+                    if !running.isEmpty {
+                        groupTitle("Running")
                         ForEach(running) { session in
                             sessionButton(session)
                         }
                     }
-                }
-                if !stopped.isEmpty {
-                    Section("Stopped") {
+                    if !stopped.isEmpty {
+                        groupTitle("Stopped")
                         ForEach(stopped) { session in
                             sessionButton(session)
                         }
                     }
-                }
-                if appState.sessions.isEmpty {
-                    Section {
+                    if appState.sessions.isEmpty {
                         Text("No sessions available")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(WorkspaceTheme.textMuted)
                             .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 8)
                     }
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
             }
-            .listStyle(.insetGrouped)
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(WorkspaceTheme.surface)
     }
 
     private func sessionButton(_ session: Session) -> some View {
@@ -249,12 +257,18 @@ struct SessionDrawerView: View {
                 Spacer()
                 if isSelected(session) {
                     Image(systemName: "checkmark")
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(WorkspaceTheme.accent)
                 }
                 StatusBadge(label: session.status, isOnline: session.isRunning)
             }
         }
-        .foregroundColor(.primary)
+        .foregroundColor(WorkspaceTheme.text)
+    }
+
+    private func groupTitle(_ title: String) -> some View {
+        WorkspaceSectionTitle(text: title)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 6)
     }
 
     private func isSelected(_ session: Session) -> Bool {
@@ -284,12 +298,14 @@ struct ApprovalsSheet: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    List {
-                        ForEach(appState.pendingApprovals) { event in
-                            ApprovalRow(event: event)
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            ForEach(appState.pendingApprovals) { event in
+                                ApprovalRow(event: event)
+                            }
                         }
+                        .padding(12)
                     }
-                    .listStyle(.insetGrouped)
                 }
             }
             .navigationTitle("Approvals")

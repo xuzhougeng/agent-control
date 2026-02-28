@@ -9,7 +9,7 @@ struct AgentControliOSApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(.light)
                 .onAppear { appState.start() }
         }
         .onChange(of: scenePhase) { phase in

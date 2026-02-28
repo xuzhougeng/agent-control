@@ -3,6 +3,7 @@ import SwiftUI
 struct SidebarView: View {
     @EnvironmentObject var appState: AppState
     @State private var showServerGuide = false
+    @State private var approvalsExpanded = false
     let onOpenSettings: (() -> Void)?
     let onOpenSessionTerminal: (() -> Void)?
 
@@ -15,107 +16,41 @@ struct SidebarView: View {
     }
 
     var body: some View {
-        List {
-            Section("Pages") {
-                Button {
-                    appState.selectedPage = .terminal
-                } label: {
-                    Label("Terminal", systemImage: "terminal")
-                }
-                .foregroundColor(appState.selectedPage == .terminal ? .accentColor : .primary)
+        VStack(spacing: 8) {
+            headerBar
 
-                Button {
-                    appState.selectedPage = .chat
-                } label: {
-                    Label("Chat", systemImage: "bubble.left.and.bubble.right")
+            WorkspacePanel(inset: 6) {
+                HStack(spacing: 8) {
+                    pageButton(title: "Terminal", icon: "terminal", page: .terminal)
+                    pageButton(title: "Chat", icon: "bubble.left.and.bubble.right", page: .chat)
                 }
-                .foregroundColor(appState.selectedPage == .chat ? .accentColor : .primary)
             }
 
-            // -- Servers --
-            Section {
-                ForEach(appState.servers) { server in
-                    ServerRow(server: server, isSelected: server.serverID == appState.selectedServerID)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            appState.selectedServerID = server.serverID
-                            Task { await appState.fetchSessions() }
-                        }
+            ScrollView {
+                VStack(spacing: 8) {
+                    serversPanel
+                    sessionsPanel
+                    approvalsPanel
                 }
-            } header: {
-                HStack {
-                    Text("Servers")
-                    Spacer()
-                    #if os(macOS)
-                    if #available(macOS 14, *) {
-                        SettingsLink {
-                            Image(systemName: "gearshape")
-                        }
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .help("Connection Settings")
-                    }
-                    #else
-                    if let onOpenSettings {
-                        Button(action: onOpenSettings) {
-                            Image(systemName: "gearshape")
-                        }
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .help("Connection Settings")
-                    }
-                    #endif
-                    Button { showServerGuide = true } label: {
-                        Image(systemName: "questionmark.circle")
-                    }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .help("How to add server")
-                    Button { Task { await appState.fetchServers() } } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                }
-            } footer: {
-                Text("Servers are discovered from the connected control plane. Tap ? for steps to add one.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                .padding(.bottom, 6)
             }
-
-            // -- Sessions --
-            Section {
-                ForEach(appState.sessions) { session in
-                    SessionRow(session: session, isSelected: isSelected(session))
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            appState.openSession(session)
-                            if session.isPTY {
-                                onOpenSessionTerminal?()
-                            }
-                        }
-                        .contextMenu { sessionContextMenu(session) }
-                }
-            } header: {
-                HStack {
-                    Text("Sessions (PTY + Chat)")
-                    Spacer()
-                    Button { Task { await appState.fetchSessions() } } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                }
+            #if os(iOS)
+            .refreshable {
+                await appState.fetchServers()
+                await appState.fetchSessions()
             }
+            #endif
         }
-        .listStyle(.sidebar)
-        #if os(iOS)
-        .refreshable {
-            await appState.fetchServers()
-            await appState.fetchSessions()
-        }
-        #endif
-        .navigationTitle("Agent Control")
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(
+            LinearGradient(
+                colors: [WorkspaceTheme.bgBase.opacity(0.92), WorkspaceTheme.bgBaseStrong.opacity(0.92)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .navigationTitle("Workspace")
         .toolbar {
             ToolbarItem {
                 Button { appState.showNewSessionSheet = true } label: {
@@ -128,6 +63,232 @@ struct SidebarView: View {
         .sheet(isPresented: $showServerGuide) {
             ServerGuideSheet(onOpenSettings: onOpenSettings)
         }
+    }
+
+    private var headerBar: some View {
+        WorkspacePanel(inset: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Agent Control")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(WorkspaceTheme.text)
+                Text("Native Workspace")
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundColor(WorkspaceTheme.textSoft)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var serversPanel: some View {
+        WorkspacePanel(inset: 8) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    WorkspaceSectionTitle(text: "Servers")
+                    Spacer()
+                    WorkspaceCountBadge(text: "\(appState.servers.count)", color: WorkspaceTheme.accent)
+                    settingsShortcut
+                    iconButton("questionmark.circle") {
+                        showServerGuide = true
+                    }
+                    iconButton("arrow.clockwise") {
+                        Task { await appState.fetchServers() }
+                    }
+                }
+
+                if appState.servers.isEmpty {
+                    Text("No servers found from control plane.")
+                        .font(.caption)
+                        .foregroundColor(WorkspaceTheme.textMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 6)
+                } else {
+                    VStack(spacing: 6) {
+                        ForEach(appState.servers) { server in
+                            Button {
+                                appState.selectedServerID = server.serverID
+                                Task { await appState.fetchSessions() }
+                            } label: {
+                                ServerRow(server: server, isSelected: server.serverID == appState.selectedServerID)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                Text("Servers are registered by cc-agent and discovered from /api/servers.")
+                    .font(.system(size: 11))
+                    .foregroundColor(WorkspaceTheme.textSoft)
+            }
+        }
+    }
+
+    private var sessionsPanel: some View {
+        let running = appState.sessions.filter(\.isRunning)
+        let stopped = appState.sessions.filter { !$0.isRunning }
+
+        return WorkspacePanel(inset: 8) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    WorkspaceSectionTitle(text: "Sessions")
+                    Spacer()
+                    WorkspaceCountBadge(text: "\(appState.sessions.count)", color: WorkspaceTheme.accent)
+                    iconButton("arrow.clockwise") {
+                        Task { await appState.fetchSessions() }
+                    }
+                }
+
+                if appState.sessions.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("No sessions")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(WorkspaceTheme.textMuted)
+                        Text("Create a session from the + button after selecting a server.")
+                            .font(.caption)
+                            .foregroundColor(WorkspaceTheme.textSoft)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                } else {
+                    if !running.isEmpty {
+                        sessionGroup(title: "Running", sessions: running)
+                    }
+                    if !stopped.isEmpty {
+                        sessionGroup(title: "Stopped", sessions: stopped)
+                    }
+                }
+            }
+        }
+    }
+
+    private var approvalsPanel: some View {
+        let pending = appState.pendingApprovals
+        return WorkspacePanel(inset: 8) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    WorkspaceSectionTitle(text: "Approvals")
+                    Spacer()
+                    WorkspaceCountBadge(text: "\(pending.count)", color: WorkspaceTheme.warning)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            approvalsExpanded.toggle()
+                        }
+                    } label: {
+                        Image(systemName: approvalsExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(WorkspaceTheme.textMuted)
+                            .frame(width: 18, height: 18)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(WorkspaceTheme.surfaceStrong)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .stroke(WorkspaceTheme.border.opacity(0.8), lineWidth: 1)
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(pending.isEmpty)
+                }
+
+                if pending.isEmpty {
+                    Text("No pending approvals")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(WorkspaceTheme.success)
+                } else if approvalsExpanded {
+                    VStack(spacing: 5) {
+                        ForEach(pending) { event in
+                            SidebarApprovalRow(event: event)
+                        }
+                    }
+                } else {
+                    Text("\(pending.count) pending approval(s). Expand to review and action.")
+                        .font(.system(size: 10))
+                        .foregroundColor(WorkspaceTheme.textSoft)
+                }
+            }
+        }
+    }
+
+    private func sessionGroup(title: String, sessions: [Session]) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            WorkspaceSectionTitle(text: title)
+            ForEach(sessions) { session in
+                Button {
+                    appState.openSession(session)
+                    if session.isPTY {
+                        onOpenSessionTerminal?()
+                    }
+                } label: {
+                    SessionRow(session: session, isSelected: isSelected(session))
+                }
+                .buttonStyle(.plain)
+                .contextMenu { sessionContextMenu(session) }
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private var settingsShortcut: some View {
+        Group {
+            #if os(macOS)
+            if #available(macOS 14, *) {
+                SettingsLink {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.plain)
+            }
+            #else
+            if let onOpenSettings {
+                iconButton("gearshape") {
+                    onOpenSettings()
+                }
+            }
+            #endif
+        }
+    }
+
+    private func pageButton(title: String, icon: String, page: AppDetailPage) -> some View {
+        Button {
+            appState.selectedPage = page
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                Text(title)
+                    .lineLimit(1)
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(appState.selectedPage == page ? WorkspaceTheme.accent : WorkspaceTheme.textMuted)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: WorkspaceTheme.cornerRadiusSmall, style: .continuous)
+                    .fill(appState.selectedPage == page ? WorkspaceTheme.accentSoft : WorkspaceTheme.surfaceStrong.opacity(0.55))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: WorkspaceTheme.cornerRadiusSmall, style: .continuous)
+                            .stroke(appState.selectedPage == page ? WorkspaceTheme.accent.opacity(0.45) : WorkspaceTheme.border.opacity(0.55), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func iconButton(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(WorkspaceTheme.textMuted)
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(WorkspaceTheme.surfaceStrong.opacity(0.62))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .stroke(WorkspaceTheme.border.opacity(0.7), lineWidth: 1)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -200,26 +361,40 @@ struct ServerRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(server.isOnline ? WorkspaceTheme.success : WorkspaceTheme.textSoft.opacity(0.65))
+                .frame(width: 7, height: 7)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(server.serverID)
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                if !server.hostname.isEmpty {
-                    Text(server.hostname)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(WorkspaceTheme.text)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    if !server.hostname.isEmpty {
+                        Text(server.hostname)
+                    }
+                    if let tags = server.tags, !tags.isEmpty {
+                        Text(tags.joined(separator: ", "))
+                    }
                 }
-                if let tags = server.tags, !tags.isEmpty {
-                    Text(tags.joined(separator: ", "))
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
+                .font(.system(size: 11))
+                .foregroundColor(WorkspaceTheme.textMuted)
+                .lineLimit(1)
             }
             Spacer()
             StatusBadge(label: server.status, isOnline: server.isOnline)
         }
-        .padding(.vertical, 2)
-        .listRowBackground(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isSelected ? WorkspaceTheme.accentSoft : WorkspaceTheme.surfaceStrong.opacity(0.64))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(isSelected ? WorkspaceTheme.accent.opacity(0.5) : WorkspaceTheme.border.opacity(0.6), lineWidth: 1)
+                )
+        )
     }
 }
 
@@ -228,33 +403,64 @@ struct SessionRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 8) {
+                Circle()
+                    .fill(session.isRunning ? WorkspaceTheme.success : WorkspaceTheme.textSoft.opacity(0.6))
+                    .frame(width: 6, height: 6)
                 Text(session.shortID)
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                Text(session.cwd)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                Text(session.isChat ? "chat" : "pty")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(WorkspaceTheme.text)
+                Spacer()
+                StatusBadge(label: session.status, isOnline: session.isRunning)
+            }
+
+            Text(session.cwd)
+                .font(.system(size: 11))
+                .foregroundColor(WorkspaceTheme.textMuted)
+                .lineLimit(1)
+
+            HStack(spacing: 6) {
+                SessionTag(text: session.isChat ? "chat" : "pty", tint: WorkspaceTheme.accent)
                 if session.awaitingApproval {
-                    Text("approval: yes")
-                        .font(.caption2)
-                        .foregroundColor(.yellow)
+                    SessionTag(text: "approval", tint: WorkspaceTheme.warning)
                 }
                 if let reason = session.exitReason, !reason.isEmpty {
-                    Text("reason: \(reason)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    Text(reason)
+                        .font(.system(size: 10))
+                        .foregroundColor(WorkspaceTheme.textSoft)
+                        .lineLimit(1)
                 }
             }
-            Spacer()
-            StatusBadge(label: session.status, isOnline: session.isRunning)
         }
-        .padding(.vertical, 2)
-        .listRowBackground(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(isSelected ? WorkspaceTheme.accentSoft : WorkspaceTheme.surfaceStrong.opacity(0.56))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .stroke(isSelected ? WorkspaceTheme.accent.opacity(0.5) : WorkspaceTheme.border.opacity(0.52), lineWidth: 1)
+                )
+        )
+    }
+}
+
+struct SessionTag: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(tint.opacity(0.12))
+                    .overlay(Capsule(style: .continuous).stroke(tint.opacity(0.28), lineWidth: 1))
+            )
     }
 }
 
@@ -268,10 +474,65 @@ struct StatusBadge: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(
-                Capsule()
-                    .fill(isOnline ? Color.green.opacity(0.12) : Color.red.opacity(0.12))
-                    .overlay(Capsule().strokeBorder(isOnline ? Color.green.opacity(0.4) : Color.red.opacity(0.4)))
+                Capsule(style: .continuous)
+                    .fill(isOnline ? WorkspaceTheme.successSoft : WorkspaceTheme.dangerSoft)
+                    .overlay(Capsule(style: .continuous).stroke(isOnline ? WorkspaceTheme.success.opacity(0.3) : WorkspaceTheme.danger.opacity(0.3), lineWidth: 1))
             )
-            .foregroundColor(isOnline ? .green : .red)
+            .foregroundColor(isOnline ? WorkspaceTheme.success : WorkspaceTheme.danger)
+    }
+}
+
+private struct SidebarApprovalRow: View {
+    @EnvironmentObject var appState: AppState
+    let event: SessionEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(String(event.sessionID.prefix(8)))
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(WorkspaceTheme.text)
+                Spacer()
+                Button {
+                    appState.attachSession(event.sessionID)
+                    appState.sendAction(sessionID: event.sessionID, kind: "approve")
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(WorkspaceTheme.success))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    appState.attachSession(event.sessionID)
+                    appState.sendAction(sessionID: event.sessionID, kind: "reject")
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(WorkspaceTheme.danger))
+                }
+                .buttonStyle(.plain)
+            }
+            if let excerpt = event.promptExcerpt, !excerpt.isEmpty {
+                Text(excerpt)
+                    .font(.system(size: 10))
+                    .foregroundColor(WorkspaceTheme.textMuted)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(WorkspaceTheme.warningSoft.opacity(0.62))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(WorkspaceTheme.warning.opacity(0.32), lineWidth: 1)
+                )
+        )
     }
 }

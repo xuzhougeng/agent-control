@@ -28,26 +28,31 @@ struct ContentView: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
-        #if os(macOS)
-        macOSBody
-        #else
-        iOSBody
-        #endif
+        ZStack {
+            WorkspaceRootBackground()
+                .ignoresSafeArea()
+            #if os(macOS)
+            macOSBody
+            #else
+            iOSBody
+            #endif
+        }
     }
 
     @ViewBuilder
     private var detailBody: some View {
         if appState.selectedPage == .chat {
             ChatDetailView()
+                .padding(14)
         } else {
-            VStack(spacing: 0) {
+            VStack(spacing: 10) {
                 if let hint = appState.connectionHint {
                     ConnectionHintBanner(message: hint)
                 }
-                ApprovalPanelView()
-                Divider()
                 TerminalContainerView()
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(14)
         }
     }
 
@@ -58,6 +63,7 @@ struct ContentView: View {
         } detail: {
             detailBody
         }
+        .navigationSplitViewStyle(.balanced)
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 ConnectionBadge(connected: appState.wsConnected)
@@ -99,20 +105,25 @@ struct ContentView: View {
 
     private var compactTabBody: some View {
         NavigationStack {
-            TabView(selection: $selectedTab) {
-                HomeTabView(selectedTab: $selectedTab)
-                    .tag(AppTab.home)
+            ZStack {
+                WorkspaceRootBackground()
+                    .ignoresSafeArea()
 
-                TerminalTabView(selectedTab: $selectedTab)
-                    .tag(AppTab.terminal)
+                TabView(selection: $selectedTab) {
+                    HomeTabView(selectedTab: $selectedTab)
+                        .tag(AppTab.home)
 
-                ChatTabView(selectedTab: $selectedTab)
-                    .tag(AppTab.chat)
+                    TerminalTabView(selectedTab: $selectedTab)
+                        .tag(AppTab.terminal)
 
-                SettingsView(showDismiss: false)
-                    .tag(AppTab.settings)
+                    ChatTabView(selectedTab: $selectedTab)
+                        .tag(AppTab.chat)
+
+                    SettingsView(showDismiss: false)
+                        .tag(AppTab.settings)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
             .simultaneousGesture(
                 DragGesture(minimumDistance: 36)
                     .onEnded { value in
@@ -172,6 +183,7 @@ struct ContentView: View {
         } detail: {
             detailBody
         }
+        .navigationSplitViewStyle(.balanced)
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 ConnectionBadge(connected: appState.wsConnected)
@@ -208,7 +220,12 @@ private struct CompactPageDots: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
-        .background(.ultraThinMaterial, in: Capsule())
+        .background(
+            Capsule(style: .continuous)
+                .fill(WorkspaceTheme.surfaceStrong)
+                .overlay(Capsule(style: .continuous).stroke(WorkspaceTheme.borderStrong, lineWidth: 1))
+        )
+        .shadow(color: WorkspaceTheme.shadow, radius: 12, y: 5)
     }
 
     private func dot(for tab: AppTab, showBadge: Bool = false) -> some View {
@@ -219,11 +236,11 @@ private struct CompactPageDots: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 Circle()
-                    .fill(selectedTab == tab ? Color.accentColor : Color.secondary.opacity(0.45))
+                    .fill(selectedTab == tab ? WorkspaceTheme.accent : WorkspaceTheme.textMuted.opacity(0.45))
                     .frame(width: selectedTab == tab ? 8 : 7, height: selectedTab == tab ? 8 : 7)
                 if showBadge {
                     Circle()
-                        .fill(.red)
+                        .fill(WorkspaceTheme.danger)
                         .frame(width: 5, height: 5)
                         .offset(x: 3, y: -2)
                 }
@@ -250,20 +267,20 @@ struct ConnectionBadge: View {
     let connected: Bool
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Circle()
-                .fill(connected ? Color.green : Color.red)
+                .fill(connected ? WorkspaceTheme.success : WorkspaceTheme.danger)
                 .frame(width: 8, height: 8)
             Text(connected ? "WS: connected" : "WS: disconnected")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(connected ? WorkspaceTheme.success : WorkspaceTheme.danger)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
         .background(
             Capsule()
-                .fill(connected ? Color.green.opacity(0.12) : Color.red.opacity(0.12))
-                .overlay(Capsule().strokeBorder(connected ? Color.green.opacity(0.3) : Color.red.opacity(0.3)))
+                .fill(connected ? WorkspaceTheme.successSoft : WorkspaceTheme.dangerSoft)
+                .overlay(Capsule().strokeBorder(connected ? WorkspaceTheme.success.opacity(0.35) : WorkspaceTheme.danger.opacity(0.35)))
         )
     }
 }
@@ -272,16 +289,117 @@ struct ConnectionHintBanner: View {
     let message: String
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.yellow)
+                .foregroundColor(WorkspaceTheme.warning)
             Text(message)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(WorkspaceTheme.textMuted)
             Spacer()
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.yellow.opacity(0.08))
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: WorkspaceTheme.cornerRadiusSmall, style: .continuous)
+                .fill(WorkspaceTheme.warningSoft)
+                .overlay(
+                    RoundedRectangle(cornerRadius: WorkspaceTheme.cornerRadiusSmall, style: .continuous)
+                        .stroke(WorkspaceTheme.warning.opacity(0.32), lineWidth: 1)
+                )
+        )
+    }
+}
+
+// MARK: - Workspace Theme
+
+enum WorkspaceTheme {
+    static let bgBase = Color(red: 0.937, green: 0.902, blue: 0.855) // #efe6da
+    static let bgBaseStrong = Color(red: 0.894, green: 0.839, blue: 0.773) // #e4d6c5
+    static let surface = Color(red: 0.996, green: 0.992, blue: 0.976) // #fffdf9
+    static let surfaceStrong = Color(red: 0.965, green: 0.937, blue: 0.902) // #f6efe6
+    static let border = Color(red: 0.851, green: 0.808, blue: 0.749) // #d9cebf
+    static let borderStrong = Color(red: 0.784, green: 0.718, blue: 0.624) // #c8b79f
+    static let text = Color(red: 0.114, green: 0.141, blue: 0.188) // #1d2430
+    static let textMuted = Color(red: 0.349, green: 0.380, blue: 0.424) // #59616c
+    static let textSoft = Color(red: 0.541, green: 0.518, blue: 0.478) // #8a847a
+    static let accent = Color(red: 0.192, green: 0.373, blue: 0.447) // #315f72
+    static let accentSoft = Color(red: 0.192, green: 0.373, blue: 0.447).opacity(0.12)
+    static let success = Color(red: 0.165, green: 0.478, blue: 0.294) // #2a7a4b
+    static let successSoft = Color(red: 0.165, green: 0.478, blue: 0.294).opacity(0.14)
+    static let warning = Color(red: 0.718, green: 0.455, blue: 0.161) // #b77429
+    static let warningSoft = Color(red: 0.718, green: 0.455, blue: 0.161).opacity(0.14)
+    static let danger = Color(red: 0.624, green: 0.259, blue: 0.220) // #9f4238
+    static let dangerSoft = Color(red: 0.624, green: 0.259, blue: 0.220).opacity(0.12)
+    static let shadow = Color.black.opacity(0.05)
+
+    static let cornerRadius: CGFloat = 12
+    static let cornerRadiusSmall: CGFloat = 8
+}
+
+struct WorkspaceRootBackground: View {
+    var body: some View {
+        LinearGradient(
+            colors: [WorkspaceTheme.bgBase, WorkspaceTheme.bgBaseStrong],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .overlay(
+            RadialGradient(
+                colors: [Color.white.opacity(0.48), .clear],
+                center: .topLeading,
+                startRadius: 30,
+                endRadius: 420
+            )
+        )
+    }
+}
+
+struct WorkspacePanel<Content: View>: View {
+    let inset: CGFloat
+    let content: Content
+
+    init(inset: CGFloat = 12, @ViewBuilder content: () -> Content) {
+        self.inset = inset
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(inset)
+            .background(
+                RoundedRectangle(cornerRadius: WorkspaceTheme.cornerRadius, style: .continuous)
+                    .fill(WorkspaceTheme.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: WorkspaceTheme.cornerRadius, style: .continuous)
+                            .stroke(WorkspaceTheme.border.opacity(0.7), lineWidth: 1)
+                    )
+                    .shadow(color: WorkspaceTheme.shadow, radius: 7, y: 2)
+            )
+    }
+}
+
+struct WorkspaceSectionTitle: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(WorkspaceTheme.textSoft)
+            .tracking(1.2)
+            .textCase(.uppercase)
+    }
+}
+
+struct WorkspaceCountBadge: View {
+    let text: String
+    var color: Color = WorkspaceTheme.accent
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Capsule(style: .continuous).fill(color))
     }
 }

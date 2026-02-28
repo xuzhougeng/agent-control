@@ -10,12 +10,12 @@ import AppKit
 
 struct ChatDetailView: View {
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 12) {
             ChatSessionPanelView()
                 .frame(minWidth: 280, idealWidth: 320, maxWidth: 360)
-            Divider()
             ChatConversationView()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -27,47 +27,64 @@ struct ChatSessionPanelView: View {
     @State private var errorText: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Chat")
-                    .font(.headline)
-                Spacer()
-                Button {
-                    Task {
-                        await appState.fetchServers()
-                        await appState.fetchSessions()
+        WorkspacePanel(inset: 10) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Chat Workspace")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(WorkspaceTheme.text)
+                        Text("Server + Session Rail")
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(1.1)
+                            .foregroundColor(WorkspaceTheme.textSoft)
                     }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
+                    Spacer()
+                    Button {
+                        Task {
+                            await appState.fetchServers()
+                            await appState.fetchSessions()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(WorkspaceTheme.textMuted)
+                            .frame(width: 30, height: 30)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(WorkspaceTheme.surfaceStrong.opacity(0.68))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .stroke(WorkspaceTheme.border.opacity(0.72), lineWidth: 1)
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help("Refresh")
                 }
-                .buttonStyle(.plain)
-                .help("Refresh")
-            }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    serversSection
-                    newChatSection
-                    sessionsSection
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        serversSection
+                        newChatSection
+                        sessionsSection
+                    }
                 }
-            }
-            if let errorText, !errorText.isEmpty {
-                Text(errorText)
-                    .font(.caption)
-                    .foregroundColor(.red)
+
+                if let errorText, !errorText.isEmpty {
+                    Text(errorText)
+                        .font(.caption)
+                        .foregroundColor(WorkspaceTheme.danger)
+                }
             }
         }
-        .padding(12)
     }
 
     private var serversSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Servers")
-                .font(.caption)
-                .foregroundColor(.secondary)
+        chatSectionCard(title: "Servers") {
             if appState.servers.isEmpty {
                 Text("No servers")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(WorkspaceTheme.textSoft)
                     .font(.caption)
             } else {
                 ForEach(appState.servers) { server in
@@ -75,23 +92,32 @@ struct ChatSessionPanelView: View {
                         appState.selectedServerID = server.serverID
                         Task { await appState.fetchSessions() }
                     } label: {
-                        HStack {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(server.isOnline ? WorkspaceTheme.success : WorkspaceTheme.textSoft.opacity(0.6))
+                                .frame(width: 7, height: 7)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(server.serverID)
                                     .font(.system(.subheadline, design: .monospaced))
+                                    .foregroundColor(WorkspaceTheme.text)
                                 if !server.hostname.isEmpty {
                                     Text(server.hostname)
                                         .font(.caption2)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(WorkspaceTheme.textMuted)
                                 }
                             }
                             Spacer()
                             StatusBadge(label: server.status, isOnline: server.isOnline)
                         }
-                        .padding(8)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 7)
                         .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(server.serverID == appState.selectedServerID ? Color.accentColor.opacity(0.12) : Color.clear)
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(server.serverID == appState.selectedServerID ? WorkspaceTheme.accentSoft : WorkspaceTheme.surfaceStrong.opacity(0.5))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        .stroke(server.serverID == appState.selectedServerID ? WorkspaceTheme.accent.opacity(0.48) : WorkspaceTheme.border.opacity(0.6), lineWidth: 1)
+                                )
                         )
                     }
                     .buttonStyle(.plain)
@@ -101,10 +127,7 @@ struct ChatSessionPanelView: View {
     }
 
     private var newChatSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("New Chat")
-                .font(.caption)
-                .foregroundColor(.secondary)
+        chatSectionCard(title: "New Chat") {
             TextField("/path/to/repo", text: $cwd)
                 .textFieldStyle(.roundedBorder)
             TextField("CC_PROFILE=dev", text: $envString)
@@ -121,19 +144,17 @@ struct ChatSessionPanelView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(WorkspaceTheme.accent)
                 .disabled(isCreating || cwd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || appState.selectedServerID == nil)
             }
         }
     }
 
     private var sessionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Chat Sessions")
-                .font(.caption)
-                .foregroundColor(.secondary)
+        chatSectionCard(title: "Chat Sessions") {
             if appState.chatSessions.isEmpty {
                 Text("No chat sessions")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(WorkspaceTheme.textSoft)
                     .font(.caption)
             } else {
                 ForEach(appState.chatSessions) { session in
@@ -145,18 +166,24 @@ struct ChatSessionPanelView: View {
                                 HStack(spacing: 6) {
                                     Text(session.shortID)
                                         .font(.system(.subheadline, design: .monospaced))
+                                        .foregroundColor(WorkspaceTheme.text)
                                     StatusBadge(label: session.status, isOnline: session.isRunning)
                                 }
                                 Text(session.cwd)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(WorkspaceTheme.textMuted)
                                     .lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(8)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 7)
                             .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(session.sessionID == appState.selectedChatSessionID ? Color.accentColor.opacity(0.12) : Color.clear)
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(session.sessionID == appState.selectedChatSessionID ? WorkspaceTheme.accentSoft : WorkspaceTheme.surfaceStrong.opacity(0.52))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                            .stroke(session.sessionID == appState.selectedChatSessionID ? WorkspaceTheme.accent.opacity(0.48) : WorkspaceTheme.border.opacity(0.6), lineWidth: 1)
+                                    )
                             )
                         }
                         .buttonStyle(.plain)
@@ -171,6 +198,22 @@ struct ChatSessionPanelView: View {
                 }
             }
         }
+    }
+
+    private func chatSectionCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            WorkspaceSectionTitle(text: title)
+            content()
+        }
+        .padding(9)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(WorkspaceTheme.surfaceStrong.opacity(0.58))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(WorkspaceTheme.border.opacity(0.65), lineWidth: 1)
+                )
+        )
     }
 
     private func createChat() {
@@ -214,24 +257,26 @@ struct ChatConversationView: View {
     #endif
 
     var body: some View {
-        VStack(spacing: 0) {
-            sessionInfoBar
-            if appState.chatRunState != .idle {
-                runStateBar
+        WorkspacePanel(inset: 0) {
+            VStack(spacing: 0) {
+                sessionInfoBar
+                if appState.chatRunState != .idle {
+                    runStateBar
+                }
+                messageList
+                if !attachments.isEmpty {
+                    attachmentList
+                }
+                if let localErrorText, !localErrorText.isEmpty {
+                    Text(localErrorText)
+                        .font(.caption)
+                        .foregroundColor(WorkspaceTheme.danger)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                inputBar
             }
-            messageList
-            if !attachments.isEmpty {
-                attachmentList
-            }
-            if let localErrorText, !localErrorText.isEmpty {
-                Text(localErrorText)
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            inputBar
         }
         #if os(macOS)
         .fileImporter(
@@ -248,7 +293,7 @@ struct ChatConversationView: View {
         HStack(spacing: 8) {
             Text(appState.selectedChatSessionID.map { "Chat: \(String($0.prefix(8)))" } ?? "Chat: (none)")
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundColor(WorkspaceTheme.textMuted)
                 .lineLimit(1)
             Spacer()
             Button(copiedSessionID ? "Copied" : "Copy") {
@@ -256,11 +301,17 @@ struct ChatConversationView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .tint(WorkspaceTheme.accent)
             .disabled(appState.selectedChatSessionID == nil)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(Color.secondary.opacity(0.08))
+        .padding(.vertical, 8)
+        .background(WorkspaceTheme.surfaceStrong.opacity(0.95))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(WorkspaceTheme.border.opacity(0.65))
+                .frame(height: 1)
+        }
     }
 
     private var runStateBar: some View {
@@ -269,8 +320,8 @@ struct ChatConversationView: View {
             .foregroundColor(runStateColor)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(runStateColor.opacity(0.1))
+            .padding(.vertical, 5)
+            .background(runStateColor.opacity(0.10))
     }
 
     private var messageList: some View {
@@ -278,11 +329,19 @@ struct ChatConversationView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     if appState.chatMessages.isEmpty {
-                        Text("No messages yet")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.top, 20)
-                            .frame(maxWidth: .infinity, alignment: .center)
+                        VStack(spacing: 8) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.system(size: 28))
+                                .foregroundColor(WorkspaceTheme.textSoft.opacity(0.75))
+                            Text("No messages yet")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(WorkspaceTheme.textMuted)
+                            Text("Create or select a chat session from the left rail to start.")
+                                .font(.caption)
+                                .foregroundColor(WorkspaceTheme.textSoft)
+                        }
+                        .padding(.top, 30)
+                        .frame(maxWidth: .infinity, alignment: .center)
                     } else {
                         ForEach(appState.chatMessages) { message in
                             ChatBubbleView(message: message)
@@ -290,8 +349,17 @@ struct ChatConversationView: View {
                         }
                     }
                 }
-                .padding(12)
+                .padding(16)
+                .frame(maxWidth: 940)
+                .frame(maxWidth: .infinity)
             }
+            .background(
+                LinearGradient(
+                    colors: [WorkspaceTheme.surfaceStrong.opacity(0.35), WorkspaceTheme.surface.opacity(0.88)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
             .onChange(of: appState.chatMessages.count) { _ in
                 scrollToBottom(proxy)
             }
@@ -310,7 +378,7 @@ struct ChatConversationView: View {
                             .frame(width: 74, height: 74)
                             .clipped()
                             .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(WorkspaceTheme.border.opacity(0.8), lineWidth: 1))
                         Button {
                             attachments.remove(at: index)
                         } label: {
@@ -328,58 +396,116 @@ struct ChatConversationView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
-        .background(Color.secondary.opacity(0.05))
+        .background(WorkspaceTheme.surfaceStrong.opacity(0.58))
     }
 
     private var inputBar: some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .bottom, spacing: 8) {
+        VStack(spacing: 0) {
+            HStack(alignment: .bottom, spacing: 10) {
                 attachButton
-                Button("Paste") {
+                composerActionButton(icon: "doc.on.clipboard") {
                     addClipboardImage()
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
                 .disabled(attachments.count >= ChatAttachmentCodec.maxItemsPerMessage)
+
                 TextEditor(text: $draftText)
-                    .frame(minHeight: 38, maxHeight: 120)
-                    .padding(5)
+                    .frame(height: composerTextHeight)
+                    .font(.system(size: 14))
+                    .foregroundColor(WorkspaceTheme.text)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .scrollContentBackground(.hidden)
+                    .background(WorkspaceTheme.surface)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(WorkspaceTheme.border.opacity(0.9), lineWidth: 1)
                     )
-                Button("Send") {
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                Button {
                     sendMessage()
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(WorkspaceTheme.accent))
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
                 .disabled(sendDisabled)
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(WorkspaceTheme.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(WorkspaceTheme.border.opacity(0.92), lineWidth: 1)
+                    )
+            )
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
         }
-        .background(Color.secondary.opacity(0.08))
+        .background(WorkspaceTheme.surfaceStrong.opacity(0.96))
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(WorkspaceTheme.border.opacity(0.65))
+                .frame(height: 1)
+        }
     }
 
     @ViewBuilder
     private var attachButton: some View {
         #if os(iOS)
         PhotosPicker(selection: $pickerItems, maxSelectionCount: remainingSlots, matching: .images) {
-            Text("Image")
+            Image(systemName: "photo")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(WorkspaceTheme.textMuted)
+                .frame(width: 30, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(WorkspaceTheme.surfaceStrong)
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(WorkspaceTheme.border, lineWidth: 1))
+                )
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .buttonStyle(.plain)
         .disabled(remainingSlots <= 0)
         .onChange(of: pickerItems) { newItems in
             Task { await loadPickerItems(newItems) }
         }
         #else
-        Button("Image") {
+        composerActionButton(icon: "photo") {
             showImageImporter = true
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
         .disabled(remainingSlots <= 0)
         #endif
+    }
+
+    private var composerTextHeight: CGFloat {
+        #if os(macOS)
+        return 34
+        #else
+        return 44
+        #endif
+    }
+
+    private func composerActionButton(icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(WorkspaceTheme.textMuted)
+                .frame(width: 30, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(WorkspaceTheme.surfaceStrong)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(WorkspaceTheme.border.opacity(0.95), lineWidth: 1)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private var sendDisabled: Bool {
@@ -392,11 +518,11 @@ struct ChatConversationView: View {
         case .idle:
             return .clear
         case .running:
-            return .blue
+            return WorkspaceTheme.accent
         case .slow:
-            return .orange
+            return WorkspaceTheme.warning
         case .error:
-            return .red
+            return WorkspaceTheme.danger
         }
     }
 
@@ -531,7 +657,7 @@ private struct ChatBubbleView: View {
                 if !displayText.isEmpty {
                     markdownText(displayText)
                         .font(.system(size: 14))
-                        .foregroundColor(isUser ? .white : .primary)
+                        .foregroundColor(isUser ? .white : WorkspaceTheme.text)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if !imageParts.isEmpty {
@@ -539,19 +665,19 @@ private struct ChatBubbleView: View {
                         ChatBinaryImage(data: data)
                             .frame(maxWidth: 320, maxHeight: 280)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(WorkspaceTheme.border.opacity(0.48), lineWidth: 1))
                     }
                 }
                 if !operations.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Intermediate steps")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(isUser ? Color.white.opacity(0.72) : WorkspaceTheme.textMuted)
                             .textCase(.uppercase)
                         ForEach(Array(operations.enumerated()), id: \.offset) { index, text in
                             Text("\(index + 1). \(text)")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(isUser ? Color.white.opacity(0.82) : WorkspaceTheme.textMuted)
                         }
                     }
                     .padding(.top, 4)
@@ -559,15 +685,33 @@ private struct ChatBubbleView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
-            .background(isUser ? Color.accentColor : Color.secondary.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .background(bubbleBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isUser ? Color.white.opacity(0.08) : WorkspaceTheme.border.opacity(0.7), lineWidth: 1)
+            )
 
             Text(timestamp)
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(WorkspaceTheme.textSoft)
         }
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
         .padding(.horizontal, 2)
+    }
+
+    private var bubbleBackground: AnyShapeStyle {
+        if isUser {
+            return AnyShapeStyle(LinearGradient(
+                colors: [
+                    Color(red: 0.192, green: 0.373, blue: 0.447), // cc-web --accent
+                    Color(red: 0.153, green: 0.310, blue: 0.384), // cc-web --accent-hover
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ))
+        }
+        return AnyShapeStyle(WorkspaceTheme.surface)
     }
 
     private var operations: [String] {

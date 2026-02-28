@@ -10,8 +10,13 @@ struct ChatTabView: View {
     }
 
     var body: some View {
-        ChatConversationView()
-            .navigationTitle("Chat")
+        ZStack {
+            WorkspaceRootBackground()
+                .ignoresSafeArea()
+            ChatConversationView()
+                .padding(12)
+        }
+            .navigationTitle("Chat Workspace")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if isActive {
@@ -42,7 +47,7 @@ struct ChatTabView: View {
             .sheet(isPresented: $showSessionPanel) {
                 NavigationStack {
                     ChatSessionPanelView()
-                        .navigationTitle("Chat Sessions")
+                        .navigationTitle("Chat Rail")
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .confirmationAction) {

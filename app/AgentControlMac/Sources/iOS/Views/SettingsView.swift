@@ -71,84 +71,96 @@ struct SettingsView: View {
     }
 
     private var settingsForm: some View {
-        Form {
-            Section("Connection") {
-                TextField("Base URL", text: $baseURL)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityLabel("Server base URL")
-                SecureField("UI Token", text: $token)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityLabel("Authentication token")
-                if !baseURL.isEmpty && !isBaseURLValid {
-                    Text("Invalid Base URL. Use format like http://192.168.x.x:18080")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
-                if showDeviceLoopbackWarning {
-                    Text("This iOS device cannot use localhost/127.0.0.1. Use your Mac/server LAN address instead.")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                }
-            }
+        ZStack {
+            WorkspaceRootBackground()
+                .ignoresSafeArea()
 
-            Section {
-                Toggle("Skip TLS verification", isOn: $skipTLSVerify)
-            } footer: {
-                Text("Enable only for self-signed certificates during development.")
-                    .font(.caption)
-            }
-
-            Section {
-                if let result = connectionCheck {
-                    HStack { result.label.font(.caption); Spacer() }
-                }
-                HStack {
-                    Button("Check connection") {
-                        checkConnection()
+            Form {
+                Section("Connection") {
+                    TextField("Base URL", text: $baseURL)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("Server base URL")
+                    SecureField("UI Token", text: $token)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("Authentication token")
+                    if !baseURL.isEmpty && !isBaseURLValid {
+                        Text("Invalid Base URL. Use format like http://192.168.x.x:18080")
+                            .font(.caption)
+                            .foregroundColor(.red)
                     }
-                    .disabled(!canSubmit)
-                    Spacer()
-                    Button {
-                        save()
-                    } label: {
-                        HStack {
-                            if saved {
-                                Label("Saved", systemImage: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                            } else {
-                                Text("Save & Reconnect")
+                    if showDeviceLoopbackWarning {
+                        Text("This iOS device cannot use localhost/127.0.0.1. Use your Mac/server LAN address instead.")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
+                .listRowBackground(WorkspaceTheme.surface.opacity(0.96))
+
+                Section {
+                    Toggle("Skip TLS verification", isOn: $skipTLSVerify)
+                } footer: {
+                    Text("Enable only for self-signed certificates during development.")
+                        .font(.caption)
+                }
+                .listRowBackground(WorkspaceTheme.surface.opacity(0.96))
+
+                Section {
+                    if let result = connectionCheck {
+                        HStack { result.label.font(.caption); Spacer() }
+                    }
+                    HStack {
+                        Button("Check connection") {
+                            checkConnection()
+                        }
+                        .disabled(!canSubmit)
+                        Spacer()
+                        Button {
+                            save()
+                        } label: {
+                            HStack {
+                                if saved {
+                                    Label("Saved", systemImage: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                } else {
+                                    Text("Save & Reconnect")
+                                }
                             }
                         }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!canSubmit)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!canSubmit)
                 }
-            }
+                .listRowBackground(WorkspaceTheme.surface.opacity(0.96))
 
-            Section("Status") {
-                HStack {
-                    Text("WebSocket")
-                    Spacer()
-                    ConnectionBadge(connected: appState.wsConnected)
+                Section("Status") {
+                    HStack {
+                        Text("WebSocket")
+                        Spacer()
+                        ConnectionBadge(connected: appState.wsConnected)
+                    }
+                    HStack {
+                        Text("Servers")
+                        Spacer()
+                        Text("\(appState.servers.count)")
+                            .foregroundColor(.secondary)
+                    }
+                    HStack {
+                        Text("Sessions")
+                        Spacer()
+                        Text("\(appState.sessions.count)")
+                            .foregroundColor(.secondary)
+                    }
                 }
-                HStack {
-                    Text("Servers")
-                    Spacer()
-                    Text("\(appState.servers.count)")
-                        .foregroundColor(.secondary)
-                }
-                HStack {
-                    Text("Sessions")
-                    Spacer()
-                    Text("\(appState.sessions.count)")
-                        .foregroundColor(.secondary)
-                }
+                .listRowBackground(WorkspaceTheme.surface.opacity(0.96))
             }
+            .scrollContentBackground(.hidden)
+            .listRowSeparatorTint(WorkspaceTheme.border.opacity(0.45))
         }
         .scrollDismissesKeyboard(.interactively)
+        .tint(WorkspaceTheme.accent)
     }
 
     private func checkConnection() {

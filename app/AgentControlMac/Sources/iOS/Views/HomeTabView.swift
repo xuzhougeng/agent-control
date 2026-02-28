@@ -16,38 +16,40 @@ struct HomeTabView: View {
     }
 
     var body: some View {
-        List {
-            connectionSection
+        ZStack {
+            WorkspaceRootBackground()
+                .ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 10) {
+                    searchCard
+                    connectionCard
 
-            if !appState.pendingApprovals.isEmpty {
-                approvalsSection
-            }
+                    if !appState.pendingApprovals.isEmpty {
+                        approvalsCard
+                    }
 
-            serversSection
+                    serversCard
 
-            if !runningSessions.isEmpty {
-                sessionsSection(title: "Running", sessions: runningSessions)
-            }
+                    if !runningSessions.isEmpty {
+                        sessionsCard(title: "Running", sessions: runningSessions)
+                    }
 
-            if !stoppedSessions.isEmpty {
-                sessionsSection(title: "Stopped", sessions: stoppedSessions)
-            }
+                    if !stoppedSessions.isEmpty {
+                        sessionsCard(title: "Stopped", sessions: stoppedSessions)
+                    }
 
-            if appState.sessions.isEmpty && !appState.servers.isEmpty {
-                emptySessionsSection
+                    if appState.sessions.isEmpty && !appState.servers.isEmpty {
+                        emptySessionsCard
+                    }
+                }
+                .padding(12)
             }
         }
-        .listStyle(.insetGrouped)
-        .navigationTitle("Agent Control")
         .refreshable {
             await appState.fetchServers()
             await appState.fetchSessions()
         }
-        .searchable(
-            text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "Search by session ID or path"
-        )
+        .navigationTitle("Workspace")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { appState.showNewSessionSheet = true } label: {
@@ -76,151 +78,188 @@ struct HomeTabView: View {
         }
     }
 
-    // MARK: - Connection card
-
-    private var connectionSection: some View {
-        Section {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(appState.wsConnected ? Color.green : Color.red)
-                    .frame(width: 10, height: 10)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(appState.wsConnected ? "Connected" : "Disconnected")
-                        .font(.subheadline.weight(.semibold))
-                    Text(baseURLHost)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                if !appState.wsConnected {
-                    Button("Settings") { selectedTab = .settings }
-                        .font(.caption)
-                        .buttonStyle(.bordered)
-                }
+    private var searchCard: some View {
+        WorkspacePanel(inset: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(WorkspaceTheme.textSoft)
+                TextField("Search by session ID or path", text: $searchText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(appState.wsConnected ? "Connected to \(baseURLHost)" : "Disconnected from \(baseURLHost)")
+            .font(.system(size: 14))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(WorkspaceTheme.surfaceStrong.opacity(0.58))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(WorkspaceTheme.border.opacity(0.72), lineWidth: 1)
+                    )
+            )
+        }
+    }
 
-            if let hint = appState.connectionHint {
-                Text(hint)
-                    .font(.caption)
-                    .foregroundColor(.orange)
+    private var connectionCard: some View {
+        WorkspacePanel(inset: 10) {
+            VStack(alignment: .leading, spacing: 9) {
+                WorkspaceSectionTitle(text: "Connection")
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(appState.wsConnected ? WorkspaceTheme.success : WorkspaceTheme.danger)
+                        .frame(width: 9, height: 9)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(appState.wsConnected ? "Connected" : "Disconnected")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(WorkspaceTheme.text)
+                        Text(baseURLHost)
+                            .font(.caption)
+                            .foregroundColor(WorkspaceTheme.textMuted)
+                    }
+                    Spacer()
+                    if !appState.wsConnected {
+                        Button("Settings") { selectedTab = .settings }
+                            .font(.caption)
+                            .buttonStyle(.bordered)
+                            .tint(WorkspaceTheme.accent)
+                    }
+                }
+
+                if let hint = appState.connectionHint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundColor(WorkspaceTheme.warning)
+                }
             }
         }
     }
 
-    // MARK: - Approvals
-
-    private var approvalsSection: some View {
-        Section {
-            ForEach(appState.pendingApprovals) { event in
-                ApprovalRow(event: event)
-            }
-        } header: {
-            HStack {
-                Text("Pending Approvals")
-                Spacer()
-                Text("\(appState.pendingApprovals.count)")
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(Color.red))
-                    .foregroundColor(.white)
+    private var approvalsCard: some View {
+        WorkspacePanel(inset: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    WorkspaceSectionTitle(text: "Pending Approvals")
+                    Spacer()
+                    WorkspaceCountBadge(text: "\(appState.pendingApprovals.count)", color: WorkspaceTheme.warning)
+                }
+                ForEach(appState.pendingApprovals) { event in
+                    ApprovalRow(event: event)
+                }
             }
         }
     }
 
-    // MARK: - Servers
-
-    private var serversSection: some View {
-        Section {
-            if appState.servers.isEmpty {
-                VStack(spacing: 8) {
-                    Text("No servers found")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Button("How to add a server") { showServerGuide = true }
-                        .font(.caption)
+    private var serversCard: some View {
+        WorkspacePanel(inset: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    WorkspaceSectionTitle(text: "Servers")
+                    Spacer()
+                    Button { showServerGuide = true } label: {
+                        Image(systemName: "questionmark.circle")
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        Task { await appState.fetchServers() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-            } else {
-                ForEach(appState.servers) { server in
-                    ServerRow(server: server, isSelected: server.serverID == appState.selectedServerID)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
+
+                if appState.servers.isEmpty {
+                    VStack(spacing: 8) {
+                        Text("No servers found")
+                            .font(.subheadline)
+                            .foregroundColor(WorkspaceTheme.textMuted)
+                        Button("How to add a server") { showServerGuide = true }
+                            .font(.caption)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                } else {
+                    ForEach(appState.servers) { server in
+                        Button {
                             appState.selectedServerID = server.serverID
                             Task { await appState.fetchSessions() }
-                        }
-                }
-            }
-        } header: {
-            HStack {
-                Text("Servers")
-                Spacer()
-                Button { showServerGuide = true } label: {
-                    Image(systemName: "questionmark.circle")
-                }
-                .buttonStyle(.plain)
-                .font(.caption)
-            }
-        } footer: {
-            if !appState.servers.isEmpty {
-                Text("Servers come from the connected control plane.")
-                    .font(.caption2)
-            }
-        }
-    }
-
-    // MARK: - Sessions (grouped)
-
-    private func sessionsSection(title: String, sessions: [Session]) -> some View {
-        Section(title) {
-            ForEach(sessions) { session in
-                SessionRow(session: session, isSelected: isSelected(session))
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        appState.openSession(session)
-                        selectedTab = session.isChat ? .chat : .terminal
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            confirmDeleteID = session.sessionID
                         } label: {
-                            Label("Delete", systemImage: "trash")
+                            ServerRow(server: server, isSelected: server.serverID == appState.selectedServerID)
                         }
-                        if session.isPTY, session.isRunning {
-                            Button {
-                                Task { await appState.stopSession(session.sessionID) }
-                            } label: {
-                                Label("Stop", systemImage: "stop.fill")
-                            }
-                            .tint(.orange)
-                        }
+                        .buttonStyle(.plain)
                     }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    }
+                }
+
+                if !appState.servers.isEmpty {
+                    Text("Servers come from the connected control plane.")
+                        .font(.caption2)
+                        .foregroundColor(WorkspaceTheme.textSoft)
+                }
             }
         }
     }
 
-    // MARK: - Empty state
+    private func sessionsCard(title: String, sessions: [Session]) -> some View {
+        WorkspacePanel(inset: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    WorkspaceSectionTitle(text: title)
+                    Spacer()
+                    WorkspaceCountBadge(text: "\(sessions.count)", color: WorkspaceTheme.accent)
+                }
+                ForEach(sessions) { session in
+                    HStack(alignment: .top, spacing: 8) {
+                        Button {
+                            appState.openSession(session)
+                            selectedTab = session.isChat ? .chat : .terminal
+                        } label: {
+                            SessionRow(session: session, isSelected: isSelected(session))
+                        }
+                        .buttonStyle(.plain)
 
-    private var emptySessionsSection: some View {
-        Section {
+                        VStack(spacing: 6) {
+                            if session.isPTY, session.isRunning {
+                                Button {
+                                    Task { await appState.stopSession(session.sessionID) }
+                                } label: {
+                                    Image(systemName: "stop.fill")
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(WorkspaceTheme.warning)
+                            }
+
+                            Button(role: .destructive) {
+                                confirmDeleteID = session.sessionID
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(WorkspaceTheme.danger)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var emptySessionsCard: some View {
+        WorkspacePanel(inset: 10) {
             VStack(spacing: 12) {
                 Image(systemName: "terminal")
                     .font(.largeTitle)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(WorkspaceTheme.textSoft)
                 Text("No sessions yet")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(WorkspaceTheme.textMuted)
                 Button {
                     appState.showNewSessionSheet = true
                 } label: {
                     Label("New Session", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(WorkspaceTheme.accent)
                 .controlSize(.small)
                 .disabled(appState.selectedServerID == nil)
             }
@@ -228,8 +267,6 @@ struct HomeTabView: View {
             .padding(.vertical, 16)
         }
     }
-
-    // MARK: - Helpers
 
     private var baseURLHost: String {
         let url = UserDefaults.standard.string(forKey: "baseURL") ?? "http://127.0.0.1:18080"

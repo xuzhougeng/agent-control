@@ -8,7 +8,7 @@ struct AgentControlMacApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(.light)
                 .frame(minWidth: 900, minHeight: 600)
                 .onAppear { appState.start() }
         }

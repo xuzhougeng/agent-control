@@ -3,6 +3,7 @@ import SwiftTerm
 
 struct TerminalContainerView: View {
     @EnvironmentObject var appState: AppState
+    private let terminalBG = Color(red: 0.043, green: 0.063, blue: 0.125)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -12,17 +13,28 @@ struct TerminalContainerView: View {
             HStack(spacing: 8) {
                 Text(appState.selectedSessionID.map { "Session: \(String($0.prefix(8)))" } ?? "Session: (none)")
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color.white.opacity(0.78))
                     .lineLimit(1)
                 Spacer()
                 Text("\(appState.terminalBridge.currentCols)×\(appState.terminalBridge.currentRows)")
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color.white.opacity(0.62))
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .padding(.vertical, 7)
+            .background(terminalBG)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.12))
+                    .frame(height: 1)
+            }
         }
+        .background(terminalBG)
+        .clipShape(RoundedRectangle(cornerRadius: WorkspaceTheme.cornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: WorkspaceTheme.cornerRadius, style: .continuous)
+                .stroke(WorkspaceTheme.border.opacity(0.72), lineWidth: 1)
+        )
     }
 }
 
@@ -38,16 +50,48 @@ struct SwiftTermView: NSViewRepresentable {
         tv.nativeForegroundColor = .white
         appState.terminalBridge.terminalView = tv
         DispatchQueue.main.async {
+            applyTerminalChrome(to: tv)
             context.coordinator.syncTerminalSize(from: tv)
         }
         return tv
     }
 
     func updateNSView(_ nsView: TerminalView, context: Context) {
+        applyTerminalChrome(to: nsView)
         context.coordinator.syncTerminalSize(from: nsView)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(appState: appState) }
+
+    private func applyTerminalChrome(to root: NSView) {
+        let bg = NSColor(red: 0.043, green: 0.063, blue: 0.125, alpha: 1)
+        styleScrollViews(in: root, bg: bg)
+    }
+
+    private func styleScrollViews(in view: NSView, bg: NSColor) {
+        view.wantsLayer = true
+        view.layer?.backgroundColor = bg.cgColor
+
+        if let clip = view as? NSClipView {
+            clip.drawsBackground = true
+            clip.backgroundColor = bg
+        }
+
+        if let scroll = view as? NSScrollView {
+            scroll.drawsBackground = true
+            scroll.backgroundColor = bg
+            scroll.scrollerStyle = .overlay
+            scroll.autohidesScrollers = true
+            // Keep wheel/trackpad scrolling, but remove the fixed gutter strip.
+            scroll.hasVerticalScroller = false
+            scroll.hasHorizontalScroller = false
+            scroll.contentView.wantsLayer = true
+            scroll.contentView.layer?.backgroundColor = bg.cgColor
+        }
+        for sub in view.subviews {
+            styleScrollViews(in: sub, bg: bg)
+        }
+    }
 
     final class Coordinator: NSObject, TerminalViewDelegate {
         let appState: AppState
