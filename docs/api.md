@@ -284,16 +284,17 @@ Base URL：`http://127.0.0.1:18080`
 
 ```json
 {
+  "session_id": "optional-uuid",
   "server_id": "srv-local",
   "session_type": "pty",
   "cwd": "/Users/you/Documents",
   "env": {"CC_PROFILE": "dev"},
   "cols": 120,
-  "rows": 30,
-  "resume_id": "optional"
+  "rows": 30
 }
 ```
 
+- `session_id`：可选 UUID。未传时服务端自动生成；传入时会校验合法性并拒绝重复值（`409`）。
 - `session_type`：可选，`"pty"` 或 `"chat"`。`chat` 类型不需要 `cols/rows`。
 - 未传 `session_type` 时：
   - 非 Windows server 默认 `pty`

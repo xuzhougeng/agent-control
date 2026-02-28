@@ -46,8 +46,19 @@ func TestValidateExecutablePath_RelativeFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected valid relative path, got %v", err)
 	}
-	if got != path {
-		t.Fatalf("expected resolved path %q, got %q", path, got)
+	if got == path {
+		return
+	}
+	wantInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat expected path: %v", err)
+	}
+	gotInfo, err := os.Stat(got)
+	if err != nil {
+		t.Fatalf("stat resolved path: %v", err)
+	}
+	if !os.SameFile(wantInfo, gotInfo) {
+		t.Fatalf("expected resolved path %q (same file), got %q", path, got)
 	}
 }
 

@@ -21,7 +21,7 @@ flowchart TB
     end
 
     subgraph Runtime["Agent 本地运行时"]
-        PTY["PTY 会话\n(claude-path + --resume)"]
+        PTY["PTY 会话\n(claude-path + --session-id)"]
         CHAT["Chat Worker\n(NDJSON stdin/stdout)"]
     end
 
@@ -122,8 +122,8 @@ sequenceDiagram
 
 补充：
 
-- `resume_id` 可在创建时传入，控制面会拼接 `--resume <id>` 启动命令。
-- 控制面也会从 PTY 输出里自动探测并更新 `resume_id`（`resume detector`）。
+- `session_id` 是会话唯一标识，可由客户端传入（UUID）或由服务端生成。
+- 同一个 `session_id` 可与同一 `cwd` 组合，在不同模式（PTY/Chat）下重建会话。
 
 ### 6.2 Chat 模式（`session_type=chat`）
 

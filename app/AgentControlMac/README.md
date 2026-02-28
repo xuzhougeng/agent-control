@@ -80,6 +80,8 @@ For a centrally deployed `cc-control` (see [docs/deploy-public-server.md](../../
 - Session list filtered by selected server
 - Create / resume sessions
 - Full terminal emulation (SwiftTerm) with input, output, and resize
+- Chat page (session create/select/delete, chat history, realtime WS messages, run-state hint)
+- Chat image attachments (picker/file + clipboard paste, auto resize/compress before send)
 - Pending approval queue with one-click Approve / Reject
 - WebSocket auto-reconnect with connection status indicator
 - **iOS**: Quick-input keybar (Esc, Tab, Ctrl-C, arrows) above terminal
@@ -95,12 +97,14 @@ Sources/
       WSClient.swift              — WebSocket with auto-reconnect
       AppState.swift              — central ObservableObject
       Models.swift                — Codable REST/WS models
+      ChatAttachmentCodec.swift   — image resize/compress + payload shaping for chat
       KeychainHelper.swift        — platform-agnostic Keychain wrapper
       TLSBypassDelegate.swift     — self-signed cert bypass
     TerminalBridge.swift          — feeds data to SwiftTerm TerminalView
     Views/
       ContentView.swift           — NavigationSplitView (sidebar + detail)
       SidebarView.swift           — server & session list
+      ChatPageView.swift          — chat panel + conversation UI (shared)
       ApprovalPanelView.swift     — pending approvals
       NewSessionSheet.swift       — create session form
   macOS/
@@ -112,5 +116,6 @@ Sources/
     App/AgentControliOSApp.swift  — @main + scenePhase lifecycle
     Views/
       TerminalContainerView.swift — UIViewRepresentable + keybar
+      ChatTabView.swift           — compact iOS chat tab
       SettingsView.swift          — iOS NavigationStack form
 ```

@@ -151,21 +151,15 @@ Open `http://127.0.0.1:18080/admin` (optional) to access the admin dashboard:
 
 Or login with the Tenant A UI token returned by `/tenant/tokens` (curl flow above).
 
-## Resuming a Session in CLI (PTY Mode)
+## Unified Session ID
 
-Web UI 中显示的 Session ID（如侧边栏和底部工具栏中的 ID）是**系统内部生成的标识符**，与 Claude Code 内部的 Session ID 不同，**不能**直接用于 `claude --resume`。
+系统现在只维护一套 `session_id`。该 ID 可用于：
 
-要从 Web 终端恢复到本地 CLI：
+1. 作为 REST/WS 的会话主键；
+2. 在同一路径（`cwd`）下重建 PTY/Chat 会话；
+3. 在 Web/App 界面里进行跨模式切换（复用同一 `session_id`）。
 
-1. 在 Web 终端中输入 `/status`，Claude 会输出当前会话信息，其中包含真实的 Session ID。
-2. 复制该 ID。
-3. 在本地终端中执行：
-
-```bash
-claude --resume <claude-session-id>
-```
-
-> 页面终端上方也有此提示。
+创建会话时可选传入 `session_id`（UUID）。不传则由服务端自动生成；若已存在则返回冲突错误。
 
 ## Token Model (Latest)
 
