@@ -30,15 +30,21 @@ export function createWorkspaceShell({
   const switchBtn = document.getElementById("workspaceSwitchModeBtn");
   const copyBtn = document.getElementById("workspaceCopyBtn");
 
-  if (viewBadge) {
-    viewBadge.textContent = `${modeLabel(viewMode)} View`;
+  let currentViewMode = viewMode;
+
+  function applyViewMode() {
+    if (viewBadge) {
+      viewBadge.textContent = `${modeLabel(currentViewMode)} View`;
+    }
+    if (terminalBtn) {
+      terminalBtn.classList.toggle("active", currentViewMode === "pty");
+    }
+    if (chatBtn) {
+      chatBtn.classList.toggle("active", currentViewMode === "chat");
+    }
   }
-  if (terminalBtn && viewMode === "pty") {
-    terminalBtn.classList.add("active");
-  }
-  if (chatBtn && viewMode === "chat") {
-    chatBtn.classList.add("active");
-  }
+
+  applyViewMode();
 
   terminalBtn?.addEventListener("click", () => {
     const session = getSelectedSession();
@@ -74,15 +80,15 @@ export function createWorkspaceShell({
       if (chatBtn) chatBtn.disabled = true;
       if (switchBtn) {
         switchBtn.disabled = true;
-        switchBtn.textContent = `Switch to ${modeLabel(viewMode)}`;
+        switchBtn.textContent = `Switch to ${modeLabel(currentViewMode)}`;
       }
       if (copyBtn) copyBtn.disabled = true;
       return;
     }
 
     const activeMode = String(session.session_type || "").trim() || "pty";
-    const matchesView = activeMode === viewMode;
-    const targetLabel = modeLabel(viewMode);
+    const matchesView = activeMode === currentViewMode;
+    const targetLabel = modeLabel(currentViewMode);
     const createdAt = session.created_at_ms ? new Date(session.created_at_ms).toLocaleString() : "-";
 
     if (modeBadge) modeBadge.textContent = `Mode: ${modeLabel(activeMode)}`;
@@ -110,5 +116,10 @@ export function createWorkspaceShell({
     if (copyBtn) copyBtn.disabled = false;
   }
 
-  return { render };
+  function setViewMode(nextViewMode) {
+    currentViewMode = nextViewMode === "chat" ? "chat" : "pty";
+    applyViewMode();
+  }
+
+  return { render, setViewMode };
 }

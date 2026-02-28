@@ -24,6 +24,7 @@
 2. `Chat -> Terminal -> Chat` 模式切换
 3. 实例列表在来回切换后保持稳定，不无限增长
 4. 预先存在的外部 Claude session 能通过 PTY 接入
+5. `/chat` 兼容路径会跳转到统一 workspace 的 Chat 视图
 
 ## 运行方式
 

@@ -142,7 +142,7 @@ powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 -ClaudePath "C:
 
 ## 6) 在 UI 会话级覆盖（可选）
 
-`/chat` 页面创建会话时，可在 `env` 输入里覆盖会话级配置。  
+统一 workspace 在 Chat 视图下创建会话时，可在 `env` 输入里覆盖会话级配置。  
 例如：
 
 ```text

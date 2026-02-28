@@ -244,14 +244,17 @@ export CC_CLAUDE_ALLOWED_TOOLS="Bash(git:*) Read Edit"
 export CC_CLAUDE_MODEL=sonnet
 ```
 
-### 3. 打开 Chat 页面
+### 3. 打开统一 Workspace
 
-浏览器访问 `http://127.0.0.1:18080/chat`，输入 UI Token 后：
+浏览器访问 `http://127.0.0.1:18080/`，输入 UI Token 后：
 
 1. 在左侧选择一个在线 Server。
-2. 填写 `cwd`（工作目录），点击 **Create** 创建一个 chat session。
-3. 在右侧输入框输入消息，按 Enter 发送。
-4. echo worker 会回复 `[echo] 你的消息`。
+2. 如需直接进入 Chat 视图，可访问 `http://127.0.0.1:18080/?view=chat`。
+3. 填写 `cwd`（工作目录），点击 **Create** 创建会话。
+4. 如果当前视图是 Chat，可在右侧输入框输入消息，按 Enter 发送。
+5. echo worker 会回复 `[echo] 你的消息`。
+
+`/chat` 仍保留为兼容路径，但现在会自动跳转到统一 workspace 的 Chat 视图。
 
 ### 4. 替换为真实 worker
 

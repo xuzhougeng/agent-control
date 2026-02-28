@@ -7,7 +7,7 @@
 ```mermaid
 flowchart TB
     subgraph Clients["客户端"]
-        Browser["Browser (cc-web)\n/index /chat /admin /tenant"]
+        Browser["Browser (cc-web)\n/ /admin /tenant\n(/chat -> /?view=chat)"]
         App["AgentControl App\n(macOS / iOS)"]
     end
 
@@ -39,7 +39,7 @@ flowchart TB
 |---|---|
 | `cc-control` | 统一入口；维护 server/session 状态；REST 管理接口；WS 转发；审批事件；审计日志 |
 | `cc-agent` | 与控制面建立出站 WS；处理 `start_session/start_chat/pty_in/resize/stop_session/chat_in` |
-| `cc-web` | 静态前端；终端页（PTY）与聊天页（Chat）；Admin/Tenant token 管理页 |
+| `cc-web` | 静态前端；统一 workspace 同时承载 PTY / Chat 视图；Admin/Tenant token 管理页 |
 | `app/AgentControlMac` | 原生 macOS/iOS 客户端，通过同一 REST/WS 协议接入 |
 
 ## 3. 认证与租户隔离

@@ -59,6 +59,7 @@
           </div>
           <ul id="sessionsList"></ul>
         </section>
+
         <section class="sidebar-card">
           <div class="section-header">
             <h2>Instances</h2>
@@ -109,6 +110,7 @@
           </div>
         </div>
       </section>
+
       <section class="alerts">
         <details id="approvalDetails" open>
           <summary>
@@ -118,7 +120,8 @@
           <ul id="approvalList"></ul>
         </details>
       </section>
-      <section class="terminal-section">
+
+      <section id="terminalSection" class="terminal-section">
         <div id="sessionHint" class="session-hint" hidden>
           The Session ID shown here is the unified session identifier used by both terminal and chat modes.
           You can reuse it with the same path to recreate the session in another mode.
@@ -146,12 +149,27 @@
           </div>
         </div>
       </section>
+
+      <div id="chatContainer" class="chat-container" hidden>
+        <div id="chatRunState" class="chat-run-state" hidden></div>
+        <div id="chatMessages" class="chat-messages"></div>
+        <div class="chat-input-bar">
+          <input id="chatImageInput" type="file" accept="image/*" multiple hidden>
+          <button id="chatAttachBtn" type="button" class="btn-secondary chat-attach-btn">Screenshot</button>
+          <textarea id="chatInput" class="chat-input" rows="1" placeholder="Type a message…"></textarea>
+          <button id="chatSendBtn" class="btn-primary chat-send-btn">Send</button>
+        </div>
+        <div id="chatAttachmentBar" class="chat-attachment-bar" hidden>
+          <div id="chatAttachmentList" class="chat-attachment-list"></div>
+        </div>
+      </div>
     </section>
   </main>
+
   <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
-  <script type="module" src="/js/main-controller.js?v=mod1"></script>
+  <script type="module" src="/js/main-workspace.js?v=mod1"></script>
 </body>
 </html>

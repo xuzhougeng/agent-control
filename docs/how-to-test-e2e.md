@@ -51,6 +51,7 @@ CC_WEB_E2E_PORT=18120 npm run test:web:e2e
 2. `Chat -> Terminal -> Chat` 模式切换
 3. 实例列表不会因为来回切换而膨胀
 4. 预先存在的外部 Claude session 能通过 PTY 接入
+5. `/chat` 兼容入口会重定向到统一 workspace
 
 ## 常用调试点
 

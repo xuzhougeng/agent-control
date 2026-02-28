@@ -3,128 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Claude Code Workspace</title>
-  <link rel="stylesheet" href="/style.css?v=chat3">
+  <title>Redirecting…</title>
 </head>
 <body>
-  <header>
-    <div class="header-title-row">
-      <button
-        id="sidebarToggleBtn"
-        class="icon-btn"
-        type="button"
-        aria-label="Toggle sidebar"
-        aria-controls="sidebar"
-        aria-expanded="false"
-      >
-        ☰
-      </button>
-      <h1>Claude Code Workspace</h1>
-    </div>
-    <div class="token-row">
-      <span id="wsStatus" class="badge badge-offline">WS: disconnected</span>
-      <label for="tokenInput">UI Token</label>
-      <input id="tokenInput" type="password" placeholder="admin-dev-token">
-      <button id="saveTokenBtn" class="btn-primary">Save</button>
-    </div>
-  </header>
-
-  <main>
-    <aside id="sidebar">
-      <div id="sidebarPanelControl" class="sidebar-panel active">
-        <section class="sidebar-card">
-          <div class="section-header">
-            <h2>Servers</h2>
-            <button id="refreshServersBtn" type="button">Refresh</button>
-          </div>
-          <ul id="serversList"></ul>
-        </section>
-
-        <details id="newChatDetails" class="sidebar-card" open>
-          <summary class="section-summary"><h2>New Session</h2></summary>
-          <label for="cwdInput">cwd</label>
-          <input id="cwdInput" type="text" placeholder="/path/to/repo">
-          <label for="sessionIdInput">session id (optional UUID)</label>
-          <input id="sessionIdInput" type="text" placeholder="763bf36b-94cb-41b9-bc9c-3e6cf83c2cdf">
-          <label for="envInput">env (KEY=VALUE, comma-separated)</label>
-          <input id="envInput" type="text" placeholder="CC_PROFILE=dev">
-          <button id="newChatBtn" type="button" class="btn-primary">Create</button>
-        </details>
-
-        <section class="sidebar-card">
-          <div class="section-header">
-            <h2>Sessions</h2>
-            <button id="refreshSessionsBtn" type="button">Refresh</button>
-          </div>
-          <ul id="sessionsList"></ul>
-        </section>
-        <section class="sidebar-card">
-          <div class="section-header">
-            <h2>Instances</h2>
-            <span id="chatInstanceHistoryCount" class="badge">0</span>
-          </div>
-          <ul id="chatInstanceHistoryList"></ul>
-        </section>
-      </div>
-    </aside>
-
-    <section class="content">
-      <section class="workspace-shell">
-        <div class="workspace-header">
-          <div class="workspace-header-top">
-            <div class="workspace-badges">
-              <span id="workspaceViewBadge" class="badge">Chat View</span>
-              <span id="workspaceModeBadge" class="badge">Mode: -</span>
-              <span id="workspaceStatusBadge" class="badge">No Session</span>
-            </div>
-            <div class="workspace-actions">
-              <button id="workspaceCopyBtn" type="button" class="btn-secondary">Copy Session ID</button>
-              <button id="workspaceOpenTerminalBtn" type="button" class="btn-secondary workspace-mode-btn">Terminal View</button>
-              <button id="workspaceOpenChatBtn" type="button" class="btn-secondary workspace-mode-btn">Chat View</button>
-              <button id="workspaceSwitchModeBtn" type="button" class="btn-primary">Switch to Chat</button>
-            </div>
-          </div>
-          <div class="workspace-title-wrap">
-            <h2 id="workspaceSessionTitle" class="workspace-title">No session selected</h2>
-            <p id="workspaceHint" class="workspace-subtitle">Select a unified session from the left to inspect or switch modes.</p>
-          </div>
-          <div class="workspace-meta">
-            <div class="workspace-meta-item">
-              <span>Server</span>
-              <strong id="workspaceServerText">-</strong>
-            </div>
-            <div class="workspace-meta-item">
-              <span>cwd</span>
-              <strong id="workspaceCwdText">-</strong>
-            </div>
-            <div class="workspace-meta-item">
-              <span>Active Instance</span>
-              <strong id="workspaceInstanceText">-</strong>
-            </div>
-            <div class="workspace-meta-item">
-              <span>Created</span>
-              <strong id="workspaceCreatedText">-</strong>
-            </div>
-          </div>
-        </div>
-      </section>
-      <div id="chatContainer" class="chat-container">
-        <div id="chatRunState" class="chat-run-state" hidden></div>
-        <div id="chatMessages" class="chat-messages"></div>
-        <div class="chat-input-bar">
-          <input id="chatImageInput" type="file" accept="image/*" multiple hidden>
-          <button id="chatAttachBtn" type="button" class="btn-secondary chat-attach-btn">Screenshot</button>
-          <textarea id="chatInput" class="chat-input" rows="1" placeholder="Type a message…"></textarea>
-          <button id="chatSendBtn" class="btn-primary chat-send-btn">Send</button>
-        </div>
-        <div id="chatAttachmentBar" class="chat-attachment-bar" hidden>
-          <div id="chatAttachmentList" class="chat-attachment-list"></div>
-        </div>
-      </div>
-    </section>
-  </main>
-  <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
-
-  <script type="module" src="/js/main-chat.js?v=mod1"></script>
+  <p>Redirecting to the unified workspace…</p>
+  <script>
+    (function redirectToWorkspace() {
+      const query = new URLSearchParams(window.location.search);
+      query.set("view", "chat");
+      const next = query.toString();
+      window.location.replace(next ? `/?${next}` : "/?view=chat");
+    }());
+  </script>
 </body>
 </html>

@@ -48,7 +48,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("chat workspace creates a unified session and sends a message", async ({ page }) => {
-  await page.goto("/chat");
+  await page.goto("/?view=chat");
   await waitForWorkspaceReady(page);
 
   const sessionID = await createSession(page);
@@ -62,7 +62,7 @@ test("chat workspace creates a unified session and sends a message", async ({ pa
 });
 
 test("workspace switches chat to terminal and back without growing instances forever", async ({ page }) => {
-  await page.goto("/chat");
+  await page.goto("/?view=chat");
   await waitForWorkspaceReady(page);
 
   const sessionID = await createSession(page);
@@ -78,7 +78,7 @@ test("workspace switches chat to terminal and back without growing instances for
   await expect(page.locator("#terminal")).toContainText("Resumed session");
 
   await page.locator("#workspaceOpenChatBtn").click();
-  await expect(page).toHaveURL(/\/chat\?/);
+  await expect(page).toHaveURL(/\/\?.*view=chat/);
   await expect(page.locator("#workspaceModeBadge")).toContainText("Terminal");
   await page.locator("#workspaceSwitchModeBtn").click();
   await expect(page.locator("#workspaceModeBadge")).toContainText("Chat");
@@ -86,7 +86,7 @@ test("workspace switches chat to terminal and back without growing instances for
   await page.locator("#chatInput").fill("back again");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.locator("#chatMessages")).toContainText("back again");
-  await expect(page.locator("#chatInstanceHistoryList > li")).toHaveCount(2);
+  await expect(page.locator("#instanceHistoryList > li")).toHaveCount(2);
   await expect(page.locator("#workspaceSessionTitle")).toHaveText(sessionID);
 });
 
@@ -98,4 +98,9 @@ test("terminal workspace can attach to a preseeded external Claude session", asy
   await expect(page.locator("#workspaceSessionTitle")).toHaveText(preseededSessionID);
   await expect(page.locator("#workspaceModeBadge")).toContainText("Terminal");
   await expect(page.locator("#terminal")).toContainText("Resumed session");
+});
+
+test("/chat redirects to the unified workspace chat view", async ({ page }) => {
+  await page.goto("/chat?server_id=srv-e2e");
+  await expect(page).toHaveURL(/\/\?.*server_id=srv-e2e.*view=chat/);
 });
