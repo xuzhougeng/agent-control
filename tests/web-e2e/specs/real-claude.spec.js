@@ -5,6 +5,7 @@ const path = require("node:path");
 const repoRoot = process.cwd();
 const uiToken = process.env.CC_WEB_E2E_UI_TOKEN || "ui-e2e-token";
 const runRealClaude = process.env.CC_WEB_E2E_CLAUDE_MODE === "real";
+const useXtermStub = process.env.CC_WEB_E2E_XTERM_STUB === "1";
 const xtermStubJS = fs.readFileSync(path.join(repoRoot, "tests/web-e2e/fixtures/xterm-stub.js"), "utf8");
 const xtermStubCSS = fs.readFileSync(path.join(repoRoot, "tests/web-e2e/fixtures/xterm-stub.css"), "utf8");
 
@@ -206,7 +207,9 @@ async function captureStep(page, testInfo, label, options = {}) {
 test.beforeEach(async ({ page }) => {
   test.skip(!runRealClaude, "set CC_WEB_E2E_CLAUDE_MODE=real to run the real Claude smoke test");
   await page.setViewportSize({ width: 1720, height: 1080 });
-  await installXtermStub(page);
+  if (useXtermStub) {
+    await installXtermStub(page);
+  }
   await primeToken(page);
 });
 

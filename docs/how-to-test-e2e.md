@@ -47,6 +47,7 @@ npm run test:web:e2e:real-claude
 - `CC_WEB_E2E_CLAUDE_PATH=/home/xzg/.local/bin/claude`
 - `CC_WEB_E2E_CLAUDE_HOME=$HOME`
 - `CC_WEB_E2E_VIDEO=on`（整条流程录屏）
+- 真实 `xterm.js` 渲染（不再默认 stub）
 
 真实 Claude smoke 当前只覆盖一条窄用例：
 
@@ -186,6 +187,8 @@ npx playwright test --ui --config=tests/web-e2e/playwright.config.mjs
   - real Claude 模式下 agent/chat worker 使用的 `HOME`
 - `CC_WEB_E2E_VIDEO`
   - Playwright 录屏模式，支持 `on` / `off` / `retain-on-failure`
+- `CC_WEB_E2E_XTERM_STUB`
+  - 是否在 real Claude 用例里强制使用 xterm stub，默认关闭；仅排查渲染问题时设为 `1`
 
 ## 常见问题
 
