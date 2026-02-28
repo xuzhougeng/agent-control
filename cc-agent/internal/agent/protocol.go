@@ -36,12 +36,11 @@ type RegisterPayload struct {
 }
 
 type StartSessionPayload struct {
-	Cwd      string            `json:"cwd"`
-	Cmd      []string          `json:"cmd"`
-	ResumeID string            `json:"resume_id,omitempty"`
-	Env      map[string]string `json:"env"`
-	Cols     uint16            `json:"cols"`
-	Rows     uint16            `json:"rows"`
+	Cwd  string            `json:"cwd"`
+	Cmd  []string          `json:"cmd"`
+	Env  map[string]string `json:"env"`
+	Cols uint16            `json:"cols"`
+	Rows uint16            `json:"rows"`
 }
 
 type ResizePayload struct {
@@ -87,10 +86,9 @@ type ChatContentPart struct {
 }
 
 type ChatOutPayload struct {
-	MessageID       string          `json:"message_id"`
-	Content         string          `json:"content"`
-	WorkerSessionID string          `json:"worker_session_id,omitempty"`
-	Meta            json.RawMessage `json:"meta,omitempty"`
+	MessageID string          `json:"message_id"`
+	Content   string          `json:"content"`
+	Meta      json.RawMessage `json:"meta,omitempty"`
 }
 
 type ChatExitPayload struct {

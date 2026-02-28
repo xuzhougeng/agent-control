@@ -30,54 +30,6 @@ func TestRegisterPayloadReturnsDefensiveCopies(t *testing.T) {
 	}
 }
 
-func TestStartSessionRejectsResumeIDWhitespaceAndSendsError(t *testing.T) {
-	root := t.TempDir()
-	roots, err := security.NormalizeRoots([]string{root})
-	if err != nil {
-		t.Fatalf("normalize roots: %v", err)
-	}
-	mgr := NewSessionManager(Config{
-		ServerID:       "srv-test",
-		AllowRoots:     roots,
-		ClaudePath:     "/bin/sh",
-		EnvAllowPrefix: "CC_",
-	})
-
-	var sent []Envelope
-	mgr.SetSendFunc(func(msg Envelope) error {
-		sent = append(sent, msg)
-		return nil
-	})
-
-	err = mgr.startSession("s1", StartSessionPayload{
-		Cwd:      root,
-		ResumeID: "bad id",
-		Cols:     120,
-		Rows:     30,
-	})
-	if err == nil {
-		t.Fatal("expected whitespace resume_id to be rejected")
-	}
-	if !strings.Contains(err.Error(), "contains whitespace") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(sent) == 0 {
-		t.Fatal("expected an error message to be sent to control plane")
-	}
-	if sent[0].Type != "error" {
-		t.Fatalf("expected first sent envelope type=error, got %q", sent[0].Type)
-	}
-	var payload struct {
-		Message string `json:"message"`
-	}
-	if err := json.Unmarshal(sent[0].Data, &payload); err != nil {
-		t.Fatalf("decode sent error payload: %v", err)
-	}
-	if !strings.Contains(payload.Message, "reject_resume_id:contains_whitespace") {
-		t.Fatalf("unexpected error payload message: %q", payload.Message)
-	}
-}
-
 func TestStartSessionMissingSessionID(t *testing.T) {
 	root := t.TempDir()
 	mgr := NewSessionManager(Config{

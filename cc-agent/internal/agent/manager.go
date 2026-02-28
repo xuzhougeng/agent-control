@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"unicode"
 
 	"cc-agent/internal/echocli"
 	"cc-agent/internal/pty"
@@ -152,26 +151,7 @@ func (m *SessionManager) startSession(sessionID string, req StartSessionPayload)
 		return err
 	}
 
-	resumeID := strings.TrimSpace(req.ResumeID)
-	if resumeID != "" {
-		if len(resumeID) > 128 {
-			err := errors.New("resume_id too long")
-			m.sendError(sessionID, "reject_resume_id:too_long")
-			return err
-		}
-		for _, r := range resumeID {
-			if unicode.IsSpace(r) {
-				err := errors.New("resume_id contains whitespace")
-				m.sendError(sessionID, "reject_resume_id:contains_whitespace")
-				return err
-			}
-		}
-	}
-
-	args := make([]string, 0, 2)
-	if resumeID != "" {
-		args = append(args, "--resume", resumeID)
-	}
+	args := []string{"--session-id", sessionID}
 
 	env := security.FilterEnv(req.Env, m.cfg.EnvAllowKeys, m.cfg.EnvAllowPrefix)
 	if strings.EqualFold(runtimeGOOS, "windows") {
@@ -319,10 +299,9 @@ func (m *SessionManager) startChat(sessionID string, req StartChatPayload) error
 
 	csess.SetCallbacks(func(msg echocli.Message) {
 		payload, _ := json.Marshal(ChatOutPayload{
-			MessageID:       msg.MessageID,
-			Content:         msg.Content,
-			WorkerSessionID: msg.SessionID,
-			Meta:            msg.Meta,
+			MessageID: msg.MessageID,
+			Content:   msg.Content,
+			Meta:      msg.Meta,
 		})
 		env := NewEnvelope("chat_out", m.cfg.ServerID, sessionID)
 		env.Data = payload

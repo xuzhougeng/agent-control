@@ -86,11 +86,11 @@ func main() {
 
 func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, content string, parts []ContentPart, emit func(content string, meta json.RawMessage)) (string, json.RawMessage) {
 	input := buildStreamInput(content, parts)
-	useResume := *sessionReady
+	useContinueSession := *sessionReady
 	var lastErr string
 	var lastMeta json.RawMessage
 	for i := 0; i < 2; i++ {
-		reply, meta, errText, err := runClaude(cfg, sessionID, useResume, input, func(op string) {
+		reply, meta, errText, err := runClaude(cfg, sessionID, useContinueSession, input, func(op string) {
 			if emit == nil {
 				return
 			}
@@ -110,12 +110,12 @@ func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, c
 			lastErr = err.Error()
 		}
 
-		if shouldRetryWithResume(errText) && !useResume {
-			useResume = true
+		if shouldRetryWithContinueFlag(errText) && !useContinueSession {
+			useContinueSession = true
 			continue
 		}
-		if shouldRetryWithSessionID(errText) && useResume {
-			useResume = false
+		if shouldRetryWithSessionID(errText) && useContinueSession {
+			useContinueSession = false
 			continue
 		}
 		break
@@ -126,10 +126,10 @@ func handleMessage(cfg claudecli.Config, sessionID string, sessionReady *bool, c
 	return "Claude error: " + lastErr, lastMeta
 }
 
-func runClaude(cfg claudecli.Config, sessionID string, resume bool, input string, onOperation func(op string)) (string, json.RawMessage, string, error) {
+func runClaude(cfg claudecli.Config, sessionID string, continueSession bool, input string, onOperation func(op string)) (string, json.RawMessage, string, error) {
 	args := claudecli.BaseArgs(cfg)
 	if sessionID != "" {
-		if resume {
+		if continueSession {
 			args = append(args, "--resume", sessionID)
 		} else {
 			args = append(args, "--session-id", sessionID)
@@ -238,7 +238,7 @@ func buildStreamInput(content string, parts []ContentPart) string {
 	return string(data) + "\n"
 }
 
-func shouldRetryWithResume(errText string) bool {
+func shouldRetryWithContinueFlag(errText string) bool {
 	low := strings.ToLower(errText)
 	return strings.Contains(low, "already in use")
 }

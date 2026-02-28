@@ -198,6 +198,10 @@ func sessionCreateErrorStatusCode(err error) int {
 		return http.StatusBadRequest
 	case strings.Contains(msg, "invalid session_type"):
 		return http.StatusBadRequest
+	case strings.Contains(msg, "invalid session_id"):
+		return http.StatusBadRequest
+	case strings.Contains(msg, "session_id already exists"):
+		return http.StatusConflict
 	case strings.Contains(msg, "not supported on Windows"):
 		return http.StatusBadRequest
 	default:

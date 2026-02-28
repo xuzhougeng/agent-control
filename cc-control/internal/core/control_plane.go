@@ -70,10 +70,9 @@ type ControlPlane struct {
 	subscribers   map[*Subscriber]struct{}
 	chatHistory   map[string][]ChatMessage
 
-	detector       *PromptDetector
-	resumeDetector *ResumeDetector
-	audit          *AuditLogger
-	limiter        *RateLimiter
+	detector *PromptDetector
+	audit    *AuditLogger
+	limiter  *RateLimiter
 }
 
 func NewControlPlane(cfg Config) (*ControlPlane, error) {
@@ -108,18 +107,17 @@ func NewControlPlane(cfg Config) (*ControlPlane, error) {
 		detector = NewPromptDetector()
 	}
 	cp := &ControlPlane{
-		cfg:            cfg,
-		servers:        make(map[string]*Server),
-		sessions:       make(map[string]*Session),
-		sessionEvents:  make(map[string][]SessionEvent),
-		sessionHubs:    make(map[string]*SessionHub),
-		agentConns:     make(map[string]AgentSender),
-		subscribers:    make(map[*Subscriber]struct{}),
-		chatHistory:    make(map[string][]ChatMessage),
-		detector:       detector,
-		resumeDetector: NewResumeDetector(),
-		audit:          audit,
-		limiter:        NewRateLimiter(cfg.RateLimitPerMin, cfg.RateWindow),
+		cfg:           cfg,
+		servers:       make(map[string]*Server),
+		sessions:      make(map[string]*Session),
+		sessionEvents: make(map[string][]SessionEvent),
+		sessionHubs:   make(map[string]*SessionHub),
+		agentConns:    make(map[string]AgentSender),
+		subscribers:   make(map[*Subscriber]struct{}),
+		chatHistory:   make(map[string][]ChatMessage),
+		detector:      detector,
+		audit:         audit,
+		limiter:       NewRateLimiter(cfg.RateLimitPerMin, cfg.RateWindow),
 	}
 	return cp, nil
 }
@@ -343,20 +341,27 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 		cp.mu.Unlock()
 		return nil, errors.New(errPTYUnsupportedOnWindows)
 	}
-	sessionID := uuid.NewString()
+	sessionID := strings.ToLower(strings.TrimSpace(req.SessionID))
+	if sessionID == "" {
+		sessionID = uuid.NewString()
+	} else {
+		if _, err := uuid.Parse(sessionID); err != nil {
+			cp.mu.Unlock()
+			return nil, errors.New("invalid session_id")
+		}
+	}
+	if _, exists := cp.sessions[sessionID]; exists {
+		cp.mu.Unlock()
+		return nil, errors.New("session_id already exists")
+	}
 
 	var cmd []string
-	var resumeID string
 	if sessType == SessionTypePTY {
-		resumeID = strings.TrimSpace(req.ResumeID)
 		cmdPath := strings.TrimSpace(server.ClaudePath)
 		if cmdPath == "" {
 			cmdPath = "claude-code"
 		}
-		cmd = []string{cmdPath}
-		if resumeID != "" {
-			cmd = append(cmd, "--resume", resumeID)
-		}
+		cmd = []string{cmdPath, "--session-id", sessionID}
 	}
 
 	envKeys := make([]string, 0, len(req.Env))
@@ -371,7 +376,6 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 		SessionType:      sessType,
 		Cwd:              req.Cwd,
 		Cmd:              append([]string(nil), cmd...),
-		ResumeID:         resumeID,
 		EnvKeys:          envKeys,
 		Status:           SessionStarting,
 		CreatedBy:        actor,
@@ -400,9 +404,6 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 			"cols": req.Cols,
 			"rows": req.Rows,
 		}
-		if resumeID != "" {
-			payload["resume_id"] = resumeID
-		}
 		data, _ = json.Marshal(payload)
 	}
 	msg := NewEnvelope(msgType, req.ServerID, sessionID)
@@ -422,7 +423,6 @@ func (cp *ControlPlane) CreateSession(actor string, tenantID string, req StartSe
 		Meta: map[string]any{
 			"cwd":          req.Cwd,
 			"session_type": string(sessType),
-			"resume_id":    resumeID,
 		},
 	})
 	return sess, nil
@@ -506,7 +506,6 @@ func (cp *ControlPlane) DeleteSession(actor, tenantID, sessionID string) error {
 	if cp.detector != nil {
 		cp.detector.Clear(sessionID)
 	}
-	cp.resumeDetector.Clear(sessionID)
 	cp.audit.Log(AuditEvent{
 		Actor:     actor,
 		ServerID:  sess.ServerID,
@@ -588,7 +587,6 @@ func (cp *ControlPlane) StopAndDeleteSession(actor, tenantID, sessionID string, 
 	if cp.detector != nil {
 		cp.detector.Clear(sessionID)
 	}
-	cp.resumeDetector.Clear(sessionID)
 	cp.audit.Log(AuditEvent{
 		Actor:     actor,
 		ServerID:  sess.ServerID,
@@ -607,7 +605,6 @@ func (cp *ControlPlane) HandlePTYOut(serverID, sessionID string, seq uint64, dat
 		return
 	}
 	var becameRunning bool
-	var resumeUpdated bool
 	cp.mu.Lock()
 	sess, ok := cp.sessions[sessionID]
 	if !ok {
@@ -628,10 +625,6 @@ func (cp *ControlPlane) HandlePTYOut(serverID, sessionID string, seq uint64, dat
 	if hub, ok := cp.sessionHubs[sessionID]; ok {
 		hub.ring.Write(raw)
 	}
-	if resumeID, ok := cp.resumeDetector.Feed(sessionID, raw); ok && resumeID != sess.ResumeID {
-		sess.ResumeID = resumeID
-		resumeUpdated = true
-	}
 	awaiting := sess.AwaitingApproval
 	cp.mu.Unlock()
 
@@ -640,7 +633,7 @@ func (cp *ControlPlane) HandlePTYOut(serverID, sessionID string, seq uint64, dat
 	out.DataB64 = dataB64
 	cp.broadcastToAttached(sessionID, out)
 
-	if becameRunning || resumeUpdated {
+	if becameRunning {
 		cp.broadcastSessionUpdate(sessionID)
 	}
 	if awaiting || cp.detector == nil {
@@ -718,7 +711,6 @@ func (cp *ControlPlane) HandlePTYExit(serverID, sessionID string, exit PTYExit) 
 	if cp.detector != nil {
 		cp.detector.Clear(sessionID)
 	}
-	cp.resumeDetector.Clear(sessionID)
 	cp.broadcastSessionUpdate(sessionID)
 	cp.audit.Log(AuditEvent{
 		Actor:     "agent:" + serverID,
@@ -794,7 +786,6 @@ func (cp *ControlPlane) HandleAgentError(serverID, sessionID, message string) {
 	if cp.detector != nil {
 		cp.detector.Clear(sessionID)
 	}
-	cp.resumeDetector.Clear(sessionID)
 	cp.broadcastSessionUpdate(sessionID)
 	cp.audit.Log(AuditEvent{
 		Actor:     "agent:" + serverID,
@@ -1121,24 +1112,18 @@ func (cp *ControlPlane) HandleClientChatIn(actor, tenantID, sessionID, content s
 
 func (cp *ControlPlane) HandleChatOut(serverID, sessionID string, data json.RawMessage) {
 	var payload struct {
-		MessageID       string          `json:"message_id"`
-		Content         string          `json:"content"`
-		WorkerSessionID string          `json:"worker_session_id,omitempty"`
-		Meta            json.RawMessage `json:"meta,omitempty"`
+		MessageID string          `json:"message_id"`
+		Content   string          `json:"content"`
+		Meta      json.RawMessage `json:"meta,omitempty"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return
 	}
 	cp.mu.Lock()
-	sess, ok := cp.sessions[sessionID]
+	_, ok := cp.sessions[sessionID]
 	if !ok {
 		cp.mu.Unlock()
 		return
-	}
-	var sessionUpdated bool
-	if payload.WorkerSessionID != "" && sess.WorkerSessionID == "" {
-		sess.WorkerSessionID = payload.WorkerSessionID
-		sessionUpdated = true
 	}
 	chatMsg := ChatMessage{
 		MessageID: payload.MessageID,
@@ -1154,10 +1139,6 @@ func (cp *ControlPlane) HandleChatOut(serverID, sessionID string, data json.RawM
 	broadcast := NewEnvelope("chat_msg", serverID, sessionID)
 	broadcast.Data, _ = json.Marshal(chatMsg)
 	cp.broadcastToAttached(sessionID, broadcast)
-
-	if sessionUpdated {
-		cp.broadcastSessionUpdate(sessionID)
-	}
 
 	cp.audit.Log(AuditEvent{
 		Actor:     "agent:" + serverID,
@@ -1275,10 +1256,8 @@ func (cp *ControlPlane) broadcastSessionUpdate(sessionID string) {
 		"status":            sess.Status,
 		"exit_code":         sess.ExitCode,
 		"exit_reason":       sess.ExitReason,
-		"resume_id":         sess.ResumeID,
 		"awaiting_approval": sess.AwaitingApproval,
 		"pending_event_id":  sess.PendingEventID,
-		"worker_session_id": sess.WorkerSessionID,
 	})
 	cp.mu.RUnlock()
 
