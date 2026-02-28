@@ -53,7 +53,8 @@ npm run test:web:e2e:real-claude
 2. 向 PTY 发送 `hi`
 3. 等待 `10s`
 4. 切到 Chat 并点击 `Switch to Chat`
-5. 再切回 Terminal 并点击 `Switch to Terminal`
+5. 在 Chat 再发送 `hi`
+6. 校验会话不会进入 `Execution failed: exited`
 
 这条 smoke 还会为每个关键步骤单独落盘 screenshot，包括：
 
@@ -62,7 +63,8 @@ npm run test:web:e2e:real-claude
 - sent hi
 - after 10s wait
 - before/after switch to chat
-- before/after switch back to terminal
+- sent hi in chat
+- chat still running
 
 如果你需要覆盖不同账号或不同 Claude 安装路径，可以显式传：
 

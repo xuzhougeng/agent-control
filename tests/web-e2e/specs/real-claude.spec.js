@@ -78,9 +78,9 @@ test.beforeEach(async ({ page }) => {
   await primeToken(page);
 });
 
-test("real Claude smoke creates a terminal session, sends hi, waits, then switches chat and back", async ({ page }, testInfo) => {
+test("real Claude flow: terminal hi then switch chat and send hi without exited", async ({ page }, testInfo) => {
   test.slow();
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
 
   await page.goto("/");
   await waitForWorkspaceReady(page);
@@ -107,14 +107,15 @@ test("real Claude smoke creates a terminal session, sends hi, waits, then switch
   await expect(page.locator("#workspaceSessionTitle")).toHaveText(sessionID);
   await captureStep(page, testInfo, "06-chat-active");
 
-  await page.locator("#workspaceOpenTerminalBtn").click();
-  await expect(page).toHaveURL(/\/\?/);
-  await expect(page.locator("#workspaceModeBadge")).toContainText("Chat");
-  await captureStep(page, testInfo, "07-terminal-view-before-switch-back");
+  await page.locator("#chatInput").fill("hi");
+  await page.locator("#chatSendBtn").click();
+  await captureStep(page, testInfo, "07-chat-sent-hi");
 
-  await page.locator("#workspaceSwitchModeBtn").click();
-  await expect(page.locator("#workspaceModeBadge")).toContainText("Terminal", { timeout: 120_000 });
-  await expect(page.locator("#workspaceSessionTitle")).toHaveText(sessionID);
-  await expect(page.locator("#currentSessionLabel")).toContainText("Session:");
-  await captureStep(page, testInfo, "08-terminal-active-again");
+  await expect(page.locator("#chatMessages")).toContainText("hi", { timeout: 120_000 });
+  await page.waitForTimeout(12_000);
+
+  await expect(page.locator("#workspaceStatusBadge")).not.toContainText("exited");
+  await expect(page.locator("#workspaceStatusBadge")).not.toContainText("error");
+  await expect(page.locator("#chatRunState")).not.toContainText("Execution failed");
+  await captureStep(page, testInfo, "08-chat-still-running");
 });
