@@ -137,13 +137,13 @@ func TestNormalizeClaudeSessionArgsSwitchesToResumeWhenSessionEnvExists(t *testi
 	}
 }
 
-func TestNormalizeClaudeSessionArgsFallsBackToSessionIDWhenResumeTargetMissing(t *testing.T) {
+func TestNormalizeClaudeSessionArgsKeepsResumeWhenResumeTargetMissing(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	sessionID := "ba3a661b-5036-4616-885f-ad6e9d4d0f34"
 
 	args := normalizeClaudeSessionArgs(sessionID, []string{"--resume", sessionID})
-	if len(args) != 2 || args[0] != "--session-id" || args[1] != sessionID {
-		t.Fatalf("expected --session-id %s, got %#v", sessionID, args)
+	if len(args) != 2 || args[0] != "--resume" || args[1] != sessionID {
+		t.Fatalf("expected --resume %s, got %#v", sessionID, args)
 	}
 }

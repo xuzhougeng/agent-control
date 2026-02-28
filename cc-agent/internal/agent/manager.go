@@ -232,12 +232,6 @@ func normalizeClaudeSessionArgs(sessionID string, args []string) []string {
 				out[i] = "--resume"
 				return out
 			}
-		case "--resume":
-			if !exists {
-				out := append([]string(nil), args...)
-				out[i] = "--session-id"
-				return out
-			}
 		}
 	}
 	return args
