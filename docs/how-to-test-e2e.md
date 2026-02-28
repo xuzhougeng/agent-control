@@ -36,6 +36,42 @@ npm run test:web:e2e
 4. 运行 Playwright 用例
 5. 为每条用例输出 screenshot，默认保存在 `test-results/`
 
+默认模式是 `fake`。如果要单独跑真实 Claude smoke，用下面这条：
+
+```bash
+npm run test:web:e2e:real-claude
+```
+
+这条命令会把 harness 切到 `CC_WEB_E2E_CLAUDE_MODE=real`，并默认使用：
+
+- `CC_WEB_E2E_CLAUDE_PATH=/home/xzg/.local/bin/claude`
+- `CC_WEB_E2E_CLAUDE_HOME=$HOME`
+
+真实 Claude smoke 当前只覆盖一条窄用例：
+
+1. 在 Terminal 视图创建 session
+2. 向 PTY 发送 `hi`
+3. 等待 `10s`
+4. 切到 Chat 并点击 `Switch to Chat`
+5. 再切回 Terminal 并点击 `Switch to Terminal`
+
+这条 smoke 还会为每个关键步骤单独落盘 screenshot，包括：
+
+- workspace ready
+- session created
+- sent hi
+- after 10s wait
+- before/after switch to chat
+- before/after switch back to terminal
+
+如果你需要覆盖不同账号或不同 Claude 安装路径，可以显式传：
+
+```bash
+CC_WEB_E2E_CLAUDE_PATH=/custom/path/to/claude \
+CC_WEB_E2E_CLAUDE_HOME=/custom/home \
+npm run test:web:e2e:real-claude
+```
+
 ## 指定端口
 
 默认端口是 `18110`。如果本机端口冲突，可以改：
@@ -130,6 +166,12 @@ npx playwright test --ui --config=tests/web-e2e/playwright.config.mjs
   - 用于模拟“服务器上已存在 Claude session”的会话 id
 - `CC_WEB_E2E_SCREENSHOT`
   - screenshot 策略，支持 `on` / `only-on-failure` / `off`
+- `CC_WEB_E2E_CLAUDE_MODE`
+  - `fake` 或 `real`，默认 `fake`
+- `CC_WEB_E2E_CLAUDE_PATH`
+  - real Claude 模式下的 Claude CLI 路径，默认 `/home/xzg/.local/bin/claude`
+- `CC_WEB_E2E_CLAUDE_HOME`
+  - real Claude 模式下 agent/chat worker 使用的 `HOME`
 
 ## 常见问题
 

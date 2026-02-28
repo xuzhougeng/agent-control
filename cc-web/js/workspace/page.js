@@ -5,6 +5,7 @@ import { createTerminalController } from "../controller/terminal.js";
 import { createWorkspaceShell } from "../shared/workspace-shell.js";
 import {
   WINDOWS_PTY_UNSUPPORTED_ERROR,
+  bytesToB64,
   escapeHtml,
   parseEnv,
 } from "../shared/utils.js";
@@ -79,6 +80,15 @@ export function initWorkspacePage() {
 
   function sendWS(msg) {
     return wsClient.send(msg);
+  }
+
+  function sendTerminalInput(text) {
+    if (!state.selectedSessionID) return false;
+    return sendWS({
+      type: "term_in",
+      session_id: state.selectedSessionID,
+      data_b64: bytesToB64(text),
+    });
   }
 
   const terminal = createTerminalController({
@@ -961,6 +971,9 @@ export function initWorkspacePage() {
   terminal.init();
   terminal.bindToolbarKeys();
   sidebar.mount();
+  window.__CC_E2E__ = {
+    sendTerminalInput,
+  };
   updateViewVisibility();
   renderInstanceHistory();
   renderApprovals();

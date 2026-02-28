@@ -24,7 +24,8 @@
 2. `Chat -> Terminal -> Chat` 模式切换
 3. 实例列表在来回切换后保持稳定，不无限增长
 4. 预先存在的外部 Claude session 能通过 PTY 接入
-5. `/chat` 兼容路径会跳转到统一 workspace 的 Chat 视图
+5. 左右抽屉可以上下拖动
+6. `/chat` 兼容路径会跳转到统一 workspace 的 Chat 视图
 
 ## 运行方式
 
@@ -56,3 +57,4 @@ CC_WEB_E2E_PORT=18120 npm run test:web:e2e
   - `Session ID ... is already in use`
   - `No conversation found with session ID ...`
 - 对 PTY 来说，只有真正收到第一条输入后才会创建 conversation marker，用于回归“空 session 不应误 resume”的场景。
+- 如果设置 `CC_WEB_E2E_CLAUDE_MODE=real`，harness 会改用系统 Claude CLI，而不是 `fake-claude.py`。这只用于单独 smoke，不建议替代默认回归。
