@@ -245,23 +245,47 @@ test("real Claude flow: terminal hi then switch chat and send hi without exited"
 
   await page.locator("#terminal").click({ position: { x: 80, y: 240 } });
   logStep("terminal:focused");
-  const terminalIOBeforeSend = (await getTerminalIOState(page)) || { lastTermOutAtMs: 0 };
-  const terminalSendOK = await page.evaluate(() => window.__CC_E2E__.sendTerminalInput("hi\r"));
-  logStep(`terminal:send:hi:${terminalSendOK ? "ok" : "failed"}`);
-  expect(terminalSendOK).toBeTruthy();
+  const terminalIOBeforeSend = (await getTerminalIOState(page)) || { termInCount: 0, termOutCount: 0 };
+  await page.keyboard.type("hi", { delay: 50 });
+  await page.keyboard.press("Enter");
+  logStep("terminal:send:hi:keyboard");
+
+  let termInObserved = false;
+  try {
+    await expect
+      .poll(async () => {
+        const io = await getTerminalIOState(page);
+        const nextCount = Number(io?.termInCount || 0);
+        const recent = String(io?.termInRecentText || "");
+        return nextCount > Number(terminalIOBeforeSend.termInCount || 0) && recent.includes("hi");
+      }, { timeout: 10_000 })
+      .toBeTruthy();
+    termInObserved = true;
+  } catch {}
+
+  if (!termInObserved) {
+    logStep("terminal:keyboard-send-not-observed:fallback-ws");
+    const terminalSendOK = await page.evaluate(() => window.__CC_E2E__.sendTerminalInput("hi\r"));
+    expect(terminalSendOK).toBeTruthy();
+    await expect
+      .poll(async () => {
+        const io = await getTerminalIOState(page);
+        const nextCount = Number(io?.termInCount || 0);
+        const recent = String(io?.termInRecentText || "");
+        return nextCount > Number(terminalIOBeforeSend.termInCount || 0) && recent.includes("hi");
+      }, { timeout: 30_000 })
+      .toBeTruthy();
+    logStep("terminal:send:hi:ws-fallback-ok");
+  } else {
+    logStep("terminal:send:hi:keyboard-ok");
+  }
+
   await expect
     .poll(async () => {
       const io = await getTerminalIOState(page);
-      return String(io?.lastTermInText || "");
-    }, { timeout: 30_000 })
-    .toContain("hi");
-  logStep("terminal:term-in-observed");
-  await expect
-    .poll(async () => {
-      const io = await getTerminalIOState(page);
-      return Number(io?.lastTermOutAtMs || 0);
+      return Number(io?.termOutCount || 0);
     }, { timeout: 60_000 })
-    .toBeGreaterThan(Number(terminalIOBeforeSend.lastTermOutAtMs || 0));
+    .toBeGreaterThan(Number(terminalIOBeforeSend.termOutCount || 0));
   logStep("terminal:term-out-observed");
   await expect(page.locator("#currentSessionLabel")).toContainText("Session:");
   await captureStep(page, testInfo, "04-sent-hi-from-terminal", { withDrawers: false });

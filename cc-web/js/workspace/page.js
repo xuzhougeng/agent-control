@@ -42,8 +42,12 @@ export function initWorkspacePage() {
     lastTermInText: "",
     lastTermInAtMs: 0,
     lastTermInSessionID: "",
+    termInCount: 0,
+    termInRecentText: "",
     lastTermOutAtMs: 0,
     lastTermOutSessionID: "",
+    termOutCount: 0,
+    termOutRecentText: "",
   };
 
   const api = createUIApi(() => state.token);
@@ -98,9 +102,12 @@ export function initWorkspacePage() {
 
   function sendWS(msg) {
     if (msg?.type === "term_in") {
-      e2eState.lastTermInText = decodeB64Text(msg.data_b64);
+      const chunk = decodeB64Text(msg.data_b64);
+      e2eState.lastTermInText = chunk;
       e2eState.lastTermInAtMs = Date.now();
       e2eState.lastTermInSessionID = String(msg.session_id || "");
+      e2eState.termInCount += 1;
+      e2eState.termInRecentText = `${e2eState.termInRecentText}${chunk}`.slice(-512);
     }
     return wsClient.send(msg);
   }
@@ -855,8 +862,11 @@ export function initWorkspacePage() {
 
   function handleWS(msg) {
     if (msg.type === "term_out" && msg.session_id === state.selectedSessionID && msg.data_b64) {
+      const chunk = decodeB64Text(msg.data_b64);
       e2eState.lastTermOutAtMs = Date.now();
       e2eState.lastTermOutSessionID = String(msg.session_id || "");
+      e2eState.termOutCount += 1;
+      e2eState.termOutRecentText = `${e2eState.termOutRecentText}${chunk}`.slice(-2048);
       terminal.writeOutput(msg, state.pendingFirstOutputSessionID, () => {
         state.pendingFirstOutputSessionID = "";
         terminal.markLoaded(msg.session_id, msg.instance_id || "");
