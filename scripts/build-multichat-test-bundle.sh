@@ -9,10 +9,11 @@ ARCH="${ARCH:-amd64}"
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/build-multichat-test-bundle.sh [--targets linux,windows] [--arch amd64] [--out-base dist]
+  bash scripts/build-multichat-test-bundle.sh [--targets linux,darwin,windows] [--arch amd64] [--out-base dist]
 
 Examples:
   bash scripts/build-multichat-test-bundle.sh
+  bash scripts/build-multichat-test-bundle.sh --targets darwin --arch arm64
   bash scripts/build-multichat-test-bundle.sh --targets linux
   TARGETS=windows ARCH=amd64 bash scripts/build-multichat-test-bundle.sh
 EOF
@@ -99,7 +100,27 @@ EOF
     cp "$REPO_ROOT/scripts/linux/stop-multichat-linux.sh" "$bundle_dir/stop-multichat.sh"
     chmod +x "$bundle_dir/run-multichat.sh"
     chmod +x "$bundle_dir/stop-multichat.sh"
-    cat >"$bundle_dir/README.txt" <<'EOF'
+    if [[ "$goos" == "darwin" ]]; then
+      cat >"$bundle_dir/README.txt" <<'EOF'
+macOS (Darwin) Multi-Chat Test Bundle
+=====================================
+
+Run:
+  ./run-multichat.sh
+Stop:
+  ./stop-multichat.sh
+
+Output:
+  ./run/tokens-and-process.json
+  ./chat-profile.md (auto-loaded by chat-claude agent if present)
+
+This starts 1 control-plane + 3 agents:
+- <prefix>-pty
+- <prefix>-chat-claude
+- <prefix>-chat-echo
+EOF
+    else
+      cat >"$bundle_dir/README.txt" <<'EOF'
 Linux Multi-Chat Test Bundle
 ============================
 
@@ -117,6 +138,7 @@ This starts 1 control-plane + 3 agents:
 - <prefix>-chat-claude
 - <prefix>-chat-echo
 EOF
+    fi
   fi
 
   local tarball="$OUT_BASE/multichat-test-${goos}-${ARCH}.tar.gz"
@@ -136,11 +158,11 @@ EOF
 
 for t in "${TARGET_LIST[@]}"; do
   case "$t" in
-    linux|windows)
+    linux|darwin|windows)
       build_one "$t"
       ;;
     *)
-      echo "unsupported target: $t (allowed: linux, windows)" >&2
+      echo "unsupported target: $t (allowed: linux, darwin, windows)" >&2
       exit 1
       ;;
   esac

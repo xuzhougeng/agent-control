@@ -3,7 +3,7 @@
 这份文档用于快速回忆两件事：
 
 1. 如何在任意支持 Bash 的环境里打包测试包
-2. 如何在 Linux / Windows 目标机上直接运行测试包
+2. 如何在 Linux / macOS / Windows 目标机上直接运行测试包
 
 Chat 权限控制专项文档见：
 
@@ -16,26 +16,20 @@ Chat 权限控制专项文档见：
 在仓库根目录执行：
 
 ```bash
-bash scripts/build-multichat-test-bundle.sh --targets linux,windows --arch amd64
+bash scripts/build-multichat-test-bundle.sh --targets linux,darwin,windows --arch amd64
 ```
 
 默认输出到 `dist/`：
 
-- `dist/multichat-test-linux-amd64/`
-- `dist/multichat-test-linux-amd64.tar.gz`
-- `dist/multichat-test-windows-amd64/`
-- `dist/multichat-test-windows-amd64.tar.gz`
-- `dist/multichat-test-windows-amd64.zip`（仅当本机有 `zip` 命令时生成）
+- `dist/multichat-test-linux-amd64/`、`dist/multichat-test-linux-amd64.tar.gz`
+- `dist/multichat-test-darwin-amd64/`、`dist/multichat-test-darwin-amd64.tar.gz`（macOS Intel）
+- `dist/multichat-test-windows-amd64/`、`dist/multichat-test-windows-amd64.tar.gz`、`dist/multichat-test-windows-amd64.zip`（仅当本机有 `zip` 时生成）
 
-只打 Linux：
+只打某一目标示例：
 
 ```bash
 bash scripts/build-multichat-test-bundle.sh --targets linux
-```
-
-只打 Windows：
-
-```bash
+bash scripts/build-multichat-test-bundle.sh --targets darwin --arch arm64   # macOS Apple Silicon
 bash scripts/build-multichat-test-bundle.sh --targets windows
 ```
 
@@ -108,7 +102,31 @@ CLAUDE_PATH=/full/path/to/claude-code bash ./run-multichat.sh
 
 ---
 
-## 3) Windows 目标机运行
+## 3) macOS (Darwin) 目标机运行
+
+打 macOS 包（Apple Silicon 用 `arm64`，Intel 用 `amd64`）：
+
+```bash
+bash scripts/build-multichat-test-bundle.sh --targets darwin --arch arm64
+```
+
+解压后进入目录，执行：
+
+```bash
+./run-multichat.sh
+```
+
+停止：
+
+```bash
+./stop-multichat.sh
+```
+
+启动内容与 Linux 一致：1 个 `cc-control` + 3 个 `cc-agent`（pty / chat-claude / chat-echo）。环境变量与 Linux 相同（如 `CONTROL_PORT`、`CLAUDE_PATH`、`CHAT_PROFILE_FILE` 等）。
+
+---
+
+## 4) Windows 目标机运行
 
 解压 Windows 包后进入目录，在 PowerShell 中执行：
 
@@ -156,7 +174,7 @@ powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 -ClaudePath "C:
 
 ---
 
-## 4) 常见问题
+## 5) 常见问题
 
 `Q: 为什么要保留 Windows 的 .ps1？`
 
