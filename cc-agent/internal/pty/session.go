@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -32,15 +34,43 @@ type Session struct {
 	Cwd     string
 	CmdPath string
 
-	mu     sync.RWMutex
-	cmd    *exec.Cmd
-	ptmx   *os.File
-	seq    uint64
-	closed chan struct{}
+	mu      sync.RWMutex
+	cmd     *exec.Cmd
+	ptmx    *os.File
+	seq     uint64
+	closed  chan struct{}
+	procCfg ptyLaunchConfig
 }
 
 func Start(id, cwd, cmdPath string, args []string, env map[string]string, cols, rows uint16) (*Session, error) {
+	cmdPath, args = normalizeLaunchCommand(cmdPath, args)
+	procCfg := newPTYLaunchConfig()
+	cmd, ptmx, err := startPTYCommand(cwd, cmdPath, args, env, cols, rows, procCfg)
+	if shouldRetryWithoutSetpgid(err, procCfg) {
+		// Some hardened runtimes deny setpgid(2) with EPERM. Retry once without
+		// process-group management so interactive PTY sessions can still start.
+		disableSetpgid(&procCfg)
+		cmd, ptmx, err = startPTYCommand(cwd, cmdPath, args, env, cols, rows, procCfg)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	s := &Session{
+		ID:      id,
+		Cwd:     cwd,
+		CmdPath: cmdPath,
+		cmd:     cmd,
+		ptmx:    ptmx,
+		closed:  make(chan struct{}),
+		procCfg: procCfg,
+	}
+	return s, nil
+}
+
+func startPTYCommand(cwd, cmdPath string, args []string, env map[string]string, cols, rows uint16, procCfg ptyLaunchConfig) (*exec.Cmd, *os.File, error) {
 	cmd := exec.Command(cmdPath, args...)
+	configurePTYCmd(cmd, procCfg)
 	cmd.Dir = cwd
 	cmd.Env = minimalHostEnv()
 	for k, v := range env {
@@ -52,21 +82,24 @@ func Start(id, cwd, cmdPath string, args []string, env map[string]string, cols, 
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if cols > 0 && rows > 0 {
 		_ = pty.Setsize(ptmx, &pty.Winsize{Cols: cols, Rows: rows})
 	}
+	return cmd, ptmx, nil
+}
 
-	s := &Session{
-		ID:      id,
-		Cwd:     cwd,
-		CmdPath: cmdPath,
-		cmd:     cmd,
-		ptmx:    ptmx,
-		closed:  make(chan struct{}),
+func normalizeLaunchCommand(cmdPath string, args []string) (string, []string) {
+	cmdPath = strings.TrimSpace(cmdPath)
+	switch strings.ToLower(filepath.Ext(cmdPath)) {
+	case ".py":
+		return "python3", append([]string{cmdPath}, args...)
+	case ".sh":
+		return "bash", append([]string{cmdPath}, args...)
+	default:
+		return cmdPath, args
 	}
-	return s, nil
 }
 
 func (s *Session) ReadLoop(onChunk func(seq uint64, chunk []byte), onExit func(code *int, signal, reason string)) {
@@ -147,10 +180,10 @@ func (s *Session) Stop(graceMS, killAfterMS int) {
 	if proc == nil {
 		return
 	}
-	_ = proc.Signal(syscall.SIGTERM)
+	_ = interruptPTYTree(proc, s.procCfg)
 	time.Sleep(time.Duration(graceMS) * time.Millisecond)
 	if s.IsRunning() {
-		_ = proc.Kill()
+		_ = killPTYTree(proc, s.procCfg)
 		waitMore := killAfterMS - graceMS
 		if waitMore > 0 {
 			time.Sleep(time.Duration(waitMore) * time.Millisecond)
