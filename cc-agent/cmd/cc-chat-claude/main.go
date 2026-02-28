@@ -96,11 +96,12 @@ func main() {
 		currentCancel = cancelRun
 		runMu.Unlock()
 		reply, meta := handleMessage(runCtx, cfg, sessionID, &sessionReady, msg.Content, msg.ContentParts, emit)
+		shouldExit := shouldTerminateWorker(rootCtx)
 		cancelRun()
 		runMu.Lock()
 		currentCancel = func() {}
 		runMu.Unlock()
-		if errors.Is(runCtx.Err(), context.Canceled) {
+		if shouldExit {
 			return
 		}
 		out := Message{MessageID: msg.MessageID, Content: reply, SessionID: sessionID, Meta: meta}
@@ -109,6 +110,13 @@ func main() {
 		writer.WriteString("\n")
 		writer.Flush()
 	}
+}
+
+func shouldTerminateWorker(rootCtx context.Context) bool {
+	if rootCtx == nil {
+		return false
+	}
+	return errors.Is(rootCtx.Err(), context.Canceled) || errors.Is(rootCtx.Err(), context.DeadlineExceeded)
 }
 
 func handleMessage(ctx context.Context, cfg claudecli.Config, sessionID string, sessionReady *bool, content string, parts []ContentPart, emit func(content string, meta json.RawMessage)) (string, json.RawMessage) {

@@ -42,3 +42,22 @@ func TestHandleMessageReturnsQuietlyWhenCanceled(t *testing.T) {
 		t.Fatal("session should not be marked ready after cancellation")
 	}
 }
+
+func TestShouldTerminateWorker(t *testing.T) {
+	if shouldTerminateWorker(nil) {
+		t.Fatal("nil context should not terminate worker")
+	}
+	if shouldTerminateWorker(context.Background()) {
+		t.Fatal("background context should not terminate worker")
+	}
+
+	root := context.Background()
+	child, cancelChild := context.WithCancel(root)
+	cancelChild()
+	if shouldTerminateWorker(root) {
+		t.Fatal("canceling child context should not terminate worker")
+	}
+	if !shouldTerminateWorker(child) {
+		t.Fatal("canceled context should terminate worker")
+	}
+}
