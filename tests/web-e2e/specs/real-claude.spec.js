@@ -87,7 +87,14 @@ function sanitizeStepLabel(label) {
   return String(label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+function logStep(label) {
+  const stamp = new Date().toISOString();
+  // Keep logs plain for CI/stdout readability.
+  console.log(`[real-claude][${stamp}] ${label}`);
+}
+
 async function captureStep(page, testInfo, label, options = {}) {
+  logStep(`capture:start:${label}`);
   const withDrawers = options.withDrawers !== false;
   let snapshotState = null;
   if (withDrawers) {
@@ -121,7 +128,9 @@ async function captureStep(page, testInfo, label, options = {}) {
   }
   await page.screenshot({
     path: testInfo.outputPath(`${sanitizeStepLabel(label)}.png`),
-    fullPage: true,
+    fullPage: false,
+    animations: "disabled",
+    timeout: 15_000,
   });
   if (withDrawers && snapshotState) {
     await page.evaluate((state) => {
@@ -140,6 +149,7 @@ async function captureStep(page, testInfo, label, options = {}) {
       if (backdrop) backdrop.hidden = !(state.leftOpen || state.rightOpen || state.mobileOpen);
     }, snapshotState);
   }
+  logStep(`capture:end:${label}`);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -152,12 +162,16 @@ test.beforeEach(async ({ page }) => {
 test("real Claude flow: terminal hi then switch chat and send hi without exited", async ({ page }, testInfo) => {
   test.slow();
   test.setTimeout(300_000);
+  logStep("test:start");
 
   await page.goto("/");
+  logStep("workspace:loaded");
   await waitForWorkspaceReady(page);
+  logStep("workspace:ready");
   await captureStep(page, testInfo, "01-workspace-ready");
 
   const sessionID = await createSession(page);
+  logStep(`session:created:${sessionID}`);
   await expect(page.locator("#workspaceModeBadge")).toContainText("Terminal");
   await captureStep(page, testInfo, "02-session-created-terminal");
 
@@ -185,6 +199,7 @@ test("real Claude flow: terminal hi then switch chat and send hi without exited"
 
   await page.locator("#chatInput").fill("hi");
   await page.locator("#chatSendBtn").click();
+  logStep("chat:sent:hi");
   await captureStep(page, testInfo, "08-chat-sent-hi");
 
   await expect(page.locator("#chatMessages")).toContainText("hi", { timeout: 120_000 });
@@ -194,4 +209,5 @@ test("real Claude flow: terminal hi then switch chat and send hi without exited"
   await expect(page.locator("#workspaceStatusBadge")).not.toContainText("error");
   await expect(page.locator("#chatRunState")).not.toContainText("Execution failed");
   await captureStep(page, testInfo, "09-chat-still-running");
+  logStep("test:done");
 });
