@@ -40,6 +40,20 @@ async function closeLeftDrawer(page) {
   }
 }
 
+async function openRightDrawer(page) {
+  const btn = page.locator("#rightDrawerToggleBtn");
+  if ((await btn.getAttribute("aria-expanded")) !== "true") {
+    await btn.click();
+  }
+}
+
+async function closeRightDrawer(page) {
+  const btn = page.locator("#rightDrawerToggleBtn");
+  if ((await btn.getAttribute("aria-expanded")) === "true") {
+    await btn.click();
+  }
+}
+
 async function waitForWorkspaceReady(page) {
   await expect(page.locator("#wsStatus")).toContainText("connected");
   await openLeftDrawer(page);
@@ -65,15 +79,25 @@ function sanitizeStepLabel(label) {
   return String(label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-async function captureStep(page, testInfo, label) {
+async function captureStep(page, testInfo, label, options = {}) {
+  const withDrawers = options.withDrawers !== false;
+  if (withDrawers) {
+    await openLeftDrawer(page);
+    await openRightDrawer(page);
+  }
   await page.screenshot({
     path: testInfo.outputPath(`${sanitizeStepLabel(label)}.png`),
     fullPage: true,
   });
+  if (withDrawers) {
+    await closeRightDrawer(page);
+    await closeLeftDrawer(page);
+  }
 }
 
 test.beforeEach(async ({ page }) => {
   test.skip(!runRealClaude, "set CC_WEB_E2E_CLAUDE_MODE=real to run the real Claude smoke test");
+  await page.setViewportSize({ width: 1720, height: 1080 });
   await installXtermStub(page);
   await primeToken(page);
 });
