@@ -45,6 +45,7 @@
 注意（非常重要）：
 - `cc-chat-claude` 直接读取的是 `CC_CLAUDE_*` 变量。
 - `CLAUDE_PATH`、`CHAT_PROFILE_FILE` 是启动脚本（如 `run-multichat.sh` / `run-multichat-win.ps1`）的输入变量；脚本会转成 `CC_CLAUDE_CMD`、`CC_CLAUDE_PROFILE_FILE` 传给 worker。
+- `ALLOW_ROOT`（Linux 环境变量）和 `-AllowRoot`（Windows PowerShell 参数）是 `cc-agent` 的启动参数，不属于 `CC_CLAUDE_*`；它决定 agent 允许访问的根目录。
 - 如果你是手工执行 `./bin/cc-agent -chat-worker ./bin/cc-chat-claude`，请直接设置 `CC_CLAUDE_CMD` 和 `CC_CLAUDE_PROFILE_FILE`。
 
 ---
@@ -75,6 +76,7 @@ CC_CLAUDE_ALLOWED_TOOLS="Bash(git:*) Read Edit"
 ```bash
 export CLAUDE_PATH="$(which claude-code)"
 export CHAT_PROFILE_FILE="./chat-profile.md"
+export ALLOW_ROOT="/workspace/repo"
 export CC_CLAUDE_PERMISSION_MODE="dontAsk"
 export CC_CLAUDE_ALLOWED_TOOLS="Bash(git:*) Read Edit"
 export CC_CLAUDE_ADD_DIR="/workspace/repo,/workspace/repo/docs"
@@ -87,6 +89,8 @@ bash ./run-multichat.sh
 - 脚本会同时启动 `*-chat-claude` 和 `*-chat-echo`
 - 只有 `*-chat-claude` 会使用这些 `CC_CLAUDE_*` 配置
 - `CLAUDE_PATH` / `CHAT_PROFILE_FILE` 仅用于脚本入口参数；不是 worker 直接读取变量
+- `ALLOW_ROOT` 会传给 `cc-agent -allow-root`
+- 若未显式设置 `ALLOW_ROOT`，Linux 测试包默认使用当前 bundle 根目录作为允许根目录
 
 ### 4.3 手工启动 `cc-agent`（不走脚本）
 
@@ -121,12 +125,18 @@ Get-Command claude
 ### 5.2 启动前设置（推荐）
 
 ```powershell
+$env:ALLOW_ROOT = "D:\repo"
 $env:CC_CLAUDE_PERMISSION_MODE = "dontAsk"
 $env:CC_CLAUDE_ALLOWED_TOOLS = "Bash(git:*) Read Edit"
 $env:CC_CLAUDE_ADD_DIR = "D:\repo,D:\repo\docs"
 
 powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 -ClaudePath "C:\path\to\claude.exe" -ChatProfileFile ".\chat-profile.md" -StartAgent 1
 ```
+
+补充：
+
+- 也可以直接传 `-AllowRoot "D:\repo"`
+- 若未显式传 `-AllowRoot`，Windows 测试包默认使用当前 bundle 根目录作为允许根目录
 
 ---
 
@@ -165,6 +175,13 @@ CC_CLAUDE_PERMISSION_MODE=dontAsk,CC_CLAUDE_ALLOWED_TOOLS=Bash(git:*) Read Edit
 
 - `run/cc-agent-chat-claude.stdout.log`
 - `run/cc-agent-chat-claude.stderr.log`
+
+也可以直接看启动脚本输出和结果文件：
+
+- 启动完成后会打印 `Allow Root: ...`
+- `run/tokens-and-process.json` 里会写入 `allow_root`
+
+这两个值对应的是 agent 实际收到的 `-allow-root` 参数，适合先确认目录边界是否符合预期。
 
 ---
 
@@ -220,6 +237,7 @@ $env:CC_CLAUDE_ADD_DIR = "D:\multichat-test-windows-amd64,D:\multichat-test-wind
 powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 `
   -ClaudePath "C:\path\to\claude.exe" `
   -ChatProfileFile ".\chat-profile.md" `
+  -AllowRoot "D:\multichat-test-windows-amd64" `
   -StartAgent 1
 ```
 
@@ -251,6 +269,7 @@ $env:CC_CLAUDE_ADD_DIR = "D:\"
 powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 `
   -ClaudePath "C:\path\to\claude.exe" `
   -ChatProfileFile ".\chat-profile.md" `
+  -AllowRoot "D:\" `
   -StartAgent 1
 ```
 
@@ -277,6 +296,7 @@ export CC_CLAUDE_ADD_DIR="/"
 ```bash
 export CLAUDE_PATH="$(which claude-code || which claude)"
 export CHAT_PROFILE_FILE="./chat-profile.md"
+export ALLOW_ROOT="/"
 bash ./run-multichat.sh
 ```
 
@@ -301,3 +321,8 @@ bash ./run-multichat.sh
 `Q: 我设置了 CLAUDE_PATH / CHAT_PROFILE_FILE，但 chat-claude 仍无响应？`  
 `A:` 多数是因为你走的是“手工启动 agent”而不是启动脚本。  
 手工启动时请改用 `CC_CLAUDE_CMD` / `CC_CLAUDE_PROFILE_FILE`。  
+
+`Q: 启动脚本默认允许目录是哪个？`  
+`A:` Linux 和 Windows 测试包默认都使用当前 bundle 根目录作为 `allow_root`。  
+如果你显式设置了 `ALLOW_ROOT`（Linux）或 `-AllowRoot`（Windows），则以你传入的值为准。  
+启动完成后可直接看控制台里的 `Allow Root: ...`，或查看 `run/tokens-and-process.json` 中的 `allow_root` 字段。  

@@ -338,6 +338,7 @@ try {
     tenant_token = $tenantToken
     ui_token = $uiToken
     agent_token = $agentToken
+    allow_root = $AllowRoot
     control = [ordered]@{
       pid = if ($controlProc) { $controlProc.Id } else { $null }
       logs = [ordered]@{
@@ -393,6 +394,8 @@ try {
   Write-Host "  PTY:         $ptyServerID"
   Write-Host "  chat-claude: $chatClaudeServerID"
   Write-Host "  chat-echo:   $chatEchoServerID"
+  Write-Host ""
+  Write-Host "Allow Root:   $AllowRoot"
   Write-Host ""
   Write-Host "Result file:  $resultPath"
   Write-Host "Chat URL:     $baseUrl/chat"

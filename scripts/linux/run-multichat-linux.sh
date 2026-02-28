@@ -225,6 +225,7 @@ jq -n \
   --arg tenant_token "$TENANT_TOKEN" \
   --arg ui_token "$UI_TOKEN" \
   --arg agent_token "$AGENT_TOKEN" \
+  --arg allow_root "$ALLOW_ROOT" \
   --arg control_pid "${CONTROL_PID:-}" \
   --arg control_stdout "$CONTROL_STDOUT" \
   --arg control_stderr "$CONTROL_STDERR" \
@@ -253,6 +254,7 @@ jq -n \
     tenant_token: $tenant_token,
     ui_token: $ui_token,
     agent_token: $agent_token,
+    allow_root: $allow_root,
     control: {
       pid: (if $control_pid == "" then null else ($control_pid|tonumber) end),
       logs: {
@@ -298,6 +300,8 @@ echo "Server IDs:"
 echo "  PTY:         $PTY_SERVER_ID"
 echo "  chat-claude: $CHAT_CLAUDE_SERVER_ID"
 echo "  chat-echo:   $CHAT_ECHO_SERVER_ID"
+echo
+echo "Allow Root:   $ALLOW_ROOT"
 echo
 echo "Result file:  $RESULT_JSON"
 echo "Chat URL:     ${BASE_URL}/chat"
