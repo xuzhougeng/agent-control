@@ -47,3 +47,9 @@ app/**/*.app
 
 # Generated docs site
 docs/_site/
+
+# Web E2E / Playwright
+node_modules/
+test-results/
+playwright-report/
+tests/web-e2e/fixtures/__pycache__/

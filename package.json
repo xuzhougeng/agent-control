@@ -1,0 +1,10 @@
+{
+  "name": "agent-control-web-e2e",
+  "private": true,
+  "scripts": {
+    "test:web:e2e": "playwright test --config=tests/web-e2e/playwright.config.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.1"
+  }
+}
