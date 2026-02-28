@@ -6,10 +6,75 @@ export function createTerminalController({
   sendWS,
 }) {
   const FOCUS_REPORT_SEQUENCES = new Set(["\x1b[I", "\x1b[O"]);
+  const platform = String(window.navigator?.userAgentData?.platform || window.navigator?.platform || "").toLowerCase();
+  const isApplePlatform = platform.includes("mac") || platform.includes("iphone") || platform.includes("ipad") || platform.includes("ipod");
   let term = null;
   let fitAddon = null;
   const currentSessionLabel = document.getElementById("currentSessionLabel");
   const sessionHint = document.getElementById("sessionHint");
+  const terminalHost = document.getElementById("terminal");
+
+  function getTerminalSelectionText() {
+    if (term && typeof term.getSelection === "function") {
+      const selected = String(term.getSelection() || "");
+      if (selected) return selected;
+    }
+    const globalSelection = window.getSelection?.();
+    return String(globalSelection?.toString() || "");
+  }
+
+  async function writeClipboardText(text) {
+    const content = String(text || "");
+    if (!content) return false;
+    if (window.navigator?.clipboard?.writeText) {
+      try {
+        await window.navigator.clipboard.writeText(content);
+        return true;
+      } catch {}
+    }
+
+    const scratch = document.createElement("textarea");
+    scratch.value = content;
+    scratch.setAttribute("readonly", "");
+    scratch.style.position = "fixed";
+    scratch.style.top = "-1000px";
+    scratch.style.left = "-1000px";
+    scratch.style.opacity = "0";
+    document.body.appendChild(scratch);
+    scratch.focus();
+    scratch.select();
+    let copied = false;
+    try {
+      copied = Boolean(document.execCommand("copy"));
+    } catch {}
+    scratch.remove();
+    if (term && typeof term.focus === "function") term.focus();
+    return copied;
+  }
+
+  function isCopyShortcut(event) {
+    const key = String(event?.key || "").toLowerCase();
+    if (key !== "c") return false;
+    if (isApplePlatform) {
+      return event.metaKey && !event.ctrlKey && !event.altKey;
+    }
+    return event.ctrlKey && event.shiftKey && !event.altKey;
+  }
+
+  function isCtrlCWithSelectionShortcut(event, hasSelection) {
+    if (!hasSelection || isApplePlatform) return false;
+    const key = String(event?.key || "").toLowerCase();
+    return key === "c" && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey;
+  }
+
+  function forwardInput(data) {
+    onTermData(data);
+    sendWS({
+      type: "term_in",
+      session_id: getSelectedSessionID(),
+      data_b64: bytesToB64(data),
+    });
+  }
 
   function formatSessionLabel(sessionID, instanceID, suffix = "") {
     const instanceText = instanceID ? ` • Instance: ${instanceID}` : "";
@@ -28,28 +93,53 @@ export function createTerminalController({
     });
     fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
-    term.open(document.getElementById("terminal"));
+    term.open(terminalHost);
     fitAddon.fit();
+
+    if (typeof term.attachCustomKeyEventHandler === "function") {
+      term.attachCustomKeyEventHandler((event) => {
+        if (event.type !== "keydown") return true;
+        const selected = getTerminalSelectionText();
+        if (!isCopyShortcut(event) && !isCtrlCWithSelectionShortcut(event, Boolean(selected))) return true;
+        event.preventDefault();
+        event.stopPropagation();
+        if (selected) {
+          void writeClipboardText(selected);
+        }
+        return false;
+      });
+    }
+
+    if (terminalHost) {
+      terminalHost.addEventListener("copy", (event) => {
+        const selected = getTerminalSelectionText();
+        if (!selected) return;
+        if (event.clipboardData?.setData) {
+          event.preventDefault();
+          event.clipboardData.setData("text/plain", selected);
+          return;
+        }
+        event.preventDefault();
+        void writeClipboardText(selected);
+      });
+    }
 
     window.addEventListener("resize", () => {
       fitAddon.fit();
       sendResize();
     });
-    new ResizeObserver(() => {
-      fitAddon.fit();
-      sendResize();
-    }).observe(document.getElementById("terminal"));
+    if (terminalHost) {
+      new ResizeObserver(() => {
+        fitAddon.fit();
+        sendResize();
+      }).observe(terminalHost);
+    }
 
     term.onData((data) => {
       if (FOCUS_REPORT_SEQUENCES.has(data)) {
         return;
       }
-      onTermData(data);
-      sendWS({
-        type: "term_in",
-        session_id: getSelectedSessionID(),
-        data_b64: bytesToB64(data),
-      });
+      forwardInput(data);
     });
   }
 
