@@ -27,8 +27,10 @@ export function createWorkspaceShell({
   const createdText = document.getElementById("workspaceCreatedText");
   const terminalBtn = document.getElementById("workspaceOpenTerminalBtn");
   const chatBtn = document.getElementById("workspaceOpenChatBtn");
+  const toggleViewBtn = document.getElementById("workspaceToggleViewBtn");
   const switchBtn = document.getElementById("workspaceSwitchModeBtn");
   const copyBtn = document.getElementById("workspaceCopyBtn");
+  const mobileMedia = window.matchMedia("(max-width: 900px)");
 
   let currentViewMode = viewMode;
 
@@ -36,12 +38,13 @@ export function createWorkspaceShell({
     if (viewBadge) {
       viewBadge.textContent = `${modeLabel(currentViewMode)} View`;
     }
-    if (terminalBtn) {
-      terminalBtn.classList.toggle("active", currentViewMode === "pty");
+    if (toggleViewBtn) {
+      const nextMode = currentViewMode === "pty" ? "chat" : "pty";
+      toggleViewBtn.textContent = modeLabel(nextMode);
+      toggleViewBtn.setAttribute("aria-label", `Open ${modeLabel(nextMode)} view`);
     }
-    if (chatBtn) {
-      chatBtn.classList.toggle("active", currentViewMode === "chat");
-    }
+    if (terminalBtn) terminalBtn.classList.toggle("active", currentViewMode === "pty");
+    if (chatBtn) chatBtn.classList.toggle("active", currentViewMode === "chat");
   }
 
   applyViewMode();
@@ -53,6 +56,15 @@ export function createWorkspaceShell({
   chatBtn?.addEventListener("click", () => {
     const session = getSelectedSession();
     if (session) onOpenChatView(session);
+  });
+  toggleViewBtn?.addEventListener("click", () => {
+    const session = getSelectedSession();
+    if (!session) return;
+    if (currentViewMode === "pty") {
+      onOpenChatView(session);
+      return;
+    }
+    onOpenTerminalView(session);
   });
   switchBtn?.addEventListener("click", () => {
     const session = getSelectedSession();
@@ -78,9 +90,10 @@ export function createWorkspaceShell({
       if (createdText) createdText.textContent = "-";
       if (terminalBtn) terminalBtn.disabled = true;
       if (chatBtn) chatBtn.disabled = true;
+      if (toggleViewBtn) toggleViewBtn.disabled = true;
       if (switchBtn) {
         switchBtn.disabled = true;
-        switchBtn.textContent = `Switch to ${modeLabel(currentViewMode)}`;
+        switchBtn.textContent = mobileMedia.matches ? "Switch" : `Switch to ${modeLabel(currentViewMode)}`;
       }
       if (copyBtn) copyBtn.disabled = true;
       return;
@@ -109,9 +122,14 @@ export function createWorkspaceShell({
 
     if (terminalBtn) terminalBtn.disabled = false;
     if (chatBtn) chatBtn.disabled = false;
+    if (toggleViewBtn) toggleViewBtn.disabled = false;
     if (switchBtn) {
       switchBtn.disabled = matchesView;
-      switchBtn.textContent = matchesView ? `${targetLabel} Active` : `Switch to ${targetLabel}`;
+      if (mobileMedia.matches) {
+        switchBtn.textContent = matchesView ? "Active" : "Switch";
+      } else {
+        switchBtn.textContent = matchesView ? `${targetLabel} Active` : `Switch to ${targetLabel}`;
+      }
     }
     if (copyBtn) copyBtn.disabled = false;
   }
@@ -120,6 +138,11 @@ export function createWorkspaceShell({
     currentViewMode = nextViewMode === "chat" ? "chat" : "pty";
     applyViewMode();
   }
+
+  mobileMedia.addEventListener("change", () => {
+    applyViewMode();
+    render(getSelectedSession());
+  });
 
   return { render, setViewMode };
 }

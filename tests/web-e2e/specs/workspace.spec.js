@@ -164,6 +164,36 @@ test("workspace drawers can be dragged vertically", async ({ page }) => {
   expect(rightTopAfter).toBeGreaterThan(rightTopBefore + 30);
 });
 
+test("mobile workspace uses drawer toggles for sessions and context", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await waitForWorkspaceReady(page);
+
+  const leftBtn = page.locator("#leftDrawerToggleBtn");
+  const rightBtn = page.locator("#rightDrawerToggleBtn");
+  const backdrop = page.locator("#sidebarBackdrop");
+
+  await expect(leftBtn).toBeVisible();
+  await expect(rightBtn).toBeVisible();
+
+  await rightBtn.click();
+  await expect(rightBtn).toHaveAttribute("aria-expanded", "true");
+  await expect.poll(async () => page.evaluate(() => document.body.classList.contains("right-drawer-open"))).toBeTruthy();
+  await expect.poll(async () => page.evaluate(() => document.body.classList.contains("left-drawer-open"))).toBeFalsy();
+
+  await leftBtn.click();
+  await expect(leftBtn).toHaveAttribute("aria-expanded", "true");
+  await expect.poll(async () => page.evaluate(() => document.body.classList.contains("left-drawer-open"))).toBeTruthy();
+  await expect.poll(async () => page.evaluate(() => document.body.classList.contains("right-drawer-open"))).toBeFalsy();
+
+  await backdrop.click({ force: true });
+  await expect.poll(async () => page.evaluate(() => ({
+    left: document.body.classList.contains("left-drawer-open"),
+    right: document.body.classList.contains("right-drawer-open"),
+    mobile: document.body.classList.contains("sidebar-open"),
+  }))).toEqual({ left: false, right: false, mobile: false });
+});
+
 test("terminal copy event writes selected text to clipboard", async ({ page }) => {
   await page.addInitScript(() => {
     const clipboard = {

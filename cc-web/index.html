@@ -41,8 +41,9 @@
       aria-label="Toggle sessions drawer"
       aria-controls="sidebar"
       aria-expanded="false"
+      title="Sessions"
     >
-      Sessions
+      ≡
     </button>
 
     <button
@@ -52,8 +53,9 @@
       aria-label="Toggle context drawer"
       aria-controls="contextSidebar"
       aria-expanded="false"
+      title="Context"
     >
-      Context
+      ◧
     </button>
 
     <aside id="sidebar" class="workspace-drawer workspace-drawer-left">
@@ -114,8 +116,9 @@
                 </div>
               </div>
               <div class="workspace-actions">
-                <button id="workspaceOpenTerminalBtn" type="button" class="btn-secondary workspace-mode-btn">Terminal</button>
-                <button id="workspaceOpenChatBtn" type="button" class="btn-secondary workspace-mode-btn">Chat</button>
+                <button id="workspaceOpenTerminalBtn" type="button" class="btn-secondary workspace-mode-btn workspace-action-desktop">Terminal</button>
+                <button id="workspaceOpenChatBtn" type="button" class="btn-secondary workspace-mode-btn workspace-action-desktop">Chat</button>
+                <button id="workspaceToggleViewBtn" type="button" class="btn-secondary workspace-mode-btn workspace-action-mobile">Chat</button>
                 <button id="workspaceSwitchModeBtn" type="button" class="btn-primary">Switch to Terminal</button>
               </div>
             </div>

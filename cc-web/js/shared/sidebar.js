@@ -99,6 +99,9 @@ export function createSidebarController({
 
   function setDrawerState(side, open) {
     const className = side === "right" ? "right-drawer-open" : "left-drawer-open";
+    if (isMobileViewport() && open) {
+      document.body.classList.remove(side === "right" ? "left-drawer-open" : "right-drawer-open");
+    }
     document.body.classList.toggle(className, Boolean(open));
     persistDesktopState(side, Boolean(open));
     syncButtons();
@@ -123,6 +126,10 @@ export function createSidebarController({
   }
 
   function closeSidebarOnMobile() {
+    if (isMobileViewport()) {
+      closeAllDrawers();
+      return;
+    }
     setDrawerState("left", false);
   }
 
@@ -146,10 +153,7 @@ export function createSidebarController({
 
   function applyViewportMode() {
     if (isMobileViewport()) {
-      document.body.classList.remove("right-drawer-open");
-      if (!document.body.classList.contains("sidebar-open")) {
-        document.body.classList.remove("left-drawer-open");
-      }
+      document.body.classList.remove("left-drawer-open", "right-drawer-open", "sidebar-open");
       if (leftDrawer) {
         leftDrawer.style.top = "";
         leftDrawer.style.bottom = "";
@@ -259,11 +263,7 @@ export function createSidebarController({
     if (sidebarToggleBtn) {
       sidebarToggleBtn.addEventListener("click", () => {
         if (isMobileViewport()) {
-          document.body.classList.toggle("sidebar-open");
-          document.body.classList.toggle("left-drawer-open", document.body.classList.contains("sidebar-open"));
-          syncButtons();
-          syncBackdrop();
-          setTimeout(() => onLayoutChange(), 0);
+          toggleDrawer("left");
           return;
         }
         toggleDrawer("left");
@@ -274,7 +274,7 @@ export function createSidebarController({
     if (sidebarBackdrop) sidebarBackdrop.addEventListener("click", closeAllDrawers);
 
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && (isLeftDrawerOpen() || isRightDrawerOpen() || document.body.classList.contains("sidebar-open"))) {
+      if (e.key === "Escape" && (isLeftDrawerOpen() || isRightDrawerOpen())) {
         closeAllDrawers();
       }
     });
