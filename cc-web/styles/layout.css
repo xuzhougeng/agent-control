@@ -102,12 +102,12 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: v
 }
 
 main {
-  display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  position: relative;
+  display: block;
   flex: 1;
   min-height: 0;
-  gap: 18px;
   padding: 18px;
+  overflow: hidden;
 }
 
 [hidden] {
@@ -125,6 +125,97 @@ aside {
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-panel);
+}
+
+.workspace-drawer {
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  width: min(320px, calc(100vw - 56px));
+  padding-top: 24px;
+  z-index: 42;
+  transition: transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
+}
+
+.workspace-drawer-left {
+  left: 18px;
+  transform: translateX(calc(-100% - 18px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.workspace-drawer-right {
+  right: 18px;
+  width: min(312px, calc(100vw - 56px));
+  transform: translateX(calc(100% + 18px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.left-drawer-open .workspace-drawer-left,
+body.right-drawer-open .workspace-drawer-right {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawer-grip {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+
+.drawer-grip:active {
+  cursor: grabbing;
+}
+
+.drawer-grip-pill {
+  display: block;
+  width: 46px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(143, 118, 90, 0.42);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) inset;
+}
+
+.drawer-peek {
+  position: absolute;
+  top: 28px;
+  z-index: 46;
+  width: 34px;
+  min-height: 112px;
+  padding: 10px 8px;
+  border-radius: 16px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 10px;
+  background: rgba(255, 250, 242, 0.94);
+  box-shadow: 0 10px 24px rgba(49, 95, 114, 0.12);
+}
+
+.drawer-peek-left {
+  left: 8px;
+}
+
+.drawer-peek-right {
+  right: 8px;
+}
+
+body.left-drawer-open .drawer-peek-left,
+body.right-drawer-open .drawer-peek-right {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .sidebar-tabs {
@@ -794,13 +885,13 @@ li .row {
   display: grid;
   min-height: 0;
   background: transparent;
+  height: 100%;
 }
 
 .workspace-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 296px;
-  gap: 18px;
-  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 100%;
 }
 
 .workspace-main-column {
@@ -815,11 +906,6 @@ li .row {
   display: grid;
   grid-template-rows: minmax(180px, auto) minmax(160px, auto) minmax(240px, 1fr);
   gap: 16px;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
 }
 
 .workspace-header {
@@ -1228,6 +1314,12 @@ body.sidebar-open .sidebar-backdrop {
   pointer-events: auto;
 }
 
+body.left-drawer-open .sidebar-backdrop,
+body.right-drawer-open .sidebar-backdrop {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* ── Admin Tabs & Panels ──────────────────────────────── */
 .admin-tabs {
   display: flex;
@@ -1368,6 +1460,15 @@ body.sidebar-open .sidebar-backdrop {
     padding: 10px;
   }
 
+  .drawer-peek,
+  #contextSidebar {
+    display: none;
+  }
+
+  .drawer-grip {
+    display: none;
+  }
+
   aside#sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -1382,7 +1483,12 @@ body.sidebar-open .sidebar-backdrop {
     padding: 12px;
   }
 
-  body.sidebar-open aside#sidebar { transform: translateX(0); }
+  body.sidebar-open aside#sidebar,
+  body.left-drawer-open aside#sidebar {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
 
   .sidebar-panel {
     padding-right: 0;
@@ -1398,9 +1504,6 @@ body.sidebar-open .sidebar-backdrop {
   .workspace-layout {
     grid-template-columns: 1fr;
     gap: 12px;
-  }
-  .workspace-context-column {
-    grid-template-rows: auto auto auto;
   }
   .workspace-meta-sidebar {
     grid-template-columns: repeat(2, minmax(0, 1fr));

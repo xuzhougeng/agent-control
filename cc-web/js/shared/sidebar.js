@@ -5,25 +5,125 @@ export function createSidebarController({
   approvalDetails,
 }) {
   const sidebarToggleBtn = document.getElementById("sidebarToggleBtn");
+  const leftDrawerToggleBtn = document.getElementById("leftDrawerToggleBtn");
+  const rightDrawerToggleBtn = document.getElementById("rightDrawerToggleBtn");
+  const leftDrawer = document.getElementById("sidebar");
+  const rightDrawer = document.getElementById("contextSidebar");
   const sidebarBackdrop = document.getElementById("sidebarBackdrop");
   const mobileMedia = window.matchMedia("(max-width: 900px)");
+  const DESKTOP_DRAWER_MARGIN = 18;
+  const DESKTOP_DRAWER_MIN_HEIGHT = 260;
+  const DESKTOP_DRAWER_DEFAULT_TOP = 18;
   let mobileKeyboardOpen = false;
 
   function isMobileViewport() {
     return mobileMedia.matches;
   }
 
-  function toggleSidebar(open) {
-    if (!sidebarToggleBtn || !sidebarBackdrop) return;
-    const nextOpen = typeof open === "boolean" ? open : !document.body.classList.contains("sidebar-open");
-    document.body.classList.toggle("sidebar-open", nextOpen);
-    sidebarToggleBtn.setAttribute("aria-expanded", String(nextOpen));
-    sidebarBackdrop.hidden = !nextOpen;
+  function isDesktopViewport() {
+    return !mobileMedia.matches;
+  }
+
+  function isLeftDrawerOpen() {
+    return document.body.classList.contains("left-drawer-open");
+  }
+
+  function isRightDrawerOpen() {
+    return document.body.classList.contains("right-drawer-open");
+  }
+
+  function syncBackdrop() {
+    if (!sidebarBackdrop) return;
+    const visible = isLeftDrawerOpen() || isRightDrawerOpen();
+    sidebarBackdrop.hidden = !visible;
+  }
+
+  function syncButtons() {
+    const leftOpen = isLeftDrawerOpen();
+    const rightOpen = isRightDrawerOpen();
+    if (sidebarToggleBtn) sidebarToggleBtn.setAttribute("aria-expanded", String(leftOpen));
+    if (leftDrawerToggleBtn) leftDrawerToggleBtn.setAttribute("aria-expanded", String(leftOpen));
+    if (rightDrawerToggleBtn) rightDrawerToggleBtn.setAttribute("aria-expanded", String(rightOpen));
+  }
+
+  function persistDesktopState(side, open) {
+    if (!isDesktopViewport()) return;
+    localStorage.setItem(side === "right" ? "workspace_right_drawer_open" : "workspace_left_drawer_open", open ? "1" : "0");
+  }
+
+  function getDesktopDrawerStorageKey(side) {
+    return side === "right" ? "workspace_right_drawer_top" : "workspace_left_drawer_top";
+  }
+
+  function getDesktopDrawerElements(side) {
+    return side === "right"
+      ? { drawer: rightDrawer, peek: rightDrawerToggleBtn }
+      : { drawer: leftDrawer, peek: leftDrawerToggleBtn };
+  }
+
+  function getDrawerTopLimit(drawer) {
+    const parent = drawer?.parentElement;
+    if (!drawer || !parent) {
+      return { min: DESKTOP_DRAWER_DEFAULT_TOP, max: DESKTOP_DRAWER_DEFAULT_TOP, height: 0 };
+    }
+    const parentRect = parent.getBoundingClientRect();
+    const parentHeight = Math.max(
+      parent.clientHeight || 0,
+      parentRect.height || 0,
+      window.innerHeight - parentRect.top - DESKTOP_DRAWER_MARGIN
+    );
+    const max = Math.max(DESKTOP_DRAWER_DEFAULT_TOP, parentHeight - DESKTOP_DRAWER_MIN_HEIGHT - DESKTOP_DRAWER_MARGIN);
+    return { min: DESKTOP_DRAWER_DEFAULT_TOP, max, height: parentHeight };
+  }
+
+  function applyDrawerOffset(side, requestedTop) {
+    if (!isDesktopViewport()) return;
+    const { drawer, peek } = getDesktopDrawerElements(side);
+    if (!drawer) return;
+    const { min, max, height } = getDrawerTopLimit(drawer);
+    const top = Math.min(Math.max(Number.isFinite(requestedTop) ? requestedTop : DESKTOP_DRAWER_DEFAULT_TOP, min), max);
+    const nextHeight = Math.max(DESKTOP_DRAWER_MIN_HEIGHT, height - top - DESKTOP_DRAWER_MARGIN);
+    drawer.style.top = `${top}px`;
+    drawer.style.bottom = "auto";
+    drawer.style.height = `${nextHeight}px`;
+    if (peek) {
+      peek.style.top = `${Math.max(28, top + 10)}px`;
+    }
+    localStorage.setItem(getDesktopDrawerStorageKey(side), String(Math.round(top)));
+  }
+
+  function restoreDrawerOffset(side) {
+    const saved = Number(localStorage.getItem(getDesktopDrawerStorageKey(side)));
+    applyDrawerOffset(side, Number.isFinite(saved) ? saved : DESKTOP_DRAWER_DEFAULT_TOP);
+  }
+
+  function setDrawerState(side, open) {
+    const className = side === "right" ? "right-drawer-open" : "left-drawer-open";
+    document.body.classList.toggle(className, Boolean(open));
+    persistDesktopState(side, Boolean(open));
+    syncButtons();
+    syncBackdrop();
+    setTimeout(() => onLayoutChange(), 0);
+  }
+
+  function toggleDrawer(side, open) {
+    const current = side === "right" ? isRightDrawerOpen() : isLeftDrawerOpen();
+    setDrawerState(side, typeof open === "boolean" ? open : !current);
+  }
+
+  function closeAllDrawers() {
+    document.body.classList.remove("left-drawer-open", "right-drawer-open", "sidebar-open");
+    if (isDesktopViewport()) {
+      localStorage.setItem("workspace_left_drawer_open", "0");
+      localStorage.setItem("workspace_right_drawer_open", "0");
+    }
+    syncButtons();
+    syncBackdrop();
     setTimeout(() => onLayoutChange(), 0);
   }
 
   function closeSidebarOnMobile() {
-    if (isMobileViewport()) toggleSidebar(false);
+    setDrawerState("left", false);
   }
 
   function initializeApprovalDetails() {
@@ -42,6 +142,90 @@ export function createSidebarController({
       return;
     }
     approvalDetails.setAttribute("open", "");
+  }
+
+  function applyViewportMode() {
+    if (isMobileViewport()) {
+      document.body.classList.remove("right-drawer-open");
+      if (!document.body.classList.contains("sidebar-open")) {
+        document.body.classList.remove("left-drawer-open");
+      }
+      if (leftDrawer) {
+        leftDrawer.style.top = "";
+        leftDrawer.style.bottom = "";
+        leftDrawer.style.height = "";
+      }
+      if (rightDrawer) {
+        rightDrawer.style.top = "";
+        rightDrawer.style.bottom = "";
+        rightDrawer.style.height = "";
+      }
+      if (leftDrawerToggleBtn) leftDrawerToggleBtn.style.top = "";
+      if (rightDrawerToggleBtn) rightDrawerToggleBtn.style.top = "";
+    } else {
+      const leftSaved = localStorage.getItem("workspace_left_drawer_open");
+      const rightSaved = localStorage.getItem("workspace_right_drawer_open");
+      document.body.classList.toggle("left-drawer-open", leftSaved === "1");
+      document.body.classList.toggle("right-drawer-open", rightSaved === "1");
+      document.body.classList.remove("sidebar-open");
+      restoreDrawerOffset("left");
+      restoreDrawerOffset("right");
+    }
+    syncButtons();
+    syncBackdrop();
+    setTimeout(() => onLayoutChange(), 0);
+  }
+
+  function bindDrawerDrag(side) {
+    const { drawer } = getDesktopDrawerElements(side);
+    const grip = drawer?.querySelector(`[data-drawer-drag="${side}"]`);
+    if (!grip || !drawer) return;
+    let dragging = false;
+
+    function startDrag(clientY, pointerId) {
+      if (!isDesktopViewport() || dragging) return;
+      dragging = true;
+      const startTop = drawer.offsetTop;
+
+      const onMove = (moveEvent) => {
+        const nextClientY = typeof moveEvent.clientY === "number" ? moveEvent.clientY : clientY;
+        const delta = nextClientY - clientY;
+        applyDrawerOffset(side, startTop + delta);
+        onLayoutChange();
+      };
+
+      const onUp = () => {
+        dragging = false;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        setTimeout(() => onLayoutChange(), 0);
+      };
+
+      if (typeof pointerId === "number") {
+        grip.setPointerCapture?.(pointerId);
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onUp);
+      } else {
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+      }
+    }
+
+    grip.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      startDrag(event.clientY, event.pointerId);
+    });
+
+    grip.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      startDrag(event.clientY);
+    });
   }
 
   function handleMobileViewportChange() {
@@ -70,18 +254,39 @@ export function createSidebarController({
   function mount() {
     if (!isControllerPage && !isChatPage) return;
     initializeApprovalDetails();
-    toggleSidebar(false);
-    if (sidebarToggleBtn) sidebarToggleBtn.addEventListener("click", () => toggleSidebar());
-    if (sidebarBackdrop) sidebarBackdrop.addEventListener("click", () => toggleSidebar(false));
+    applyViewportMode();
+
+    if (sidebarToggleBtn) {
+      sidebarToggleBtn.addEventListener("click", () => {
+        if (isMobileViewport()) {
+          document.body.classList.toggle("sidebar-open");
+          document.body.classList.toggle("left-drawer-open", document.body.classList.contains("sidebar-open"));
+          syncButtons();
+          syncBackdrop();
+          setTimeout(() => onLayoutChange(), 0);
+          return;
+        }
+        toggleDrawer("left");
+      });
+    }
+    if (leftDrawerToggleBtn) leftDrawerToggleBtn.addEventListener("click", () => toggleDrawer("left"));
+    if (rightDrawerToggleBtn) rightDrawerToggleBtn.addEventListener("click", () => toggleDrawer("right"));
+    if (sidebarBackdrop) sidebarBackdrop.addEventListener("click", closeAllDrawers);
 
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && document.body.classList.contains("sidebar-open")) {
-        toggleSidebar(false);
+      if (e.key === "Escape" && (isLeftDrawerOpen() || isRightDrawerOpen() || document.body.classList.contains("sidebar-open"))) {
+        closeAllDrawers();
       }
     });
 
     mobileMedia.addEventListener("change", () => {
-      if (!isMobileViewport()) toggleSidebar(false);
+      applyViewportMode();
+    });
+
+    window.addEventListener("resize", () => {
+      if (!isDesktopViewport()) return;
+      restoreDrawerOffset("left");
+      restoreDrawerOffset("right");
       onLayoutChange();
     });
 
@@ -95,12 +300,16 @@ export function createSidebarController({
         setTimeout(() => onLayoutChange(), 0);
       });
     }
+
+    bindDrawerDrag("left");
+    bindDrawerDrag("right");
   }
 
   return {
     mount,
     isMobileViewport,
-    toggleSidebar,
+    toggleDrawer,
+    closeAllDrawers,
     closeSidebarOnMobile,
   };
 }

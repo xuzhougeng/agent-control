@@ -34,7 +34,32 @@
   </header>
 
   <main>
-    <aside id="sidebar">
+    <button
+      id="leftDrawerToggleBtn"
+      class="drawer-peek drawer-peek-left"
+      type="button"
+      aria-label="Toggle sessions drawer"
+      aria-controls="sidebar"
+      aria-expanded="false"
+    >
+      Sessions
+    </button>
+
+    <button
+      id="rightDrawerToggleBtn"
+      class="drawer-peek drawer-peek-right"
+      type="button"
+      aria-label="Toggle context drawer"
+      aria-controls="contextSidebar"
+      aria-expanded="false"
+    >
+      Context
+    </button>
+
+    <aside id="sidebar" class="workspace-drawer workspace-drawer-left">
+      <div class="drawer-grip" data-drawer-drag="left" title="Drag drawer vertically">
+        <span class="drawer-grip-pill"></span>
+      </div>
       <div id="sidebarPanelControl" class="sidebar-panel active">
         <section class="sidebar-card">
           <div class="section-header">
@@ -138,7 +163,10 @@
           </section>
         </section>
 
-        <aside class="workspace-context-column">
+        <aside id="contextSidebar" class="workspace-context-column workspace-drawer workspace-drawer-right">
+          <div class="drawer-grip" data-drawer-drag="right" title="Drag drawer vertically">
+            <span class="drawer-grip-pill"></span>
+          </div>
           <section class="context-card context-card-session">
             <div class="context-card-header">
               <div>
