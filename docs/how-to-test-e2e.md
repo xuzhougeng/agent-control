@@ -34,6 +34,7 @@ npm run test:web:e2e
 2. 在临时目录里启动 `cc-control`、`cc-agent`、`cc-chat-claude`
 3. 用 `tests/web-e2e/fixtures/fake-claude.py` 替代真实 Claude CLI
 4. 运行 Playwright 用例
+5. 为每条用例输出 screenshot，默认保存在 `test-results/`
 
 ## 指定端口
 
@@ -41,6 +42,24 @@ npm run test:web:e2e
 
 ```bash
 CC_WEB_E2E_PORT=18120 npm run test:web:e2e
+```
+
+## Screenshot 策略
+
+默认会为每条用例保存整页 screenshot，方便直接检查页面状态，输出目录是：
+
+- `test-results/`
+
+如果你只想在失败时保留 screenshot：
+
+```bash
+CC_WEB_E2E_SCREENSHOT=only-on-failure npm run test:web:e2e
+```
+
+如果你临时不想生成 screenshot：
+
+```bash
+CC_WEB_E2E_SCREENSHOT=off npm run test:web:e2e
 ```
 
 ## 当前覆盖
@@ -109,6 +128,8 @@ npx playwright test --ui --config=tests/web-e2e/playwright.config.mjs
   - agent 的 `allow-root`
 - `CC_WEB_E2E_PRESEEDED_SESSION_ID`
   - 用于模拟“服务器上已存在 Claude session”的会话 id
+- `CC_WEB_E2E_SCREENSHOT`
+  - screenshot 策略，支持 `on` / `only-on-failure` / `off`
 
 ## 常见问题
 

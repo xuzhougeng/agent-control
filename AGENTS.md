@@ -22,11 +22,20 @@
 - Files: Go source follows existing `snake_case.go` patterns; tests use `*_test.go`.
 - UI: keep changes scoped to `cc-web/` and follow the existing vanilla JS/DOM style (no framework).
 
+## Web UI Expectations
+- Desktop-first: prioritize the desktop web workspace before mobile polish. Mobile should remain functional, but primary design decisions should optimize desktop information hierarchy and task flow.
+- Treat `/` as the single real workspace entrypoint. `/chat` is compatibility-only and should not regain separate product logic.
+- Prefer a clear workspace model: left rail for navigation/creation, center for the active task, right rail for secondary context such as approvals and runtime history.
+- Avoid generic admin-tool aesthetics. UI changes should establish a coherent visual language with deliberate typography, spacing, color hierarchy, and panel structure.
+- Do not add UI complexity unless it improves the main task flow: select session, inspect status, switch mode, continue work.
+
 ## Testing Guidelines
 - Framework: Go standard `testing` package.
 - Location: tests live alongside code (for example `cc-control/internal/.../*_test.go`).
 - Naming: `TestXxx` functions in `*_test.go` files.
 - Targeted runs: `go test ./cc-agent/...` or `go test ./cc-control/...`.
+- For web changes, run the Playwright E2E suite when practical: `npm run test:web:e2e`.
+- Keep Playwright screenshots enabled so reviewers can inspect the resulting UI state. The default artifact location is `test-results/`.
 
 ## Commit & Pull Request Guidelines
 - Commit messages follow Conventional Commits seen in history, for example `feat: ...`, `docs: ...`, `fix: ...`.
