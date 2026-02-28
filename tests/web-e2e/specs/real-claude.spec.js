@@ -329,5 +329,51 @@ test("real Claude flow: terminal hi then switch chat and send hi without exited"
   await expect(page.locator("#workspaceSessionTitle")).toHaveText(sessionID);
   await expect(page.locator("#currentSessionLabel")).toContainText("Session:");
   await captureStep(page, testInfo, "12-terminal-active-again", { withDrawers: false });
+
+  await page.locator("#terminal").click({ position: { x: 80, y: 240 } });
+  logStep("terminal:focused:final");
+  const terminalIOBeforeFinalSend = (await getTerminalIOState(page)) || { termInCount: 0, termOutCount: 0 };
+  await page.keyboard.type("say hi", { delay: 50 });
+  await page.keyboard.press("Enter");
+  logStep("terminal:send:say-hi:keyboard");
+
+  let finalTermInObserved = false;
+  try {
+    await expect
+      .poll(async () => {
+        const io = await getTerminalIOState(page);
+        const nextCount = Number(io?.termInCount || 0);
+        const recent = String(io?.termInRecentText || "");
+        return nextCount > Number(terminalIOBeforeFinalSend.termInCount || 0) && recent.includes("say hi");
+      }, { timeout: 10_000 })
+      .toBeTruthy();
+    finalTermInObserved = true;
+  } catch {}
+
+  if (!finalTermInObserved) {
+    logStep("terminal:final-keyboard-send-not-observed:fallback-ws");
+    const terminalSendOK = await page.evaluate(() => window.__CC_E2E__.sendTerminalInput("say hi\r"));
+    expect(terminalSendOK).toBeTruthy();
+    await expect
+      .poll(async () => {
+        const io = await getTerminalIOState(page);
+        const nextCount = Number(io?.termInCount || 0);
+        const recent = String(io?.termInRecentText || "");
+        return nextCount > Number(terminalIOBeforeFinalSend.termInCount || 0) && recent.includes("say hi");
+      }, { timeout: 30_000 })
+      .toBeTruthy();
+    logStep("terminal:send:say-hi:ws-fallback-ok");
+  } else {
+    logStep("terminal:send:say-hi:keyboard-ok");
+  }
+
+  await expect
+    .poll(async () => {
+      const io = await getTerminalIOState(page);
+      return Number(io?.termOutCount || 0);
+    }, { timeout: 60_000 })
+    .toBeGreaterThan(Number(terminalIOBeforeFinalSend.termOutCount || 0));
+  logStep("terminal:final-term-out-observed");
+  await captureStep(page, testInfo, "13-terminal-sent-say-hi", { withDrawers: false });
   logStep("test:done");
 });
