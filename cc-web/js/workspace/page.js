@@ -38,6 +38,13 @@ export function initWorkspacePage() {
     pendingTurns: 0,
     pendingSlowTimer: null,
   };
+  const e2eState = {
+    lastTermInText: "",
+    lastTermInAtMs: 0,
+    lastTermInSessionID: "",
+    lastTermOutAtMs: 0,
+    lastTermOutSessionID: "",
+  };
 
   const api = createUIApi(() => state.token);
 
@@ -78,7 +85,23 @@ export function initWorkspacePage() {
     return getServerByID(state.selectedServerID);
   }
 
+  function decodeB64Text(b64) {
+    try {
+      const bin = atob(String(b64 || ""));
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) arr[i] = bin.charCodeAt(i);
+      return new TextDecoder().decode(arr);
+    } catch {
+      return "";
+    }
+  }
+
   function sendWS(msg) {
+    if (msg?.type === "term_in") {
+      e2eState.lastTermInText = decodeB64Text(msg.data_b64);
+      e2eState.lastTermInAtMs = Date.now();
+      e2eState.lastTermInSessionID = String(msg.session_id || "");
+    }
     return wsClient.send(msg);
   }
 
@@ -832,6 +855,8 @@ export function initWorkspacePage() {
 
   function handleWS(msg) {
     if (msg.type === "term_out" && msg.session_id === state.selectedSessionID && msg.data_b64) {
+      e2eState.lastTermOutAtMs = Date.now();
+      e2eState.lastTermOutSessionID = String(msg.session_id || "");
       terminal.writeOutput(msg, state.pendingFirstOutputSessionID, () => {
         state.pendingFirstOutputSessionID = "";
         terminal.markLoaded(msg.session_id, msg.instance_id || "");
@@ -973,6 +998,7 @@ export function initWorkspacePage() {
   sidebar.mount();
   window.__CC_E2E__ = {
     sendTerminalInput,
+    getTerminalIOState: () => ({ ...e2eState }),
   };
   updateViewVisibility();
   renderInstanceHistory();

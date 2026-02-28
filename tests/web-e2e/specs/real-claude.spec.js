@@ -204,6 +204,13 @@ async function captureStep(page, testInfo, label, options = {}) {
   logStep(`capture:end:${label}`);
 }
 
+async function getTerminalIOState(page) {
+  return page.evaluate(() => {
+    if (!window.__CC_E2E__ || typeof window.__CC_E2E__.getTerminalIOState !== "function") return null;
+    return window.__CC_E2E__.getTerminalIOState();
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   test.skip(!runRealClaude, "set CC_WEB_E2E_CLAUDE_MODE=real to run the real Claude smoke test");
   await page.setViewportSize({ width: 1720, height: 1080 });
@@ -236,7 +243,26 @@ test("real Claude flow: terminal hi then switch chat and send hi without exited"
   await page.waitForTimeout(5_000);
   await captureStep(page, testInfo, "03-terminal-wait-5s-before-hi", { withDrawers: false });
 
-  await page.evaluate(() => window.__CC_E2E__.sendTerminalInput("hi\r"));
+  await page.locator("#terminal").click({ position: { x: 80, y: 240 } });
+  logStep("terminal:focused");
+  const terminalIOBeforeSend = (await getTerminalIOState(page)) || { lastTermOutAtMs: 0 };
+  const terminalSendOK = await page.evaluate(() => window.__CC_E2E__.sendTerminalInput("hi\r"));
+  logStep(`terminal:send:hi:${terminalSendOK ? "ok" : "failed"}`);
+  expect(terminalSendOK).toBeTruthy();
+  await expect
+    .poll(async () => {
+      const io = await getTerminalIOState(page);
+      return String(io?.lastTermInText || "");
+    }, { timeout: 30_000 })
+    .toContain("hi");
+  logStep("terminal:term-in-observed");
+  await expect
+    .poll(async () => {
+      const io = await getTerminalIOState(page);
+      return Number(io?.lastTermOutAtMs || 0);
+    }, { timeout: 60_000 })
+    .toBeGreaterThan(Number(terminalIOBeforeSend.lastTermOutAtMs || 0));
+  logStep("terminal:term-out-observed");
   await expect(page.locator("#currentSessionLabel")).toContainText("Session:");
   await captureStep(page, testInfo, "04-sent-hi-from-terminal", { withDrawers: false });
 
