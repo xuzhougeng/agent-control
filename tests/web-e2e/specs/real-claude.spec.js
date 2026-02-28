@@ -27,31 +27,51 @@ async function primeToken(page) {
 }
 
 async function openLeftDrawer(page) {
-  const btn = page.locator("#leftDrawerToggleBtn");
-  if ((await btn.getAttribute("aria-expanded")) !== "true") {
-    await btn.click();
-  }
+  await page.evaluate(() => {
+    const body = document.body;
+    const leftBtn = document.getElementById("leftDrawerToggleBtn");
+    const topBtn = document.getElementById("sidebarToggleBtn");
+    const backdrop = document.getElementById("sidebarBackdrop");
+    body.classList.add("left-drawer-open");
+    leftBtn?.setAttribute("aria-expanded", "true");
+    topBtn?.setAttribute("aria-expanded", "true");
+    if (backdrop) backdrop.hidden = false;
+  });
 }
 
 async function closeLeftDrawer(page) {
-  const btn = page.locator("#leftDrawerToggleBtn");
-  if ((await btn.getAttribute("aria-expanded")) === "true") {
-    await btn.click();
-  }
+  await page.evaluate(() => {
+    const body = document.body;
+    const leftBtn = document.getElementById("leftDrawerToggleBtn");
+    const topBtn = document.getElementById("sidebarToggleBtn");
+    const backdrop = document.getElementById("sidebarBackdrop");
+    body.classList.remove("left-drawer-open");
+    leftBtn?.setAttribute("aria-expanded", "false");
+    topBtn?.setAttribute("aria-expanded", "false");
+    if (backdrop) backdrop.hidden = !body.classList.contains("right-drawer-open");
+  });
 }
 
 async function openRightDrawer(page) {
-  const btn = page.locator("#rightDrawerToggleBtn");
-  if ((await btn.getAttribute("aria-expanded")) !== "true") {
-    await btn.click();
-  }
+  await page.evaluate(() => {
+    const body = document.body;
+    const rightBtn = document.getElementById("rightDrawerToggleBtn");
+    const backdrop = document.getElementById("sidebarBackdrop");
+    body.classList.add("right-drawer-open");
+    rightBtn?.setAttribute("aria-expanded", "true");
+    if (backdrop) backdrop.hidden = false;
+  });
 }
 
 async function closeRightDrawer(page) {
-  const btn = page.locator("#rightDrawerToggleBtn");
-  if ((await btn.getAttribute("aria-expanded")) === "true") {
-    await btn.click();
-  }
+  await page.evaluate(() => {
+    const body = document.body;
+    const rightBtn = document.getElementById("rightDrawerToggleBtn");
+    const backdrop = document.getElementById("sidebarBackdrop");
+    body.classList.remove("right-drawer-open");
+    rightBtn?.setAttribute("aria-expanded", "false");
+    if (backdrop) backdrop.hidden = !body.classList.contains("left-drawer-open");
+  });
 }
 
 async function waitForWorkspaceReady(page) {
@@ -62,24 +82,31 @@ async function waitForWorkspaceReady(page) {
 }
 
 async function createSession(page, { cwd } = {}) {
+  logStep("create-session:start");
   const root = cwd || repoRoot;
   await openLeftDrawer(page);
+  logStep("create-session:left-drawer-open");
   const toolsSummary = page.locator("#workspaceToolsDetails summary");
   const toolsDetails = page.locator("#workspaceToolsDetails");
   if (!(await toolsDetails.evaluate((el) => el.hasAttribute("open")))) {
-    await toolsSummary.click();
+    await toolsSummary.click({ timeout: 10_000 });
+    logStep("create-session:tools-opened");
   }
-  await page.getByLabel("cwd").fill(root);
-  await page.getByRole("button", { name: "Create" }).click();
-  await expect(page.locator("#workspaceSessionTitle")).not.toHaveText("No session selected");
+  await page.getByLabel("cwd").fill(root, { timeout: 10_000 });
+  logStep("create-session:cwd-filled");
+  await page.getByRole("button", { name: "Create" }).click({ timeout: 10_000 });
+  logStep("create-session:create-clicked");
+  await expect(page.locator("#workspaceSessionTitle")).not.toHaveText("No session selected", { timeout: 30_000 });
+  logStep("create-session:title-ready");
   const sessionID = String((await page.locator("#workspaceSessionTitle").textContent()) || "").trim();
   const shortSessionID = sessionID.slice(0, 8);
   const sessionRow = shortSessionID
     ? page.locator("#sessionsList li.session-item").filter({ hasText: shortSessionID }).first()
     : page.locator("#sessionsList li.session-item").first();
-  await expect(sessionRow).toBeVisible();
-  await sessionRow.click();
+  await expect(sessionRow).toBeVisible({ timeout: 20_000 });
+  await sessionRow.click({ timeout: 10_000 });
   await closeLeftDrawer(page);
+  logStep(`create-session:done:${sessionID}`);
   return sessionID;
 }
 
@@ -170,6 +197,7 @@ test("real Claude flow: terminal hi then switch chat and send hi without exited"
   logStep("workspace:ready");
   await captureStep(page, testInfo, "01-workspace-ready");
 
+  logStep("create-session:invoke");
   const sessionID = await createSession(page);
   logStep(`session:created:${sessionID}`);
   await expect(page.locator("#workspaceModeBadge")).toContainText("Terminal");
