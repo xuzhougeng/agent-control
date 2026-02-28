@@ -94,10 +94,17 @@ CLAUDE_PATH=/full/path/to/claude-code bash ./run-multichat.sh
 - `ui token`
 - `agent token`
 - `Chat URL`
+- `Allow Root`
 
 并写入结果文件：
 
 - `./run/tokens-and-process.json`
+
+关于统一 `session_id` 的补充：
+
+- Web UI 中同一个 `session_id` 会在 Chat / PTY 间复用。
+- 若目标机本机已存在 `~/.claude/session-env/<session_id>`，PTY 会自动尝试用 `claude --resume <session_id>` 接入已有 Claude conversation。
+- 若只是新建了逻辑 session，但 Claude conversation 实际还没建立（例如 PTY/Chat 都没真正对 Claude 说过话），切回 PTY 时系统会继续使用 `--session-id`，避免触发 `no conversation found with session ID ...`。
 
 ---
 
@@ -142,6 +149,11 @@ powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 -ClaudePath "C:
 
 - `.\run\tokens-and-process.json`
 
+说明：
+
+- Windows 当前仍以 Chat 测试为主；`session_type=pty` 依旧不支持。
+- 统一 `session_id`、`active_instance_id` 和实例历史的语义与 Linux 端保持一致。
+
 ---
 
 ## 4) 常见问题
@@ -166,3 +178,11 @@ powershell -ExecutionPolicy Bypass -File .\run-multichat-win.ps1 -ClaudePath "C:
 `Q: Windows 上 PTY 测试会怎样？`
 
 `A:` 预期是创建 PTY 会话时报不支持（这是当前设计），但 chat-claude / chat-echo 会正常可测。
+
+`Q: 为什么我传入一个已经在服务器上通过命令行 claude 启动过的 session_id，第一次进 PTY 仍然会报冲突？`
+
+`A:` 请确认目标机本机存在 `~/.claude/session-env/<session_id>`。最新版 agent 会在发现该文件时自动把 PTY 启动参数从 `--session-id` 切换为 `--resume`。如果仍报错，优先检查最新 bundle 是否已重新打包，以及 `run/cc-agent-pty.stdout.log` / `run/cc-agent-pty.stderr.log`。
+
+`Q: 为什么新建了一个带 session_id 的空会话，PTY -> Chat -> PTY 后会看到 no conversation found？`
+
+`A:` 旧版本会把“存在历史实例”误判成“Claude conversation 已存在”，导致错误地对 PTY 使用 `--resume`。最新版已修正：只有会话已产生真实 chat history 时，控制面才会主动要求 PTY `resume`；否则仍使用 `--session-id`。如果还有问题，请确认使用的是最新重新打包的测试包。 

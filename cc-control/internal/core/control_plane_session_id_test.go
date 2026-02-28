@@ -44,11 +44,17 @@ func TestCreateSession_WithProvidedSessionID(t *testing.T) {
 	if sess.SessionID != wantSessionID {
 		t.Fatalf("expected session_id=%s, got %s", wantSessionID, sess.SessionID)
 	}
+	if sess.ActiveInstanceID == "" {
+		t.Fatal("expected active_instance_id to be set")
+	}
 	if len(conn.msgs) == 0 {
 		t.Fatal("expected message sent to agent")
 	}
 	if conn.msgs[0].SessionID != wantSessionID {
 		t.Fatalf("expected envelope session_id=%s, got %s", wantSessionID, conn.msgs[0].SessionID)
+	}
+	if conn.msgs[0].InstanceID != sess.ActiveInstanceID {
+		t.Fatalf("expected envelope instance_id=%s, got %s", sess.ActiveInstanceID, conn.msgs[0].InstanceID)
 	}
 }
 

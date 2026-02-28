@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chat – Control Plane</title>
+  <title>Claude Code Workspace</title>
   <link rel="stylesheet" href="/style.css?v=chat3">
 </head>
 <body>
@@ -19,7 +19,7 @@
       >
         ☰
       </button>
-      <h1>Chat</h1>
+      <h1>Claude Code Workspace</h1>
     </div>
     <div class="token-row">
       <span id="wsStatus" class="badge badge-offline">WS: disconnected</span>
@@ -41,7 +41,7 @@
         </section>
 
         <details id="newChatDetails" class="sidebar-card" open>
-          <summary class="section-summary"><h2>New Chat</h2></summary>
+          <summary class="section-summary"><h2>New Session</h2></summary>
           <label for="cwdInput">cwd</label>
           <input id="cwdInput" type="text" placeholder="/path/to/repo">
           <label for="sessionIdInput">session id (optional UUID)</label>
@@ -53,20 +53,62 @@
 
         <section class="sidebar-card">
           <div class="section-header">
-            <h2>Chat Sessions</h2>
+            <h2>Sessions</h2>
             <button id="refreshSessionsBtn" type="button">Refresh</button>
           </div>
           <ul id="sessionsList"></ul>
+        </section>
+        <section class="sidebar-card">
+          <div class="section-header">
+            <h2>Instances</h2>
+            <span id="chatInstanceHistoryCount" class="badge">0</span>
+          </div>
+          <ul id="chatInstanceHistoryList"></ul>
         </section>
       </div>
     </aside>
 
     <section class="content">
-      <div id="chatContainer" class="chat-container">
-        <div id="chatSessionInfo" class="chat-session-info" hidden>
-          <span id="chatSessionIdText" class="chat-session-id-text"></span>
-          <button id="chatCopySessionBtn" type="button" class="btn-secondary chat-copy-session-btn">Copy</button>
+      <section class="workspace-shell">
+        <div class="workspace-header">
+          <div class="workspace-header-top">
+            <div class="workspace-badges">
+              <span id="workspaceViewBadge" class="badge">Chat View</span>
+              <span id="workspaceModeBadge" class="badge">Mode: -</span>
+              <span id="workspaceStatusBadge" class="badge">No Session</span>
+            </div>
+            <div class="workspace-actions">
+              <button id="workspaceCopyBtn" type="button" class="btn-secondary">Copy Session ID</button>
+              <button id="workspaceOpenTerminalBtn" type="button" class="btn-secondary workspace-mode-btn">Terminal View</button>
+              <button id="workspaceOpenChatBtn" type="button" class="btn-secondary workspace-mode-btn">Chat View</button>
+              <button id="workspaceSwitchModeBtn" type="button" class="btn-primary">Switch to Chat</button>
+            </div>
+          </div>
+          <div class="workspace-title-wrap">
+            <h2 id="workspaceSessionTitle" class="workspace-title">No session selected</h2>
+            <p id="workspaceHint" class="workspace-subtitle">Select a unified session from the left to inspect or switch modes.</p>
+          </div>
+          <div class="workspace-meta">
+            <div class="workspace-meta-item">
+              <span>Server</span>
+              <strong id="workspaceServerText">-</strong>
+            </div>
+            <div class="workspace-meta-item">
+              <span>cwd</span>
+              <strong id="workspaceCwdText">-</strong>
+            </div>
+            <div class="workspace-meta-item">
+              <span>Active Instance</span>
+              <strong id="workspaceInstanceText">-</strong>
+            </div>
+            <div class="workspace-meta-item">
+              <span>Created</span>
+              <strong id="workspaceCreatedText">-</strong>
+            </div>
+          </div>
         </div>
+      </section>
+      <div id="chatContainer" class="chat-container">
         <div id="chatRunState" class="chat-run-state" hidden></div>
         <div id="chatMessages" class="chat-messages"></div>
         <div class="chat-input-bar">

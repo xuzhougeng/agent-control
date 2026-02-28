@@ -600,6 +600,99 @@ li .row {
   background: var(--bg-surface);
 }
 
+.workspace-shell {
+  padding: 14px 16px 0;
+}
+
+.workspace-header {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background:
+    linear-gradient(135deg, rgba(116, 163, 199, 0.12), rgba(255, 248, 240, 0.94)),
+    var(--bg-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.workspace-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspace-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.workspace-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspace-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.workspace-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.workspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.workspace-mode-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.workspace-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workspace-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(116, 163, 199, 0.18);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.workspace-meta-item span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+}
+
+.workspace-meta-item strong {
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+}
+
 /* ── Approvals / Alerts ────────────────────────────────── */
 .alerts {
   border-bottom: 1px solid var(--border);
@@ -677,6 +770,7 @@ li .row {
   display: grid;
   grid-template-rows: 1fr auto;
   min-height: 0;
+  padding-top: 12px;
 }
 
 .terminal-toolbar {
@@ -970,6 +1064,7 @@ body.sidebar-open .sidebar-backdrop {
   }
 
   .content { flex: 1; min-height: 0; grid-template-rows: auto 1fr; }
+  .workspace-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   .terminal-section { min-height: 200px; flex-shrink: 0; }
 
@@ -1005,5 +1100,13 @@ body.sidebar-open .sidebar-backdrop {
 
 @media (max-width: 600px) {
   .content { grid-template-rows: auto 1fr; }
+  .workspace-header-top,
+  .workspace-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .workspace-meta {
+    grid-template-columns: 1fr;
+  }
   .alerts { max-height: 32vh; }
 }

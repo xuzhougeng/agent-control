@@ -15,11 +15,11 @@ import (
 )
 
 type Client struct {
-	URL               string
-	Token             string
-	HeartbeatEvery    time.Duration
-	Manager           *SessionManager
-	TLSSkipVerify     bool // 自签名证书时设为 true
+	URL            string
+	Token          string
+	HeartbeatEvery time.Duration
+	Manager        *SessionManager
+	TLSSkipVerify  bool // 自签名证书时设为 true
 }
 
 func (c *Client) Run(stop <-chan struct{}) error {
@@ -145,7 +145,7 @@ func (c *Client) runOnce(stop <-chan struct{}) (bool, error) {
 		case "session_update", "event":
 		default:
 			if err := c.Manager.Handle(msg); err != nil {
-				c.Manager.sendError(msg.SessionID, err.Error())
+				c.Manager.sendError(msg.SessionID, msg.InstanceID, err.Error())
 			}
 		}
 	}

@@ -156,8 +156,15 @@ Or login with the Tenant A UI token returned by `/tenant/tokens` (curl flow abov
 系统现在只维护一套 `session_id`。该 ID 可用于：
 
 1. 作为 REST/WS 的会话主键；
-2. 在同一路径（`cwd`）下重建 PTY/Chat 会话；
-3. 在 Web/App 界面里进行跨模式切换（复用同一 `session_id`）。
+2. 作为 Claude CLI 的统一 conversation ID；
+3. 在同一路径（`cwd`）下重建 PTY/Chat 会话；
+4. 在 Web/App 界面里进行跨模式切换（复用同一 `session_id`）。
+
+补充说明：
+
+- 控制面会为同一个逻辑 `session_id` 维护按模式划分的运行实例槽位（`instance_id`）；Chat 和 PTY 各自最多保留一个实例槽位，不会随着反复切换无限追加。
+- PTY 启动时，若本机已存在 `~/.claude/session-env/<session_id>`，agent 会自动优先使用 `claude --resume <session_id>` 接入已有 Claude conversation，而不是盲目再用 `--session-id` 创建。
+- 若当前逻辑会话还没有真实的 Claude conversation（例如 PTY 创建后一句话都没说，就切到 Chat 再切回 PTY），系统会继续使用 `--session-id`，避免误用 `--resume` 触发 `no conversation found`。
 
 创建会话时可选传入 `session_id`（UUID）。不传则由服务端自动生成；若已存在则返回冲突错误。
 

@@ -2,6 +2,8 @@ package agent
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -38,11 +40,29 @@ func TestStartSessionMissingSessionID(t *testing.T) {
 		ClaudePath: "/bin/sh",
 	})
 
-	err := mgr.startSession("", StartSessionPayload{Cwd: root})
+	err := mgr.startSession("", "inst-1", StartSessionPayload{Cwd: root})
 	if err == nil {
 		t.Fatal("expected missing session_id error")
 	}
-	if !strings.Contains(err.Error(), "missing session_id") {
+	if !strings.Contains(err.Error(), "missing session_id or instance_id") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestStartSessionRejectsExistingChatSession(t *testing.T) {
+	root := t.TempDir()
+	mgr := NewSessionManager(Config{
+		ServerID:   "srv-test",
+		AllowRoots: []string{root},
+		ClaudePath: "/bin/sh",
+	})
+	mgr.chatSessions["inst-1"] = nil
+
+	err := mgr.startSession("s1", "inst-1", StartSessionPayload{Cwd: root})
+	if err == nil {
+		t.Fatal("expected duplicate session error")
+	}
+	if !strings.Contains(err.Error(), "session already exists") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -72,7 +92,7 @@ func TestStartSessionWindowsRejectsPTYAndSendsError(t *testing.T) {
 		return nil
 	})
 
-	err = mgr.startSession("s1", StartSessionPayload{
+	err = mgr.startSession("s1", "inst-1", StartSessionPayload{
 		Cwd: root,
 	})
 	if err == nil {
@@ -96,5 +116,34 @@ func TestStartSessionWindowsRejectsPTYAndSendsError(t *testing.T) {
 	wantMessage := "start_failed:" + ptyUnsupportedOnWindowsMessage
 	if payload.Message != wantMessage {
 		t.Fatalf("unexpected error payload message: %q", payload.Message)
+	}
+}
+
+func TestNormalizeClaudeSessionArgsSwitchesToResumeWhenSessionEnvExists(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sessionID := "ba3a661b-5036-4616-885f-ad6e9d4d0f34"
+	path := filepath.Join(home, ".claude", "session-env")
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatalf("mkdir session-env: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(path, sessionID), []byte("1"), 0o644); err != nil {
+		t.Fatalf("write session-env marker: %v", err)
+	}
+
+	args := normalizeClaudeSessionArgs(sessionID, []string{"--session-id", sessionID})
+	if len(args) != 2 || args[0] != "--resume" || args[1] != sessionID {
+		t.Fatalf("expected --resume %s, got %#v", sessionID, args)
+	}
+}
+
+func TestNormalizeClaudeSessionArgsFallsBackToSessionIDWhenResumeTargetMissing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sessionID := "ba3a661b-5036-4616-885f-ad6e9d4d0f34"
+
+	args := normalizeClaudeSessionArgs(sessionID, []string{"--resume", sessionID})
+	if len(args) != 2 || args[0] != "--session-id" || args[1] != sessionID {
+		t.Fatalf("expected --session-id %s, got %#v", sessionID, args)
 	}
 }

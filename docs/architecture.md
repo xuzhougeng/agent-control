@@ -21,7 +21,7 @@ flowchart TB
     end
 
     subgraph Runtime["Agent 本地运行时"]
-        PTY["PTY 会话\n(claude-path + --session-id)"]
+        PTY["PTY 会话\n(claude-path + --session-id/--resume)"]
         CHAT["Chat Worker\n(NDJSON stdin/stdout)"]
     end
 
@@ -61,6 +61,8 @@ Token 默认在内存中；配置 `-token-db`（或 `TOKEN_DB`）后会持久化
 
 - `servers`: `server_id -> Server`
 - `sessions`: `session_id -> Session`
+- `instances`: `instance_id -> RuntimeInstance`
+- `sessionInstances`: `session_id -> []instance_id`
 - `sessionEvents`: `session_id -> []SessionEvent`
 - `sessionHubs`: `session_id -> {ring buffer + subscribers}`
 - `agentConns`: `server_id -> WS sender`
@@ -82,6 +84,7 @@ Token 默认在内存中；配置 `-token-db`（或 `TOKEN_DB`）后会持久化
   "type": "xxx",
   "server_id": "optional",
   "session_id": "optional",
+  "instance_id": "optional",
   "seq": 123,
   "ts_ms": 1730000000000,
   "data": {},
@@ -123,7 +126,11 @@ sequenceDiagram
 补充：
 
 - `session_id` 是会话唯一标识，可由客户端传入（UUID）或由服务端生成。
-- 同一个 `session_id` 可与同一 `cwd` 组合，在不同模式（PTY/Chat）下重建会话。
+- `session_id` 同时也是 Claude CLI 侧复用的 conversation ID。
+- 同一个 `session_id` 可在不同模式（PTY/Chat）之间切换；控制面保留统一逻辑会话身份，并用 `instance_id` 区分当前具体运行实例。
+- PTY 启动时有两层判断：
+  - 控制面仅在该逻辑会话已经产生 chat history 时，才主动要求 PTY 走 `--resume <session_id>`。
+  - agent 若发现本机已存在 `~/.claude/session-env/<session_id>`，会自动把 `--session-id <session_id>` 提升为 `--resume <session_id>`，用于接入外部已经用 `claude` 启动过的 session。
 
 ### 6.2 Chat 模式（`session_type=chat`）
 
@@ -149,6 +156,7 @@ sequenceDiagram
 补充：
 
 - Chat worker 命令通常由 agent 启动参数 `-chat-worker` 决定。
+- Chat worker 也复用同一个逻辑 `session_id` 作为 Claude conversation ID；从 Chat 切回 PTY 时，期望恢复的是同一段 Claude conversation，而不是新建另一条会话。
 - Windows server 默认会话类型为 `chat`；`pty` 当前不支持 Windows。
 
 ### 6.3 审批事件（可选）
@@ -164,6 +172,7 @@ sequenceDiagram
 - UI 连接 `/ws/client` 后会收到 `debug_probe`（可忽略）与全局未解决审批事件重放。
 - `attach` 成功后返回 `attach_ok`，并回放 ring buffer 快照。
 - `pty_out` 使用 `seq` 去重，避免乱序/重复片段回灌。
+- 同一逻辑会话下，Chat 和 PTY 共享 `session_id`，但不共享 `instance_id`；事件、输出、审批和历史消息会标注到对应实例，便于排查跨模式切换问题。
 - Agent 断线后服务器标记 offline；重连后通过 `register` 恢复可用。
 - 删除会话采用 Stop+Delete 语义：运行中会先发 stop，再删除控制面记录。
 

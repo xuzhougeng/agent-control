@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 type Message struct {
@@ -148,14 +149,39 @@ func (s *Session) SetCallbacks(onMessage func(Message), onExit func(*int, string
 	s.onExit = onExit
 }
 
-func (s *Session) Stop() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.stdin != nil {
-		s.stdin.Close()
+func (s *Session) Stop(graceMS, killAfterMS int) {
+	if graceMS <= 0 {
+		graceMS = 3000
 	}
-	if s.cmd != nil && s.cmd.Process != nil {
-		_ = s.cmd.Process.Signal(os.Interrupt)
+	if killAfterMS <= 0 {
+		killAfterMS = 7000
+	}
+	if killAfterMS < graceMS {
+		killAfterMS = graceMS
+	}
+
+	s.mu.Lock()
+	stdin := s.stdin
+	var proc *os.Process
+	if s.cmd != nil {
+		proc = s.cmd.Process
+	}
+	s.mu.Unlock()
+
+	if stdin != nil {
+		_ = stdin.Close()
+	}
+	if proc == nil {
+		return
+	}
+	_ = proc.Signal(os.Interrupt)
+	time.Sleep(time.Duration(graceMS) * time.Millisecond)
+	if s.IsRunning() {
+		_ = proc.Kill()
+		waitMore := killAfterMS - graceMS
+		if waitMore > 0 {
+			time.Sleep(time.Duration(waitMore) * time.Millisecond)
+		}
 	}
 }
 

@@ -223,6 +223,17 @@ func (s *Server) handleSessionSubroutes(w http.ResponseWriter, r *http.Request, 
 	}
 
 	switch {
+	case r.Method == http.MethodGet && action == "instances":
+		if !auth.RoleAtLeast(rec.Role, auth.RoleViewer) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		instances := s.CP.GetSessionInstances(rec.TenantID, sessionID)
+		if instances == nil {
+			http.Error(w, "session not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"instances": instances})
 	case r.Method == http.MethodPost && action == "stop":
 		if !auth.RoleAtLeast(rec.Role, auth.RoleOperator) {
 			http.Error(w, "forbidden", http.StatusForbidden)
@@ -243,6 +254,27 @@ func (s *Server) handleSessionSubroutes(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	case r.Method == http.MethodPost && action == "switch":
+		if !auth.RoleAtLeast(rec.Role, auth.RoleOperator) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		var req core.SwitchSessionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		actor := "ui:" + rec.TokenID
+		sess, err := s.CP.SwitchSessionMode(actor, rec.TenantID, sessionID, req)
+		if err != nil {
+			code := sessionCreateErrorStatusCode(err)
+			if strings.Contains(err.Error(), "not found") {
+				code = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), code)
+			return
+		}
+		writeJSON(w, http.StatusOK, sess)
 	case r.Method == http.MethodDelete && action == "":
 		if !auth.RoleAtLeast(rec.Role, auth.RoleOwner) {
 			http.Error(w, "forbidden", http.StatusForbidden)

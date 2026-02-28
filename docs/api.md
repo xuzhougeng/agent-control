@@ -295,12 +295,20 @@ Base URL：`http://127.0.0.1:18080`
 ```
 
 - `session_id`：可选 UUID。未传时服务端自动生成；传入时会校验合法性并拒绝重复值（`409`）。
+- `session_id` 同时作为逻辑会话标识和 Claude conversation ID 复用。
 - `session_type`：可选，`"pty"` 或 `"chat"`。`chat` 类型不需要 `cols/rows`。
 - 未传 `session_type` 时：
   - 非 Windows server 默认 `pty`
   - Windows server 默认 `chat`
 - Windows server 暂不支持 `session_type=pty`；若显式传 `pty` 会返回 `400`，错误文本：`PTY is not supported on Windows yet; use session_type=chat`。
-- 成功：`201`，返回 `session` 对象（含 `session_id`、`session_type`）。
+- 成功：`201`，返回 `session` 对象（含 `session_id`、`session_type`、`active_instance_id`）。
+
+补充行为：
+
+- 当 `session_type=pty` 时，agent 会优先按以下规则决定 Claude CLI 参数：
+  - 若本机已存在 `~/.claude/session-env/<session_id>`，使用 `--resume <session_id>`；
+  - 否则使用 `--session-id <session_id>` 创建/继续该逻辑会话。
+- 这使得你可以传入一个已经在服务器上用 `claude` 启动过的 UUID 型 `session_id`，让 PTY 直接接入该 conversation。
 
 ### 5) 停止会话
 
@@ -321,7 +329,33 @@ Base URL：`http://127.0.0.1:18080`
 - 角色要求：`viewer` 及以上
 - 返回 `events`。如果启用了 `cc-control -enable-prompt-detection`，可能会出现 `approval_needed`（以及对应的 resolved 状态）；否则通常为空或仅包含非 approval 类事件（如未来扩展）。
 
-### 7) 查询聊天历史
+### 7) 查询实例列表
+
+- `GET /api/sessions/{session_id}/instances`
+- 角色要求：`viewer` 及以上
+- 返回该逻辑会话下各模式的运行实例槽位。
+- 返回：
+
+```json
+{
+  "instances": [
+    {
+      "instance_id": "uuid",
+      "session_id": "uuid",
+      "session_type": "pty|chat",
+      "status": "starting|running|stopping|exited|error",
+      "created_at_ms": 1730000000000
+    }
+  ]
+}
+```
+
+说明：
+
+- 同一逻辑 `session_id` 下通常最多看到一条 `pty` 和一条 `chat` 实例槽位。
+- 反复 `Chat -> PTY -> Chat` 切换时，系统会复用对应模式的实例槽位，而不是无限创建新实例。
+
+### 8) 查询聊天历史
 
 - `GET /api/sessions/{session_id}/chat`
 - 角色要求：`viewer` 及以上
@@ -334,6 +368,7 @@ Base URL：`http://127.0.0.1:18080`
     {
       "message_id": "uuid",
       "session_id": "uuid",
+      "instance_id": "uuid",
       "role": "user|assistant",
       "content": "message text",
       "meta": {"operations": ["optional step"]},
@@ -362,7 +397,32 @@ Base URL：`http://127.0.0.1:18080`
 - `CC_CLAUDE_PROFILE_FILE`（从文件加载个性化提示词）
 - `CC_CLAUDE_INJECT_RUNTIME_CONTEXT`（是否注入运行时上下文，默认开启）
 
-### 8) 删除会话
+### 9) 切换会话模式
+
+- `POST /api/sessions/{session_id}/switch`
+- 角色要求：`operator` 及以上
+- 请求体：
+
+```json
+{
+  "session_type": "pty",
+  "env": {"CC_PROFILE": "dev"},
+  "cols": 120,
+  "rows": 30
+}
+```
+
+说明：
+
+- `session_id` 不变，`active_instance_id` 可能切换到该模式对应的实例槽位。
+- 服务端流程是严格串行的：先停掉当前 active instance，等待退出，再启动目标模式实例。
+- 对 PTY 而言：
+  - 若当前逻辑会话已存在 chat history，控制面会优先要求 PTY 用 `--resume <session_id>`；
+  - 若该逻辑会话还没有真实 conversation，控制面不会盲目要求 `resume`，避免 `no conversation found with session ID ...`。
+
+- 成功：`200`，返回更新后的 `session` 对象。
+
+### 10) 删除会话
 
 - `DELETE /api/sessions/{session_id}`
 - 角色要求：`owner`

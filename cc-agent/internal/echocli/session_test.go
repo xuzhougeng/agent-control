@@ -43,7 +43,7 @@ func TestSession_WriteAndRead(t *testing.T) {
 		t.Fatal("timeout waiting for response")
 	}
 
-	sess.Stop()
+	sess.Stop(0, 0)
 	select {
 	case <-exited:
 	case <-time.After(5 * time.Second):
@@ -63,7 +63,7 @@ func TestSession_StopCausesExit(t *testing.T) {
 		close(exited)
 	})
 
-	sess.Stop()
+	sess.Stop(0, 0)
 	select {
 	case <-exited:
 	case <-time.After(5 * time.Second):

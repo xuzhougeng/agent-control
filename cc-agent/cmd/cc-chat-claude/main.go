@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -145,11 +147,12 @@ func runClaude(cfg claudecli.Config, sessionID string, continueSession bool, inp
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, cfg.Cmd, args...)
-	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", nil, "", err
 	}
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return "", nil, "", err
@@ -172,17 +175,27 @@ func runClaude(cfg claudecli.Config, sessionID string, continueSession bool, inp
 	})
 	waitErr := cmd.Wait()
 	meta := buildMeta(res.Operations)
+	stderrText := strings.TrimSpace(stderrBuf.String())
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return "", nil, "", fmt.Errorf("timeout after %dms", timeout)
 	}
 	if parseErr != nil {
+		if stderrText != "" {
+			return "", nil, stderrText, parseErr
+		}
 		return "", nil, "", parseErr
 	}
 	if res.IsError {
+		if res.ErrText == "" && stderrText != "" {
+			res.ErrText = stderrText
+		}
 		return "", meta, res.ErrText, nil
 	}
 	if waitErr != nil {
+		if stderrText != "" {
+			return "", meta, stderrText, waitErr
+		}
 		return "", meta, "", waitErr
 	}
 	return res.Reply, meta, "", nil

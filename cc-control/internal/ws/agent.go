@@ -141,15 +141,15 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case "heartbeat":
 			h.CP.TouchServer(reg.ServerID)
 		case "pty_out":
-			h.CP.HandlePTYOut(reg.ServerID, msg.SessionID, msg.Seq, msg.DataB64)
+			h.CP.HandlePTYOut(reg.ServerID, msg.SessionID, msg.InstanceID, msg.Seq, msg.DataB64)
 		case "pty_exit":
 			var exit core.PTYExit
 			_ = json.Unmarshal(msg.Data, &exit)
-			h.CP.HandlePTYExit(reg.ServerID, msg.SessionID, exit)
+			h.CP.HandlePTYExit(reg.ServerID, msg.SessionID, msg.InstanceID, exit)
 		case "chat_out":
-			h.CP.HandleChatOut(reg.ServerID, msg.SessionID, msg.Data)
+			h.CP.HandleChatOut(reg.ServerID, msg.SessionID, msg.InstanceID, msg.Data)
 		case "chat_exit":
-			h.CP.HandleChatExit(reg.ServerID, msg.SessionID, msg.Data)
+			h.CP.HandleChatExit(reg.ServerID, msg.SessionID, msg.InstanceID, msg.Data)
 		case "error":
 			var payload struct {
 				Message string `json:"message"`
@@ -159,8 +159,8 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if message == "" {
 				message = string(msg.Data)
 			}
-			h.CP.HandleAgentError(reg.ServerID, msg.SessionID, message)
-			slog.Warn("agent error", "server_id", reg.ServerID, "session_id", msg.SessionID, "message", message)
+			h.CP.HandleAgentError(reg.ServerID, msg.SessionID, msg.InstanceID, message)
+			slog.Warn("agent error", "server_id", reg.ServerID, "session_id", msg.SessionID, "instance_id", msg.InstanceID, "message", message)
 		default:
 		}
 	}

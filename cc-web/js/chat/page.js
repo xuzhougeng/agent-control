@@ -4,6 +4,7 @@ import { createWSClient, setWSBadge } from "../shared/ws.js";
 import { escapeHtml, parseEnv } from "../shared/utils.js";
 import { renderServerList } from "../shared/server-list.js";
 import { renderSessionList } from "../shared/session-list.js";
+import { createWorkspaceShell } from "../shared/workspace-shell.js";
 import { renderChatMarkdown } from "./markdown.js";
 
 export function initChatPage() {
@@ -21,10 +22,12 @@ export function initChatPage() {
     selectedServerID: query.get("server_id") || "",
     requestedSessionID: query.get("session_id") || "",
     selectedChatSessionID: query.get("session_id") || "",
+    switchingSessionID: "",
     chatMessages: [],
     pendingScreenshots: [],
     pendingTurns: 0,
     pendingSlowTimer: null,
+    instanceHistory: [],
   };
 
   const api = createUIApi(() => state.token);
@@ -45,10 +48,13 @@ export function initChatPage() {
   const chatImageInput = document.getElementById("chatImageInput");
   const chatAttachmentBar = document.getElementById("chatAttachmentBar");
   const chatAttachmentList = document.getElementById("chatAttachmentList");
-  const chatSessionInfo = document.getElementById("chatSessionInfo");
-  const chatSessionIdText = document.getElementById("chatSessionIdText");
-  const chatCopySessionBtn = document.getElementById("chatCopySessionBtn");
+  const chatInstanceHistoryList = document.getElementById("chatInstanceHistoryList");
+  const chatInstanceHistoryCount = document.getElementById("chatInstanceHistoryCount");
   const chatRunState = document.getElementById("chatRunState");
+
+  function getSelectedSession() {
+    return state.sessions.find((s) => s.session_id === state.selectedChatSessionID) || null;
+  }
 
   const sidebar = createSidebarController({
     isControllerPage: false,
@@ -57,13 +63,28 @@ export function initChatPage() {
     approvalDetails: document.getElementById("approvalDetails"),
   });
 
+  const workspace = createWorkspaceShell({
+    viewMode: "chat",
+    getSelectedSession,
+    onOpenTerminalView: (session) => openTerminalView(session),
+    onOpenChatView: (session) => attachChatSession(session.session_id),
+    onSwitchMode: (session) => switchSessionToChat(session),
+    onCopySession: async (session) => {
+      try {
+        await navigator.clipboard.writeText(session.session_id || "");
+      } catch {
+        alert("copy failed");
+      }
+    },
+  });
+
   const wsClient = createWSClient({
     getToken: () => state.token,
     shouldConnect: () => true,
     setStatus: setWSBadge,
     onOpen: ({ send }) => {
       state.ws = wsClient.getSocket();
-      if (state.selectedChatSessionID) {
+      if (state.selectedChatSessionID && (getSelectedSession()?.session_type || "pty") === "chat") {
         send({ type: "attach", data: { session_id: state.selectedChatSessionID, since_seq: 0 } });
       }
     },
@@ -85,6 +106,9 @@ export function initChatPage() {
           failPendingTurns(data.exit_reason || `session ${data.status}`);
         }
         fetchSessions();
+        if (data.session_id === state.selectedChatSessionID) {
+          fetchSessionInstances(state.selectedChatSessionID);
+        }
       }
     },
     onError: (e) => console.error("[ws] error", e),
@@ -310,6 +334,11 @@ export function initChatPage() {
     return operations;
   }
 
+  function formatInstanceShort(instanceID) {
+    const value = String(instanceID || "").trim();
+    return value ? value.slice(0, 8) : "-";
+  }
+
   function getChatContentParts(meta) {
     if (!meta || typeof meta !== "object" || !Array.isArray(meta.content_parts)) return [];
     const parts = [];
@@ -361,7 +390,13 @@ export function initChatPage() {
     if (!state.chatMessages.length) {
       const empty = document.createElement("div");
       empty.className = "chat-empty";
-      empty.textContent = "No messages yet";
+      if (!state.selectedChatSessionID) {
+        empty.textContent = "Select a session";
+      } else if ((getSelectedSession()?.session_type || "") !== "chat") {
+        empty.textContent = "This session is currently in Terminal mode. Use \"Switch to Chat\" to continue the shared conversation here.";
+      } else {
+        empty.textContent = "No messages yet";
+      }
       chatMessagesEl.appendChild(empty);
       return;
     }
@@ -399,23 +434,12 @@ export function initChatPage() {
 
       const meta = document.createElement("div");
       meta.className = "chat-bubble-meta";
-      meta.textContent = new Date(m.ts_ms).toLocaleTimeString();
+      meta.textContent = `${new Date(m.ts_ms).toLocaleTimeString()} • instance ${formatInstanceShort(m.instance_id)}`;
       bubble.appendChild(meta);
       chatMessagesEl.appendChild(bubble);
     }
 
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-  }
-
-  function updateChatSessionInfo() {
-    if (!chatSessionInfo) return;
-    if (state.selectedChatSessionID) {
-      chatSessionIdText.textContent = `Session: ${state.selectedChatSessionID}`;
-      chatSessionInfo.hidden = false;
-    } else {
-      chatSessionInfo.hidden = true;
-      chatSessionIdText.textContent = "";
-    }
   }
 
   function renderServers() {
@@ -431,39 +455,83 @@ export function initChatPage() {
     renderSessionList({
       listEl: sessionsList,
       sessions: state.sessions,
-      wantType: "chat",
       selectedSessionID: state.selectedChatSessionID,
       renderItem: (s, isSelected) => {
-      const li = document.createElement("li");
-      li.classList.add("session-item");
-      if (isSelected) li.classList.add("selected");
-      const statusBadge = s.status === "running" ? "badge badge-running" : "badge";
-      const canDelete = s.status !== "running";
-      li.innerHTML = `
-        <div class="session-main">
-          <strong class="session-id">${escapeHtml(s.session_id.slice(0, 8))}</strong>
-          <span class="${statusBadge}">${escapeHtml(s.status)}</span>
-        </div>
-        <div class="session-sub">${escapeHtml(s.cwd || "-")}</div>
-        <div class="session-actions">
-          <button type="button" data-action="terminal" class="btn-secondary">Open Terminal</button>
-          <button type="button" data-action="delete" class="btn-danger" ${canDelete ? "" : "disabled"}>Delete</button>
-        </div>
-      `;
-      const terminalBtn = li.querySelector('[data-action="terminal"]');
-      terminalBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        await switchSessionToTerminal(s);
-      });
-      const deleteBtn = li.querySelector('[data-action="delete"]');
-      deleteBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        await deleteSession(s);
-      });
-      li.addEventListener("click", () => attachChatSession(s.session_id));
-      return li;
+        const isSwitching = state.switchingSessionID === s.session_id;
+        const li = document.createElement("li");
+        li.classList.add("session-item");
+        if (isSelected) li.classList.add("selected");
+        const statusBadge = s.status === "running" ? "badge badge-running" : "badge";
+        const canDelete = s.status !== "running" && !isSwitching;
+        const modeLabel = s.session_type === "chat" ? "chat" : "pty";
+        li.innerHTML = `
+          <div class="session-main">
+            <strong class="session-id">${escapeHtml(s.session_id.slice(0, 8))}</strong>
+            <div class="session-badges">
+              <span class="badge">${escapeHtml(modeLabel)}</span>
+              <span class="${statusBadge}">${escapeHtml(s.status)}</span>
+            </div>
+          </div>
+          <div class="session-sub">${escapeHtml(s.cwd || "-")}</div>
+          <div class="session-detail"><span>active ${(s.active_instance_id || "-").slice(0, 8)}</span></div>
+          ${s.exit_reason ? `<div class="session-detail"><span>reason ${escapeHtml(s.exit_reason)}</span></div>` : ""}
+          <div class="session-actions">
+            <button type="button" data-action="delete" class="btn-danger" ${canDelete ? "" : "disabled"}>Delete</button>
+          </div>
+        `;
+        const deleteBtn = li.querySelector('[data-action="delete"]');
+        deleteBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          await deleteSession(s);
+        });
+        li.addEventListener("click", () => attachChatSession(s.session_id));
+        return li;
       },
     });
+    workspace.render(getSelectedSession());
+  }
+
+  function renderInstanceHistory() {
+    if (!chatInstanceHistoryList || !chatInstanceHistoryCount) return;
+    chatInstanceHistoryList.innerHTML = "";
+    const session = state.sessions.find((s) => s.session_id === state.selectedChatSessionID);
+    const items = state.instanceHistory || [];
+    chatInstanceHistoryCount.textContent = String(items.length);
+    if (!state.selectedChatSessionID) {
+      const li = document.createElement("li");
+      li.className = "session-item";
+      li.textContent = "Select a session";
+      chatInstanceHistoryList.appendChild(li);
+      return;
+    }
+    if (!items.length) {
+      const li = document.createElement("li");
+      li.className = "session-item";
+      li.textContent = "No instances";
+      chatInstanceHistoryList.appendChild(li);
+      return;
+    }
+    for (const inst of items) {
+      const li = document.createElement("li");
+      li.className = "session-item";
+      if (session && session.active_instance_id === inst.instance_id) {
+        li.classList.add("selected");
+      }
+      const statusBadge = inst.status === "running" ? "badge badge-running" : "badge";
+      const createdAt = inst.created_at_ms ? new Date(inst.created_at_ms).toLocaleString() : "-";
+      li.innerHTML = `
+        <div class="session-main">
+          <strong class="session-id">${escapeHtml((inst.instance_id || "").slice(0, 8) || "-")}</strong>
+          <div class="session-badges">
+            <span class="badge">${escapeHtml(inst.session_type || "-")}</span>
+            <span class="${statusBadge}">${escapeHtml(inst.status || "-")}</span>
+          </div>
+        </div>
+        <div class="session-sub">${escapeHtml(createdAt)}</div>
+        ${inst.exit_reason ? `<div class="session-detail"><span>reason ${escapeHtml(inst.exit_reason)}</span></div>` : ""}
+      `;
+      chatInstanceHistoryList.appendChild(li);
+    }
   }
 
   async function fetchServers() {
@@ -487,12 +555,23 @@ export function initChatPage() {
     const body = await resp.json();
     state.sessions = body.sessions || [];
     renderSessions();
+    renderInstanceHistory();
     if (state.requestedSessionID && !state.chatMessages.length) {
       const target = state.sessions.find((s) => s.session_id === state.requestedSessionID);
       if (target) {
         state.requestedSessionID = "";
         await attachChatSession(target.session_id);
       }
+    }
+    if (state.selectedChatSessionID && !state.sessions.some((s) => s.session_id === state.selectedChatSessionID)) {
+      state.selectedChatSessionID = "";
+      state.instanceHistory = [];
+      state.chatMessages = [];
+      state.pendingScreenshots = [];
+      renderInstanceHistory();
+      renderChatMessages();
+      renderPendingScreenshots();
+      workspace.render(null);
     }
   }
 
@@ -515,13 +594,27 @@ export function initChatPage() {
     }
     if (state.selectedChatSessionID === session.session_id) {
       state.selectedChatSessionID = "";
+      state.instanceHistory = [];
       state.chatMessages = [];
       state.pendingScreenshots = [];
       renderChatMessages();
       renderPendingScreenshots();
-      updateChatSessionInfo();
+      renderInstanceHistory();
     }
     await fetchSessions();
+  }
+
+  async function fetchSessionInstances(sessionID) {
+    if (!sessionID) {
+      state.instanceHistory = [];
+      renderInstanceHistory();
+      return;
+    }
+    const resp = await api(`/api/sessions/${encodeURIComponent(sessionID)}/instances`);
+    if (!resp.ok) return;
+    if (state.selectedChatSessionID !== sessionID) return;
+    state.instanceHistory = (await resp.json()).instances || [];
+    renderInstanceHistory();
   }
 
   async function switchSessionToTerminal(session) {
@@ -535,36 +628,80 @@ export function initChatPage() {
       alert("PTY is not supported on Windows yet.");
       return;
     }
-    const cwd = (session.cwd || "").trim();
-    if (!cwd) {
-      alert("cwd is required");
+    if ((session.session_type || "pty") === "pty") {
+      openTerminalView(session);
       return;
     }
+    if (state.switchingSessionID) return;
     const sessionID = session.session_id;
-    const delResp = await api(`/api/sessions/${encodeURIComponent(sessionID)}`, { method: "DELETE" });
-    if (!delResp.ok) {
-      alert(await delResp.text());
+    state.switchingSessionID = sessionID;
+    renderSessions();
+    try {
+      const switchBody = {
+        session_type: "pty",
+        env: parseEnv(envInput ? envInput.value : ""),
+        cols: 120,
+        rows: 30,
+      };
+      const createResp = await api(`/api/sessions/${encodeURIComponent(sessionID)}/switch`, {
+        method: "POST",
+        body: JSON.stringify(switchBody),
+      });
+      if (!createResp.ok) {
+        alert(formatSessionCreateError(await createResp.text()));
+        return;
+      }
+      openTerminalView(session);
+    } finally {
+      state.switchingSessionID = "";
+      renderSessions();
+    }
+  }
+
+  async function switchSessionToChat(session) {
+    if (!session?.session_id) return;
+    if ((session.session_type || "pty") === "chat") {
+      await attachChatSession(session.session_id);
       return;
     }
-    const createBody = {
-      session_id: sessionID,
-      server_id: serverID,
-      cwd,
-      env: parseEnv(envInput ? envInput.value : ""),
-      cols: 120,
-      rows: 30,
-    };
-    const createResp = await api("/api/sessions", { method: "POST", body: JSON.stringify(createBody) });
-    if (!createResp.ok) {
-      alert(formatSessionCreateError(await createResp.text()));
-      return;
+    if (state.switchingSessionID) return;
+    const sessionID = session.session_id;
+    state.switchingSessionID = sessionID;
+    renderSessions();
+    try {
+      const createResp = await api(`/api/sessions/${encodeURIComponent(sessionID)}/switch`, {
+        method: "POST",
+        body: JSON.stringify({
+          session_type: "chat",
+          env: parseEnv(envInput ? envInput.value : ""),
+        }),
+      });
+      if (!createResp.ok) {
+        alert(formatSessionCreateError(await createResp.text()));
+        return;
+      }
+      await fetchSessions();
+      await attachChatSession(sessionID);
+    } finally {
+      state.switchingSessionID = "";
+      renderSessions();
     }
-    window.location.href = `/?server_id=${encodeURIComponent(serverID)}&session_id=${encodeURIComponent(sessionID)}`;
+  }
+
+  function openTerminalView(session) {
+    const serverID = session?.server_id || state.selectedServerID || "";
+    const sessionID = session?.session_id || state.selectedChatSessionID || "";
+    if (!sessionID) return;
+    const query = new URLSearchParams();
+    if (serverID) query.set("server_id", serverID);
+    query.set("session_id", sessionID);
+    window.location.href = `/?${query.toString()}`;
   }
 
   async function attachChatSession(sessionID) {
     if (!sessionID) return;
     state.selectedChatSessionID = sessionID;
+    state.instanceHistory = [];
     state.chatMessages = [];
     state.pendingScreenshots = [];
     state.pendingTurns = 0;
@@ -573,7 +710,15 @@ export function initChatPage() {
     renderSessions();
     renderChatMessages();
     renderPendingScreenshots();
-    updateChatSessionInfo();
+    renderInstanceHistory();
+    workspace.render(getSelectedSession());
+    fetchSessionInstances(sessionID);
+
+    const session = getSelectedSession();
+    if (!session || (session.session_type || "pty") !== "chat") {
+      sidebar.closeSidebarOnMobile();
+      return;
+    }
 
     sendWS({ type: "attach", data: { session_id: sessionID, since_seq: 0 } });
 
@@ -596,6 +741,10 @@ export function initChatPage() {
     if (!text && !state.pendingScreenshots.length) return;
     if (!state.selectedChatSessionID) {
       alert("Select or create a chat session first");
+      return;
+    }
+    if ((getSelectedSession()?.session_type || "") !== "chat") {
+      alert("This session is currently in Terminal mode. Switch to Chat first.");
       return;
     }
     const contentParts = [];
@@ -699,23 +848,11 @@ export function initChatPage() {
     });
   }
 
-  chatCopySessionBtn?.addEventListener("click", async () => {
-    if (!state.selectedChatSessionID) return;
-    try {
-      await navigator.clipboard.writeText(state.selectedChatSessionID);
-      chatCopySessionBtn.textContent = "Copied!";
-      setTimeout(() => {
-        chatCopySessionBtn.textContent = "Copy";
-      }, 1500);
-    } catch (_err) {
-      alert("Copy failed");
-    }
-  });
-
   sidebar.mount();
   renderChatMessages();
   renderPendingScreenshots();
-  updateChatSessionInfo();
+  renderInstanceHistory();
+  workspace.render(null);
   if (localStorage.getItem("ui_token")) {
     wsClient.connect();
     refreshAll();

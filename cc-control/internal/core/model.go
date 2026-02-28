@@ -45,6 +45,7 @@ type Session struct {
 	SessionID         string        `json:"session_id"`
 	ServerID          string        `json:"server_id"`
 	SessionType       SessionType   `json:"session_type"`
+	ActiveInstanceID  string        `json:"active_instance_id,omitempty"`
 	Cwd               string        `json:"cwd"`
 	Cmd               []string      `json:"cmd"`
 	EnvKeys           []string      `json:"env_keys"`
@@ -58,9 +59,25 @@ type Session struct {
 	LatestAgentOutSeq uint64        `json:"latest_agent_out_seq"`
 }
 
+type RuntimeInstance struct {
+	InstanceID        string        `json:"instance_id"`
+	SessionID         string        `json:"session_id"`
+	TenantID          string        `json:"tenant_id"`
+	ServerID          string        `json:"server_id"`
+	SessionType       SessionType   `json:"session_type"`
+	Status            SessionStatus `json:"status"`
+	CreatedAtMS       int64         `json:"created_at_ms"`
+	ExitCode          *int          `json:"exit_code,omitempty"`
+	ExitReason        string        `json:"exit_reason,omitempty"`
+	AwaitingApproval  bool          `json:"awaiting_approval"`
+	PendingEventID    string        `json:"pending_event_id,omitempty"`
+	LatestAgentOutSeq uint64        `json:"latest_agent_out_seq"`
+}
+
 type SessionEvent struct {
 	EventID    string `json:"event_id"`
 	SessionID  string `json:"session_id"`
+	InstanceID string `json:"instance_id,omitempty"`
 	ServerID   string `json:"server_id"`
 	TenantID   string `json:"tenant_id"`
 	Kind       string `json:"kind"`
@@ -83,6 +100,13 @@ type StartSessionRequest struct {
 type StopSessionRequest struct {
 	GraceMS     int `json:"grace_ms"`
 	KillAfterMS int `json:"kill_after_ms"`
+}
+
+type SwitchSessionRequest struct {
+	SessionType SessionType       `json:"session_type"`
+	Env         map[string]string `json:"env"`
+	Cols        uint16            `json:"cols"`
+	Rows        uint16            `json:"rows"`
 }
 
 type ActionRequest struct {
@@ -108,12 +132,13 @@ type PTYExit struct {
 }
 
 type ChatMessage struct {
-	MessageID string          `json:"message_id"`
-	SessionID string          `json:"session_id"`
-	Role      string          `json:"role"`
-	Content   string          `json:"content"`
-	Meta      json.RawMessage `json:"meta,omitempty"`
-	TsMS      int64           `json:"ts_ms"`
+	MessageID  string          `json:"message_id"`
+	SessionID  string          `json:"session_id"`
+	InstanceID string          `json:"instance_id,omitempty"`
+	Role       string          `json:"role"`
+	Content    string          `json:"content"`
+	Meta       json.RawMessage `json:"meta,omitempty"`
+	TsMS       int64           `json:"ts_ms"`
 }
 
 type ChatImageSource struct {

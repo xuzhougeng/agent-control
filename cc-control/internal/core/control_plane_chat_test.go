@@ -53,6 +53,9 @@ func TestCreateSession_ChatType(t *testing.T) {
 
 func TestHandleClientChatIn(t *testing.T) {
 	cp, conn, sessionID := setupChatTestCP(t)
+	cp.mu.RLock()
+	instanceID := cp.sessions[sessionID].ActiveInstanceID
+	cp.mu.RUnlock()
 
 	err := cp.HandleClientChatIn("ui:test", "t1", sessionID, "hello", nil)
 	if err != nil {
@@ -89,6 +92,9 @@ func TestHandleClientChatIn(t *testing.T) {
 	}
 	if len(msgs) != 1 || msgs[0].Role != "user" || msgs[0].Content != "hello" {
 		t.Fatalf("unexpected history: %+v", msgs)
+	}
+	if msgs[0].InstanceID != instanceID {
+		t.Fatalf("expected history instance_id=%s, got %s", instanceID, msgs[0].InstanceID)
 	}
 }
 
@@ -160,6 +166,9 @@ func TestHandleClientChatIn_WithImageParts(t *testing.T) {
 
 func TestHandleChatOut(t *testing.T) {
 	cp, _, sessionID := setupChatTestCP(t)
+	cp.mu.RLock()
+	instanceID := cp.sessions[sessionID].ActiveInstanceID
+	cp.mu.RUnlock()
 
 	payload, _ := json.Marshal(map[string]any{
 		"message_id": "m1",
@@ -168,7 +177,7 @@ func TestHandleChatOut(t *testing.T) {
 			"operations": []string{"tool_use: Bash", "result: status=ok"},
 		},
 	})
-	cp.HandleChatOut("srv", sessionID, payload)
+	cp.HandleChatOut("srv", sessionID, instanceID, payload)
 
 	msgs, err := cp.GetChatHistory("t1", sessionID)
 	if err != nil {
@@ -176,6 +185,9 @@ func TestHandleChatOut(t *testing.T) {
 	}
 	if len(msgs) != 1 || msgs[0].Role != "assistant" || msgs[0].Content != "echo hello" {
 		t.Fatalf("unexpected history: %+v", msgs)
+	}
+	if msgs[0].InstanceID != instanceID {
+		t.Fatalf("expected assistant history instance_id=%s, got %s", instanceID, msgs[0].InstanceID)
 	}
 	var meta struct {
 		Operations []string `json:"operations"`
@@ -190,10 +202,13 @@ func TestHandleChatOut(t *testing.T) {
 
 func TestHandleChatExit(t *testing.T) {
 	cp, _, sessionID := setupChatTestCP(t)
+	cp.mu.RLock()
+	instanceID := cp.sessions[sessionID].ActiveInstanceID
+	cp.mu.RUnlock()
 
 	code := 0
 	payload, _ := json.Marshal(PTYExit{ExitCode: &code, Reason: "done"})
-	cp.HandleChatExit("srv", sessionID, payload)
+	cp.HandleChatExit("srv", sessionID, instanceID, payload)
 
 	cp.mu.RLock()
 	sess := cp.sessions[sessionID]

@@ -5,10 +5,17 @@ export function createTerminalController({
   getSelectedSessionID,
   sendWS,
 }) {
+  const FOCUS_REPORT_SEQUENCES = new Set(["\x1b[I", "\x1b[O"]);
   let term = null;
   let fitAddon = null;
   const currentSessionLabel = document.getElementById("currentSessionLabel");
   const sessionHint = document.getElementById("sessionHint");
+
+  function formatSessionLabel(sessionID, instanceID, suffix = "") {
+    const instanceText = instanceID ? ` • Instance: ${instanceID}` : "";
+    const suffixText = suffix ? ` ${suffix}` : "";
+    return `Session: ${sessionID}${instanceText}${suffixText}`;
+  }
 
   function init() {
     term = new Terminal({
@@ -34,6 +41,9 @@ export function createTerminalController({
     }).observe(document.getElementById("terminal"));
 
     term.onData((data) => {
+      if (FOCUS_REPORT_SEQUENCES.has(data)) {
+        return;
+      }
       onTermData(data);
       sendWS({
         type: "term_in",
@@ -63,7 +73,7 @@ export function createTerminalController({
 
   function resetForSession(sessionID) {
     if (!term) return;
-    currentSessionLabel.textContent = `Session: ${sessionID} (loading...)`;
+    currentSessionLabel.textContent = formatSessionLabel(sessionID, "", "(loading...)");
     if (sessionHint) sessionHint.hidden = false;
     term.reset();
     term.scrollToBottom();
@@ -77,8 +87,17 @@ export function createTerminalController({
     term.scrollToBottom();
   }
 
-  function markLoaded(sessionID) {
-    currentSessionLabel.textContent = `Session: ${sessionID}`;
+  function markLoaded(sessionID, instanceID = "") {
+    currentSessionLabel.textContent = formatSessionLabel(sessionID, instanceID);
+  }
+
+  function setSessionInfo(sessionID, instanceID = "", loading = false) {
+    if (!currentSessionLabel) return;
+    if (!sessionID) {
+      currentSessionLabel.textContent = "Session: (none)";
+      return;
+    }
+    currentSessionLabel.textContent = formatSessionLabel(sessionID, instanceID, loading ? "(loading...)" : "");
   }
 
   function sendQuickKey(keyValue) {
@@ -156,6 +175,7 @@ export function createTerminalController({
     resetForSession,
     clearSession,
     markLoaded,
+    setSessionInfo,
     sendResize,
     bindToolbarKeys,
     getTerm: () => term,

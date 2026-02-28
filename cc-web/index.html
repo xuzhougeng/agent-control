@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Claude Code Control Plane</title>
+  <title>Claude Code Workspace</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css">
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -20,7 +20,7 @@
       >
         ☰
       </button>
-      <h1>Claude Code Control Plane</h1>
+      <h1>Claude Code Workspace</h1>
     </div>
     <div class="token-row">
       <span id="wsStatus" class="badge badge-offline">WS: disconnected</span>
@@ -59,10 +59,56 @@
           </div>
           <ul id="sessionsList"></ul>
         </section>
+        <section class="sidebar-card">
+          <div class="section-header">
+            <h2>Instances</h2>
+            <span id="instanceHistoryCount" class="badge">0</span>
+          </div>
+          <ul id="instanceHistoryList"></ul>
+        </section>
       </div>
     </aside>
 
     <section class="content">
+      <section class="workspace-shell">
+        <div class="workspace-header">
+          <div class="workspace-header-top">
+            <div class="workspace-badges">
+              <span id="workspaceViewBadge" class="badge">Terminal View</span>
+              <span id="workspaceModeBadge" class="badge">Mode: -</span>
+              <span id="workspaceStatusBadge" class="badge">No Session</span>
+            </div>
+            <div class="workspace-actions">
+              <button id="workspaceCopyBtn" type="button" class="btn-secondary">Copy Session ID</button>
+              <button id="workspaceOpenTerminalBtn" type="button" class="btn-secondary workspace-mode-btn">Terminal View</button>
+              <button id="workspaceOpenChatBtn" type="button" class="btn-secondary workspace-mode-btn">Chat View</button>
+              <button id="workspaceSwitchModeBtn" type="button" class="btn-primary">Switch to Terminal</button>
+            </div>
+          </div>
+          <div class="workspace-title-wrap">
+            <h2 id="workspaceSessionTitle" class="workspace-title">No session selected</h2>
+            <p id="workspaceHint" class="workspace-subtitle">Select a unified session from the left to inspect or switch modes.</p>
+          </div>
+          <div class="workspace-meta">
+            <div class="workspace-meta-item">
+              <span>Server</span>
+              <strong id="workspaceServerText">-</strong>
+            </div>
+            <div class="workspace-meta-item">
+              <span>cwd</span>
+              <strong id="workspaceCwdText">-</strong>
+            </div>
+            <div class="workspace-meta-item">
+              <span>Active Instance</span>
+              <strong id="workspaceInstanceText">-</strong>
+            </div>
+            <div class="workspace-meta-item">
+              <span>Created</span>
+              <strong id="workspaceCreatedText">-</strong>
+            </div>
+          </div>
+        </div>
+      </section>
       <section class="alerts">
         <details id="approvalDetails" open>
           <summary>

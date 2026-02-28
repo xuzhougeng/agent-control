@@ -90,6 +90,7 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	pendingEvents := h.CP.GetPendingApprovalEvents(rec.TenantID)
 	for _, ev := range pendingEvents {
 		evMsg := core.NewEnvelope("event", ev.ServerID, ev.SessionID)
+		evMsg.InstanceID = ev.InstanceID
 		evMsg.Data, _ = json.Marshal(ev)
 		select {
 		case sub.Send <- evMsg:
@@ -145,6 +146,7 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 				pendingApprovals++
 				evMsg := core.NewEnvelope("event", ev.ServerID, ev.SessionID)
+				evMsg.InstanceID = ev.InstanceID
 				evMsg.Data, _ = json.Marshal(ev)
 				select {
 				case sub.Send <- evMsg:

@@ -9,7 +9,9 @@ export function renderSessionList({
   renderItem,
 }) {
   listEl.innerHTML = "";
-  const filtered = sessions.filter((s) => (s.session_type || "pty") === wantType);
+  const filtered = wantType
+    ? sessions.filter((s) => (s.session_type || "pty") === wantType)
+    : sessions;
   if (!filtered.length) {
     renderEmptyItem(listEl, emptyText);
     return;
