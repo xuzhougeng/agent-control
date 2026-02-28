@@ -506,7 +506,6 @@ export function initWorkspacePage() {
       ensureSupportedViewForServer(server);
       await fetchSessions();
       syncQuery();
-      sidebar.closeSidebarOnMobile();
     });
   }
 
