@@ -262,5 +262,19 @@ test("real Claude flow: terminal hi then switch chat and send hi without exited"
   await expect(page.locator("#workspaceStatusBadge")).not.toContainText("error");
   await expect(page.locator("#chatRunState")).not.toContainText("Execution failed");
   await captureStep(page, testInfo, "09-chat-still-running", { withDrawers: false });
+
+  await page.waitForTimeout(10_000);
+  await captureStep(page, testInfo, "10-after-chat-wait-10s", { withDrawers: false });
+
+  await page.locator("#workspaceOpenTerminalBtn").click();
+  await expect(page).toHaveURL(/\/\?/);
+  await expect(page.locator("#workspaceModeBadge")).toContainText("Chat");
+  await captureStep(page, testInfo, "11-terminal-view-before-switch-back", { withDrawers: false });
+
+  await page.locator("#workspaceSwitchModeBtn").click();
+  await expect(page.locator("#workspaceModeBadge")).toContainText("Terminal", { timeout: 120_000 });
+  await expect(page.locator("#workspaceSessionTitle")).toHaveText(sessionID);
+  await expect(page.locator("#currentSessionLabel")).toContainText("Session:");
+  await captureStep(page, testInfo, "12-terminal-active-again", { withDrawers: false });
   logStep("test:done");
 });
