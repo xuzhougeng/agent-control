@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -76,13 +77,77 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Debug probe: server-initiated message to UI (logged on backend).
-	probe := core.NewEnvelope("debug_probe", "", "")
-	probe.Data, _ = json.Marshal(map[string]any{"message": "probe"})
+	// Parse client protocol version from URL query parameter.
+	clientProtoVersion := 0
+	if v := r.URL.Query().Get("v"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			clientProtoVersion = parsed
+		}
+	}
+
+	// Hello message: send server protocol version to client.
+	hello := core.NewEnvelope("hello", "", "")
+	hello.Data, _ = json.Marshal(map[string]any{
+		"protocol_version":     core.ProtocolVersion,
+		"protocol_version_min": core.ProtocolVersionMin,
+		"server_time_ms":       time.Now().UnixMilli(),
+	})
 	select {
-	case sub.Send <- probe:
+	case sub.Send <- hello:
 	default:
-		slog.Warn("ui ws probe dropped", "remote", remote)
+		slog.Warn("ui ws hello dropped", "remote", remote)
+	}
+
+	// Protocol version check.
+	if clientProtoVersion > core.ProtocolVersion {
+		errMsg := core.NewEnvelope("version_error", "", "")
+		errMsg.Data, _ = json.Marshal(map[string]any{
+			"message":                 "client protocol version too new; upgrade the control plane",
+			"server_protocol_version": core.ProtocolVersion,
+		})
+		_ = conn.WriteJSON(errMsg)
+		_ = conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "protocol_version_mismatch"),
+			time.Now().Add(2*time.Second),
+		)
+		slog.Warn("ui client protocol version too new",
+			"remote", remote,
+			"client_protocol_version", clientProtoVersion,
+			"server_protocol_version", core.ProtocolVersion,
+		)
+		cleanup()
+		<-doneWriter
+		return
+	}
+	if clientProtoVersion < core.ProtocolVersionMin {
+		errMsg := core.NewEnvelope("version_error", "", "")
+		errMsg.Data, _ = json.Marshal(map[string]any{
+			"message":                 "client version too old; please refresh the page",
+			"server_protocol_version": core.ProtocolVersion,
+			"min_protocol_version":    core.ProtocolVersionMin,
+		})
+		_ = conn.WriteJSON(errMsg)
+		_ = conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "protocol_version_too_old"),
+			time.Now().Add(2*time.Second),
+		)
+		slog.Warn("ui client protocol version too old",
+			"remote", remote,
+			"client_protocol_version", clientProtoVersion,
+			"min_protocol_version", core.ProtocolVersionMin,
+		)
+		cleanup()
+		<-doneWriter
+		return
+	}
+	if clientProtoVersion < core.ProtocolVersion {
+		slog.Warn("ui client using older protocol version",
+			"remote", remote,
+			"client_protocol_version", clientProtoVersion,
+			"server_protocol_version", core.ProtocolVersion,
+		)
 	}
 
 	// Replay all unresolved approval events on connect so UI has a global

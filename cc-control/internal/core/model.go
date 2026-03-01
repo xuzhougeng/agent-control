@@ -115,14 +115,15 @@ type ActionRequest struct {
 }
 
 type AgentRegister struct {
-	ServerID     string   `json:"server_id"`
-	Hostname     string   `json:"hostname"`
-	Tags         []string `json:"tags"`
-	OS           string   `json:"os"`
-	Arch         string   `json:"arch"`
-	AgentVersion string   `json:"agent_version"`
-	AllowRoots   []string `json:"allow_roots"`
-	ClaudePath   string   `json:"claude_path"`
+	ServerID        string   `json:"server_id"`
+	Hostname        string   `json:"hostname"`
+	Tags            []string `json:"tags"`
+	OS              string   `json:"os"`
+	Arch            string   `json:"arch"`
+	AgentVersion    string   `json:"agent_version"`
+	ProtocolVersion int      `json:"protocol_version"`
+	AllowRoots      []string `json:"allow_roots"`
+	ClaudePath      string   `json:"claude_path"`
 }
 
 type PTYExit struct {

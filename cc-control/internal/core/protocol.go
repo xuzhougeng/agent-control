@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+// ProtocolVersion is the current WebSocket protocol version.
+// Bump this when making incompatible changes to the message format.
+const ProtocolVersion = 1
+
+// ProtocolVersionMin is the minimum protocol version the server accepts.
+const ProtocolVersionMin = 1
+
 // Envelope is the common WS message format.
 type Envelope struct {
 	Type       string          `json:"type"`

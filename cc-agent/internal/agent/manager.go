@@ -71,14 +71,15 @@ func (m *SessionManager) send(msg Envelope) error {
 
 func (m *SessionManager) RegisterPayload() RegisterPayload {
 	return RegisterPayload{
-		ServerID:     m.cfg.ServerID,
-		Hostname:     m.cfg.Hostname,
-		Tags:         append([]string(nil), m.cfg.Tags...),
-		OS:           runtime.GOOS,
-		Arch:         runtime.GOARCH,
-		AgentVersion: "0.1.0",
-		AllowRoots:   append([]string(nil), m.cfg.AllowRoots...),
-		ClaudePath:   m.cfg.ClaudePath,
+		ServerID:        m.cfg.ServerID,
+		Hostname:        m.cfg.Hostname,
+		Tags:            append([]string(nil), m.cfg.Tags...),
+		OS:              runtime.GOOS,
+		Arch:            runtime.GOARCH,
+		AgentVersion:    "0.1.0",
+		ProtocolVersion: ProtocolVersion,
+		AllowRoots:      append([]string(nil), m.cfg.AllowRoots...),
+		ClaudePath:      m.cfg.ClaudePath,
 	}
 }
 
@@ -171,6 +172,7 @@ func (m *SessionManager) startSession(sessionID, instanceID string, req StartSes
 		cmdPath = "claude-code"
 	}
 	args = normalizeClaudeSessionArgs(sessionID, args)
+	fallbackArgs, hasFallbackArgs := alternateClaudeSessionArgs(sessionID, args)
 
 	env := security.FilterEnv(req.Env, m.cfg.EnvAllowKeys, m.cfg.EnvAllowPrefix)
 	if strings.EqualFold(runtimeGOOS, "windows") {
@@ -178,38 +180,97 @@ func (m *SessionManager) startSession(sessionID, instanceID string, req StartSes
 		m.sendError(sessionID, instanceID, "start_failed:"+err.Error())
 		return err
 	}
-	sess, err := pty.Start(sessionID, req.Cwd, cmdPath, args, env, req.Cols, req.Rows)
-	if err != nil {
+
+	const recentOutputLimit = 16 * 1024
+	var seqMu sync.Mutex
+	var outSeq uint64
+	nextOutSeq := func() uint64 {
+		seqMu.Lock()
+		defer seqMu.Unlock()
+		outSeq++
+		return outSeq
+	}
+
+	var recentMu sync.Mutex
+	recentOutput := ""
+	appendRecentOutput := func(chunk []byte) {
+		recentMu.Lock()
+		recentOutput = appendRecentText(recentOutput, chunk, recentOutputLimit)
+		recentMu.Unlock()
+	}
+	getRecentOutput := func() string {
+		recentMu.Lock()
+		defer recentMu.Unlock()
+		return recentOutput
+	}
+	clearRecentOutput := func() {
+		recentMu.Lock()
+		recentOutput = ""
+		recentMu.Unlock()
+	}
+
+	var retryMu sync.Mutex
+	retryUsed := false
+
+	var runSession func(launchArgs []string) error
+	runSession = func(launchArgs []string) error {
+		sess, err := pty.Start(sessionID, req.Cwd, cmdPath, launchArgs, env, req.Cols, req.Rows)
+		if err != nil {
+			return err
+		}
+
+		m.mu.Lock()
+		m.sessions[instanceID] = sess
+		m.mu.Unlock()
+
+		go sess.ReadLoop(func(_ uint64, chunk []byte) {
+			appendRecentOutput(chunk)
+			msg := NewEnvelope("pty_out", m.cfg.ServerID, sessionID)
+			msg.InstanceID = instanceID
+			msg.Seq = nextOutSeq()
+			msg.DataB64 = base64.StdEncoding.EncodeToString(chunk)
+			if err := m.send(msg); err != nil {
+				log.Printf("send pty_out failed session=%s: %v", sessionID, err)
+			}
+		}, func(code *int, signal, reason string) {
+			retryMu.Lock()
+			canRetry := hasFallbackArgs && !retryUsed && !sameStringSlice(launchArgs, fallbackArgs) &&
+				shouldRetryClaudeSessionStartup(code, reason, getRecentOutput())
+			if canRetry {
+				retryUsed = true
+			}
+			retryMu.Unlock()
+
+			if canRetry {
+				clearRecentOutput()
+				if err := runSession(fallbackArgs); err == nil {
+					log.Printf("retry pty startup with alternate session flag session=%s instance=%s", sessionID, instanceID)
+					return
+				}
+			}
+
+			m.mu.Lock()
+			if m.sessions[instanceID] == sess {
+				delete(m.sessions, instanceID)
+			}
+			m.mu.Unlock()
+			payload, _ := json.Marshal(PTYExitPayload{
+				ExitCode: code,
+				Signal:   signal,
+				Reason:   reason,
+			})
+			msg := NewEnvelope("pty_exit", m.cfg.ServerID, sessionID)
+			msg.InstanceID = instanceID
+			msg.Data = payload
+			_ = m.send(msg)
+		})
+		return nil
+	}
+
+	if err := runSession(args); err != nil {
 		m.sendError(sessionID, instanceID, "start_failed:"+err.Error())
 		return err
 	}
-
-	m.mu.Lock()
-	m.sessions[instanceID] = sess
-	m.mu.Unlock()
-
-	go sess.ReadLoop(func(seq uint64, chunk []byte) {
-		msg := NewEnvelope("pty_out", m.cfg.ServerID, sessionID)
-		msg.InstanceID = instanceID
-		msg.Seq = seq
-		msg.DataB64 = base64.StdEncoding.EncodeToString(chunk)
-		if err := m.send(msg); err != nil {
-			log.Printf("send pty_out failed session=%s: %v", sessionID, err)
-		}
-	}, func(code *int, signal, reason string) {
-		m.mu.Lock()
-		delete(m.sessions, instanceID)
-		m.mu.Unlock()
-		payload, _ := json.Marshal(PTYExitPayload{
-			ExitCode: code,
-			Signal:   signal,
-			Reason:   reason,
-		})
-		msg := NewEnvelope("pty_exit", m.cfg.ServerID, sessionID)
-		msg.InstanceID = instanceID
-		msg.Data = payload
-		_ = m.send(msg)
-	})
 	return nil
 }
 
@@ -235,6 +296,77 @@ func normalizeClaudeSessionArgs(sessionID string, args []string) []string {
 		}
 	}
 	return args
+}
+
+func alternateClaudeSessionArgs(sessionID string, args []string) ([]string, bool) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" || len(args) < 2 {
+		return nil, false
+	}
+	for i := 0; i+1 < len(args); i++ {
+		flag := strings.TrimSpace(args[i])
+		value := strings.TrimSpace(args[i+1])
+		if value != sessionID {
+			continue
+		}
+		switch flag {
+		case "--session-id":
+			out := append([]string(nil), args...)
+			out[i] = "--resume"
+			return out, true
+		case "--resume":
+			out := append([]string(nil), args...)
+			out[i] = "--session-id"
+			return out, true
+		}
+	}
+	return nil, false
+}
+
+func shouldRetryClaudeSessionStartup(code *int, reason, recentOutput string) bool {
+	if code == nil || *code == 0 {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(reason + "\n" + recentOutput))
+	if msg == "" {
+		return false
+	}
+	if strings.Contains(msg, "already in use") {
+		return true
+	}
+	if strings.Contains(msg, "no conversation found") {
+		return true
+	}
+	return false
+}
+
+func appendRecentText(current string, chunk []byte, limit int) string {
+	if limit <= 0 {
+		limit = 4096
+	}
+	if len(chunk) == 0 {
+		if len(current) <= limit {
+			return current
+		}
+		return current[len(current)-limit:]
+	}
+	combined := current + string(chunk)
+	if len(combined) <= limit {
+		return combined
+	}
+	return combined[len(combined)-limit:]
+}
+
+func sameStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func claudeSessionEnvExists(sessionID string) bool {

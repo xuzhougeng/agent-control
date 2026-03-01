@@ -1,6 +1,6 @@
 import { createUIApi } from "../shared/http.js";
 import { createSidebarController } from "../shared/sidebar.js";
-import { createWSClient, setWSBadge } from "../shared/ws.js";
+import { createWSClient, setWSBadge, PROTOCOL_VERSION } from "../shared/ws.js";
 import { createTerminalController } from "../controller/terminal.js";
 import { createWorkspaceShell } from "../shared/workspace-shell.js";
 import {
@@ -158,6 +158,11 @@ export function initWorkspacePage() {
       attachSelectedView(send);
     },
     onMessage: (msg) => handleWS(msg),
+    onVersionError: (data) => {
+      const message = data?.message || "Protocol version mismatch";
+      setWSBadge(false);
+      alert(`Connection error: ${message}\nPlease refresh the page to get the latest client.`);
+    },
     onError: (e) => console.error("[ws] error", e),
   });
 
@@ -860,6 +865,15 @@ export function initWorkspacePage() {
   }
 
   function handleWS(msg) {
+    if (msg.type === "hello") {
+      const minVersion = msg.data?.protocol_version_min ?? 0;
+      if (PROTOCOL_VERSION < minVersion) {
+        alert("Your browser client is outdated. Please refresh the page.");
+        wsClient.getSocket()?.close();
+        return;
+      }
+      return;
+    }
     if (msg.type === "term_out" && msg.session_id === state.selectedSessionID && msg.data_b64) {
       const chunk = decodeB64Text(msg.data_b64);
       e2eState.lastTermOutAtMs = Date.now();

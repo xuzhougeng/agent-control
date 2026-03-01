@@ -102,6 +102,58 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Protocol version check.
+	if reg.ProtocolVersion > core.ProtocolVersion {
+		_ = conn.WriteJSON(core.Envelope{
+			Type: "version_error",
+			TsMS: time.Now().UnixMilli(),
+			Data: mustMarshal(map[string]any{
+				"message":                 "agent protocol version too new; upgrade the control plane",
+				"server_protocol_version": core.ProtocolVersion,
+			}),
+		})
+		_ = conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "protocol_version_mismatch"),
+			time.Now().Add(2*time.Second),
+		)
+		slog.Warn("agent protocol version too new",
+			"server_id", reg.ServerID, "remote", r.RemoteAddr,
+			"agent_protocol_version", reg.ProtocolVersion,
+			"server_protocol_version", core.ProtocolVersion,
+		)
+		return
+	}
+	if reg.ProtocolVersion < core.ProtocolVersionMin {
+		_ = conn.WriteJSON(core.Envelope{
+			Type: "version_error",
+			TsMS: time.Now().UnixMilli(),
+			Data: mustMarshal(map[string]any{
+				"message":                 "agent protocol version too old; upgrade the agent",
+				"server_protocol_version": core.ProtocolVersion,
+				"min_protocol_version":    core.ProtocolVersionMin,
+			}),
+		})
+		_ = conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "protocol_version_too_old"),
+			time.Now().Add(2*time.Second),
+		)
+		slog.Warn("agent protocol version too old",
+			"server_id", reg.ServerID, "remote", r.RemoteAddr,
+			"agent_protocol_version", reg.ProtocolVersion,
+			"min_protocol_version", core.ProtocolVersionMin,
+		)
+		return
+	}
+	if reg.ProtocolVersion < core.ProtocolVersion {
+		slog.Warn("agent using older protocol version",
+			"server_id", reg.ServerID,
+			"agent_protocol_version", reg.ProtocolVersion,
+			"server_protocol_version", core.ProtocolVersion,
+		)
+	}
+
 	agentConn := NewAgentConn(conn)
 	if err := h.CP.RegisterOrUpdateServer(rec.TenantID, reg, agentConn); err != nil {
 		_ = conn.WriteControl(
@@ -126,6 +178,7 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ack.Data, _ = json.Marshal(map[string]any{
 		"heartbeat_interval_ms": 5000,
 		"server_time_ms":        time.Now().UnixMilli(),
+		"protocol_version":      core.ProtocolVersion,
 	})
 	_ = agentConn.Send(ack)
 	slog.Info("agent register_ok sent", "server_id", reg.ServerID)
@@ -164,4 +217,9 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 		}
 	}
+}
+
+func mustMarshal(v any) json.RawMessage {
+	data, _ := json.Marshal(v)
+	return data
 }

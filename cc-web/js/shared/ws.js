@@ -1,9 +1,12 @@
+export const PROTOCOL_VERSION = 1;
+
 export function createWSClient({
   getToken,
   shouldConnect,
   onOpen,
   onMessage,
   onError,
+  onVersionError,
   setStatus,
 }) {
   let ws = null;
@@ -20,7 +23,7 @@ export function createWSClient({
   function connect() {
     if (!shouldConnect()) return;
     const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-    const url = `${scheme}://${window.location.host}/ws/client?token=${encodeURIComponent(getToken() || "")}`;
+    const url = `${scheme}://${window.location.host}/ws/client?token=${encodeURIComponent(getToken() || "")}&v=${PROTOCOL_VERSION}`;
     ws = new WebSocket(url);
 
     ws.onopen = () => {
@@ -31,6 +34,11 @@ export function createWSClient({
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (msg.type === "version_error") {
+          console.error("[ws] protocol version mismatch", msg.data);
+          if (onVersionError) onVersionError(msg.data);
+          return;
+        }
         onMessage(msg, { send });
       } catch (err) {
         console.error("[ws] parse error", err);
@@ -42,8 +50,13 @@ export function createWSClient({
       if (onError) onError(err);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       setStatus(false);
+      // 1008 = Policy Violation: server closed due to version mismatch
+      if (event.code === 1008) {
+        console.error("[ws] connection closed due to policy violation (version mismatch), not reconnecting");
+        return;
+      }
       setTimeout(reconnect, 1000);
     };
   }

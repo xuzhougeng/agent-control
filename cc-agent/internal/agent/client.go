@@ -22,6 +22,8 @@ type Client struct {
 	TLSSkipVerify  bool // 自签名证书时设为 true
 }
 
+var errVersionMismatch = errors.New("protocol version mismatch")
+
 func (c *Client) Run(stop <-chan struct{}) error {
 	if c.Manager == nil {
 		return errors.New("manager required")
@@ -40,8 +42,12 @@ func (c *Client) Run(stop <-chan struct{}) error {
 		connected, err := c.runOnce(stop)
 		if err != nil {
 			slog.Warn("agent ws disconnected", "err", err)
+			if errors.Is(err, errVersionMismatch) {
+				slog.Error("protocol version mismatch is fatal; stopping reconnect for 5 minutes")
+				backoff = 5 * time.Minute
+			}
 		}
-		if connected {
+		if connected && !errors.Is(err, errVersionMismatch) {
 			backoff = time.Second
 		}
 		select {
@@ -142,6 +148,18 @@ func (c *Client) runOnce(stop <-chan struct{}) (bool, error) {
 		switch msg.Type {
 		case "register_ok":
 			slog.Info("agent register_ok received", "server_id", c.Manager.cfg.ServerID)
+		case "version_error":
+			var payload struct {
+				Message string `json:"message"`
+			}
+			_ = json.Unmarshal(msg.Data, &payload)
+			slog.Error("protocol version mismatch, agent will disconnect",
+				"message", payload.Message,
+				"agent_protocol_version", ProtocolVersion,
+			)
+			close(runDone)
+			<-writerDone
+			return true, errVersionMismatch
 		case "session_update", "event":
 		default:
 			if err := c.Manager.Handle(msg); err != nil {

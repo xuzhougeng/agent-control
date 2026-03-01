@@ -147,3 +147,85 @@ func TestNormalizeClaudeSessionArgsKeepsResumeWhenResumeTargetMissing(t *testing
 		t.Fatalf("expected --resume %s, got %#v", sessionID, args)
 	}
 }
+
+func TestAlternateClaudeSessionArgsSwitchesSessionIDToResume(t *testing.T) {
+	sessionID := "ba3a661b-5036-4616-885f-ad6e9d4d0f34"
+	alt, ok := alternateClaudeSessionArgs(sessionID, []string{"--session-id", sessionID})
+	if !ok {
+		t.Fatal("expected alternate args for --session-id")
+	}
+	if len(alt) != 2 || alt[0] != "--resume" || alt[1] != sessionID {
+		t.Fatalf("expected --resume %s, got %#v", sessionID, alt)
+	}
+}
+
+func TestAlternateClaudeSessionArgsSwitchesResumeToSessionID(t *testing.T) {
+	sessionID := "ba3a661b-5036-4616-885f-ad6e9d4d0f34"
+	alt, ok := alternateClaudeSessionArgs(sessionID, []string{"--resume", sessionID})
+	if !ok {
+		t.Fatal("expected alternate args for --resume")
+	}
+	if len(alt) != 2 || alt[0] != "--session-id" || alt[1] != sessionID {
+		t.Fatalf("expected --session-id %s, got %#v", sessionID, alt)
+	}
+}
+
+func TestAlternateClaudeSessionArgsNoSessionFlag(t *testing.T) {
+	sessionID := "ba3a661b-5036-4616-885f-ad6e9d4d0f34"
+	if _, ok := alternateClaudeSessionArgs(sessionID, []string{"-p"}); ok {
+		t.Fatal("did not expect alternate args without session flag")
+	}
+}
+
+func TestShouldRetryClaudeSessionStartup(t *testing.T) {
+	code := 1
+	cases := []struct {
+		name   string
+		code   *int
+		reason string
+		output string
+		want   bool
+	}{
+		{
+			name:   "already in use output",
+			code:   &code,
+			reason: "exited",
+			output: "Error: Session ID abc is already in use.",
+			want:   true,
+		},
+		{
+			name:   "no conversation output",
+			code:   &code,
+			reason: "exited",
+			output: "Error: No conversation found with session ID abc.",
+			want:   true,
+		},
+		{
+			name:   "success exit code",
+			code:   func() *int { v := 0; return &v }(),
+			reason: "exited",
+			output: "Error: Session ID abc is already in use.",
+			want:   false,
+		},
+		{
+			name:   "irrelevant error",
+			code:   &code,
+			reason: "exited",
+			output: "permission denied",
+			want:   false,
+		},
+	}
+
+	for _, tc := range cases {
+		if got := shouldRetryClaudeSessionStartup(tc.code, tc.reason, tc.output); got != tc.want {
+			t.Fatalf("%s: expected %v, got %v", tc.name, tc.want, got)
+		}
+	}
+}
+
+func TestAppendRecentTextTrimsToLimit(t *testing.T) {
+	got := appendRecentText("abcdef", []byte("ghij"), 8)
+	if got != "cdefghij" {
+		t.Fatalf("expected trimmed tail, got %q", got)
+	}
+}
