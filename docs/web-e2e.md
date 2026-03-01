@@ -2,20 +2,23 @@
 
 更偏运行步骤和调试方法见 [docs/how-to-test-e2e.md](/home/xzg/project/agent-control/docs/how-to-test-e2e.md)。
 
-Web E2E 当前由三套入口组成：
+Web E2E 当前由四套入口组成：
 
 1. 默认回归：`npm run test:web:e2e`
 2. 移动端样式回归：`npm run test:web:mobile`
-3. 真实 Claude 烟测：`npm run test:web:e2e:real-claude`
+3. 移动端 fake Claude Terminal 回归：`npm run test:web:mobile:terminal`
+4. 真实 Claude 烟测：`npm run test:web:e2e:real-claude`
 
 ## 目录
 
 - `tests/web-e2e/playwright.config.mjs`
 - `tests/web-e2e/playwright.mobile.config.mjs`
+- `tests/web-e2e/playwright.mobile.terminal.config.mjs`
 - `tests/web-e2e/run-harness.sh`
 - `tests/web-e2e/run-harness-echo.sh`
 - `tests/web-e2e/specs/workspace.spec.js`
 - `tests/web-e2e/specs/mobile-scroll.spec.js`
+- `tests/web-e2e/specs/mobile-terminal-fake.spec.js`
 - `tests/web-e2e/specs/real-claude.spec.js`
 - `tests/web-e2e/fixtures/fake-claude.py`
 - `tests/web-e2e/fixtures/xterm-stub.js`
@@ -40,6 +43,12 @@ Web E2E 当前由三套入口组成：
 3. Markdown 表格会被正确渲染为 table 结构
 4. Markdown data URL 图片可正常渲染
 5. 消息加载后输入栏和 `Send` 按钮仍在可视区内
+
+### `mobile-terminal-fake.spec.js`（移动端 fake Claude Terminal）
+
+1. 在 mobile 视口创建 Terminal session
+2. 终端可收到 fake Claude 启动输出（`Started session`）
+3. 通过 `window.__CC_E2E__.sendTerminalInput(...)` 发送输入并回显
 
 ### `real-claude.spec.js`（真实 Claude 烟测）
 
@@ -69,6 +78,12 @@ npm run test:web:e2e
 npm run test:web:mobile
 ```
 
+运行移动端 fake Claude Terminal 回归：
+
+```bash
+npm run test:web:mobile:terminal
+```
+
 运行真实 Claude 烟测：
 
 ```bash
@@ -81,12 +96,13 @@ npm run test:web:e2e:real-claude
 - 默认模式 `CC_WEB_E2E_CLAUDE_MODE=fake` 使用 `fake-claude.py`，覆盖 `--session-id`/`--resume`、会话冲突、会话不存在等分支。
 - `run-harness-echo.sh` 使用 `cc-chat-echo`，用于移动端代码块滚动和输入栏布局回归，不依赖 Claude CLI。
 - `workspace.spec.js` 默认拦截 CDN 的 `xterm.js/xterm.css` 并注入本地 stub，降低外网依赖。
+- `mobile-terminal-fake.spec.js` 在 mobile 视口下走 fake Claude PTY 链路，并使用 xterm stub 消除外网依赖。
 - `real-claude.spec.js` 仅在 `CC_WEB_E2E_CLAUDE_MODE=real` 时执行；可选 `CC_WEB_E2E_XTERM_STUB=1` 强制启用 xterm stub 辅助排查渲染问题。
 
 ## 关键环境变量
 
 - `CC_WEB_E2E_PORT`
-  - 默认回归默认 `18110`，移动端回归默认 `18112`
+  - 默认回归默认 `18110`，移动端样式回归默认 `18112`，移动端 terminal 回归默认 `18113`
 - `CC_WEB_E2E_UI_TOKEN` / `CC_WEB_E2E_AGENT_TOKEN`
   - control 与 agent 的测试 token
 - `CC_WEB_E2E_SERVER_ID`

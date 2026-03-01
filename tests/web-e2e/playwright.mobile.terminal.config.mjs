@@ -1,0 +1,32 @@
+import { defineConfig, devices } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const port = Number(process.env.CC_WEB_E2E_PORT || 18113);
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+const harnessPath = path.join(configDir, "run-harness.sh");
+
+export default defineConfig({
+  testDir: "./specs",
+  testMatch: "**/mobile-terminal-fake.spec.js",
+  timeout: 120_000,
+  expect: { timeout: 12_000 },
+  fullyParallel: false,
+  retries: process.env.CI ? 1 : 0,
+  reporter: [["list"]],
+  use: {
+    baseURL: `http://127.0.0.1:${port}`,
+    headless: true,
+    trace: "retain-on-failure",
+    screenshot: { mode: "on", fullPage: true },
+    ...devices["iPhone 14"],
+  },
+  webServer: {
+    command: `bash ${JSON.stringify(harnessPath)}`,
+    url: `http://127.0.0.1:${port}`,
+    timeout: 120_000,
+    reuseExistingServer: !process.env.CI,
+    stdout: "pipe",
+    stderr: "pipe",
+  },
+});

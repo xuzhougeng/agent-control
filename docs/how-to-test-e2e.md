@@ -22,13 +22,15 @@ sudo npx playwright install-deps chromium
 
 ## 快速入口
 
-仓库根目录下有三条常用命令：
+仓库根目录下有四条常用命令：
 
 1. 默认回归（fake Claude）  
    `npm run test:web:e2e`
 2. 移动端样式回归（echo worker）  
    `npm run test:web:mobile`
-3. 真实 Claude 烟测  
+3. 移动端 fake Claude Terminal 回归  
+   `npm run test:web:mobile:terminal`
+4. 真实 Claude 烟测  
    `npm run test:web:e2e:real-claude`
 
 ## 默认回归（fake Claude）
@@ -70,6 +72,26 @@ npm run test:web:mobile
 
 ```bash
 CC_WEB_E2E_PORT=18122 npm run test:web:mobile
+```
+
+## 移动端 fake Claude Terminal 回归
+
+```bash
+npm run test:web:mobile:terminal
+```
+
+这条命令使用 `tests/web-e2e/playwright.mobile.terminal.config.mjs`，仅执行 `mobile-terminal-fake.spec.js`，并且：
+
+1. 使用 `tests/web-e2e/run-harness.sh`
+2. 运行 fake Claude 模式（`CC_WEB_E2E_CLAUDE_MODE=fake`）
+3. 在 mobile 视口创建 Terminal session 并验证 PTY 输入回显
+4. 使用 xterm stub，避免依赖外网 CDN
+5. 默认端口 `18113`
+
+如需指定端口：
+
+```bash
+CC_WEB_E2E_PORT=18123 npm run test:web:mobile:terminal
 ```
 
 ## 真实 Claude 烟测
@@ -183,6 +205,12 @@ CC_WEB_E2E_SCREENSHOT=off npm run test:web:e2e
 4. Markdown data URL 图片可正常渲染
 5. 消息加载后输入栏和 `Send` 按钮仍可见
 
+### `mobile-terminal-fake.spec.js`
+
+1. mobile 视口下创建 Terminal session
+2. fake Claude 启动输出可见
+3. 发送 terminal 输入后可见回显
+
 ### `real-claude.spec.js`
 
 1. Terminal 发 `hi`
@@ -233,6 +261,10 @@ npx playwright test tests/web-e2e/specs/mobile-scroll.spec.js --config=tests/web
 ```
 
 ```bash
+CC_WEB_E2E_PORT=18113 CC_WEB_E2E_CLAUDE_MODE=fake npx playwright test tests/web-e2e/specs/mobile-terminal-fake.spec.js --config=tests/web-e2e/playwright.mobile.terminal.config.mjs
+```
+
+```bash
 CC_WEB_E2E_PORT=18111 CC_WEB_E2E_CLAUDE_MODE=real npx playwright test tests/web-e2e/specs/real-claude.spec.js --config=tests/web-e2e/playwright.config.mjs
 ```
 
@@ -245,7 +277,7 @@ npx playwright test --ui --config=tests/web-e2e/playwright.config.mjs
 ## 相关环境变量
 
 - `CC_WEB_E2E_PORT`
-  - harness 对外暴露的 control 端口（默认回归 `18110`，mobile 回归 `18112`）
+  - harness 对外暴露的 control 端口（默认回归 `18110`，mobile 样式回归 `18112`，mobile terminal 回归 `18113`）
 - `CC_WEB_E2E_UI_TOKEN`
   - Web UI 使用的 token
 - `CC_WEB_E2E_AGENT_TOKEN`
