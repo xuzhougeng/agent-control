@@ -226,7 +226,9 @@ struct ChatMessage: Codable, Identifiable {
     let meta: ChatMeta?
     let tsMS: Int64
 
-    var id: String { messageID }
+    // `message_id` can be reused across roles (user + assistant final reply).
+    // Use a composite key so SwiftUI list identity stays unique and stable.
+    var id: String { "\(role):\(messageID):\(tsMS)" }
     var isUser: Bool { role == "user" }
     var isAssistant: Bool { role == "assistant" }
 

@@ -339,10 +339,66 @@ final class AppState: ObservableObject {
         await fetchChatHistory(sessionID: sessionID)
     }
 
+    /// Keep Chat page active while selecting a non-chat session (cc-web behavior).
+    func selectSessionForChatView(_ sessionID: String) {
+        guard !sessionID.isEmpty else { return }
+        selectedSessionID = sessionID
+        selectedChatSessionID = nil
+        selectedPage = .chat
+        chatMessages = []
+        chatPendingTurns = 0
+        cancelSlowStateTransition()
+        chatRunState = .idle
+    }
+
+    func switchSessionToChat(_ sessionID: String) async throws {
+        guard !sessionID.isEmpty else { return }
+        _ = try await apiClient.switchSession(sessionID, to: .chat, env: [:])
+        await fetchSessions()
+        await attachChatSession(sessionID)
+    }
+
+    func switchSessionToPTY(_ sessionID: String) async throws {
+        guard !sessionID.isEmpty else { return }
+        _ = try await apiClient.switchSession(
+            sessionID,
+            to: .pty,
+            env: [:],
+            cols: terminalBridge.currentCols,
+            rows: terminalBridge.currentRows
+        )
+        await fetchSessions()
+        attachSession(sessionID)
+    }
+
+    func applyChatPermissions(
+        sessionID: String,
+        permissionMode: String,
+        allowedTools: String,
+        disallowedTools: String
+    ) async throws {
+        guard !sessionID.isEmpty else { return }
+        var env: [String: String] = [:]
+        let mode = permissionMode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowed = allowedTools.trimmingCharacters(in: .whitespacesAndNewlines)
+        let disallowed = disallowedTools.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !mode.isEmpty { env["CC_CLAUDE_PERMISSION_MODE"] = mode }
+        if !allowed.isEmpty { env["CC_CLAUDE_ALLOWED_TOOLS"] = allowed }
+        if !disallowed.isEmpty { env["CC_CLAUDE_DISALLOWED_TOOLS"] = disallowed }
+
+        _ = try await apiClient.switchSession(sessionID, to: .chat, env: env)
+        await fetchSessions()
+        await attachChatSession(sessionID)
+    }
+
     @discardableResult
     func sendChatMessage(text: String, attachments: [ChatAttachment]) -> Bool {
         guard let sid = selectedChatSessionID, !sid.isEmpty else {
-            chatRunState = .error("select or create a chat session first")
+            if let selected = selectedSessionID, !selected.isEmpty {
+                chatRunState = .error("This session is currently in Terminal mode. Switch to Chat first.")
+            } else {
+                chatRunState = .error("select or create a chat session first")
+            }
             return false
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

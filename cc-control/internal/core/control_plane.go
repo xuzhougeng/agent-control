@@ -555,7 +555,7 @@ func (cp *ControlPlane) SwitchSessionMode(actor, tenantID, sessionID string, req
 	currentStatus := sess.Status
 	cp.mu.RUnlock()
 
-	if currentType == targetType && (currentStatus == SessionStarting || currentStatus == SessionRunning) {
+	if currentType == targetType && (currentStatus == SessionStarting || currentStatus == SessionRunning) && len(req.Env) == 0 {
 		cp.mu.RLock()
 		out := *cp.sessions[sessionID]
 		cp.mu.RUnlock()

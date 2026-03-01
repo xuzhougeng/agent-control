@@ -1,6 +1,8 @@
 import Foundation
 
 final class WSClient: NSObject, URLSessionWebSocketDelegate, URLSessionDelegate {
+    private static let protocolVersion = 1
+
     private var baseURL = ""
     private var token = ""
     private var skipTLSVerify = false
@@ -18,6 +20,18 @@ final class WSClient: NSObject, URLSessionWebSocketDelegate, URLSessionDelegate 
         self.skipTLSVerify = skipTLSVerify
     }
 
+    static func webSocketURLString(baseURL: String, token: String) -> String? {
+        let normalizedBaseURL = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+        let scheme = normalizedBaseURL.hasPrefix("https") ? "wss" : "ws"
+        let host = normalizedBaseURL
+            .replacingOccurrences(of: "https://", with: "")
+            .replacingOccurrences(of: "http://", with: "")
+        let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token
+        let urlStr = "\(scheme)://\(host)/ws/client?token=\(encodedToken)&v=\(protocolVersion)"
+        guard URL(string: urlStr) != nil else { return nil }
+        return urlStr
+    }
+
     // MARK: - Connection lifecycle
 
     func connect() {
@@ -25,12 +39,8 @@ final class WSClient: NSObject, URLSessionWebSocketDelegate, URLSessionDelegate 
         disconnect(reconnect: false)
         shouldReconnect = true
 
-        let scheme = baseURL.hasPrefix("https") ? "wss" : "ws"
-        let host = baseURL
-            .replacingOccurrences(of: "https://", with: "")
-            .replacingOccurrences(of: "http://", with: "")
-        let urlStr = "\(scheme)://\(host)/ws/client?token=\(token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? token)"
-        guard let url = URL(string: urlStr) else { return }
+        guard let urlStr = Self.webSocketURLString(baseURL: baseURL, token: token),
+              let url = URL(string: urlStr) else { return }
 
         urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
         var request = URLRequest(url: url)
@@ -161,7 +171,12 @@ final class WSClient: NSObject, URLSessionWebSocketDelegate, URLSessionDelegate 
         didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
         reason: Data?
     ) {
-        print("[ws] closed code=\(closeCode.rawValue)")
+        let reasonText = reason.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        if reasonText.isEmpty {
+            print("[ws] closed code=\(closeCode.rawValue)")
+        } else {
+            print("[ws] closed code=\(closeCode.rawValue), reason=\(reasonText)")
+        }
         DispatchQueue.main.async { self.onConnectionChange?(false) }
         scheduleReconnect()
     }

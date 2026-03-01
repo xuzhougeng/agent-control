@@ -125,6 +125,26 @@ final class APIClient {
         return try JSONDecoder().decode(ChatHistoryResponse.self, from: data).messages
     }
 
+    func switchSession(
+        _ sessionID: String,
+        to sessionType: SessionType,
+        env: [String: String],
+        cols: Int? = nil,
+        rows: Int? = nil
+    ) async throws -> Session {
+        var body: [String: Any] = [
+            "session_type": sessionType.rawValue,
+            "env": env,
+        ]
+        if sessionType == .pty {
+            body["cols"] = cols ?? 120
+            body["rows"] = rows ?? 30
+        }
+        let jsonData = try JSONSerialization.data(withJSONObject: body)
+        let data = try await request("/api/sessions/\(sessionID)/switch", method: "POST", body: jsonData)
+        return try JSONDecoder().decode(Session.self, from: data)
+    }
+
     // MARK: - Internal
 
     private func request(_ path: String, method: String = "GET", body: Data? = nil) async throws -> Data {

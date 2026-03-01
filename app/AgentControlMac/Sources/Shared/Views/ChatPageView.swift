@@ -10,15 +10,20 @@ import AppKit
 
 struct ChatDetailView: View {
     var body: some View {
+        #if os(macOS)
         HStack(spacing: 12) {
             ChatSessionPanelView()
                 .frame(minWidth: 280, idealWidth: 320, maxWidth: 360)
             ChatConversationView()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        #else
+        ChatConversationView()
+        #endif
     }
 }
 
+#if os(macOS)
 struct ChatSessionPanelView: View {
     @EnvironmentObject var appState: AppState
     @State private var cwd = ""
@@ -242,6 +247,7 @@ struct ChatSessionPanelView: View {
         return env
     }
 }
+#endif
 
 struct ChatConversationView: View {
     @EnvironmentObject var appState: AppState
@@ -249,17 +255,48 @@ struct ChatConversationView: View {
     @State private var attachments: [ChatAttachment] = []
     @State private var localErrorText: String?
     @State private var copiedSessionID = false
+    @State private var permissionExpanded = false
+    @State private var permissionMode = "dontAsk"
+    @State private var permissionAllowedTools = ""
+    @State private var permissionDisallowedTools = ""
+    @State private var applyingPermissions = false
+    @State private var switchingToChat = false
+    @State private var showPermissionConfirm = false
 
     #if os(iOS)
     @State private var pickerItems: [PhotosPickerItem] = []
+    @FocusState private var composerFocused: Bool
     #elseif os(macOS)
     @State private var showImageImporter = false
     #endif
+
+    private var selectedSessionForConversation: Session? {
+        if let chatID = appState.selectedChatSessionID,
+           let chatSession = appState.sessions.first(where: { $0.sessionID == chatID }) {
+            return chatSession
+        }
+        guard appState.selectedPage == .chat,
+              let sessionID = appState.selectedSessionID else {
+            return nil
+        }
+        return appState.sessions.first(where: { $0.sessionID == sessionID })
+    }
+
+    private var selectedSessionIDForConversation: String? {
+        selectedSessionForConversation?.sessionID
+    }
+
+    private var selectedSessionIsChat: Bool {
+        selectedSessionForConversation?.isChat == true
+    }
 
     var body: some View {
         WorkspacePanel(inset: 0) {
             VStack(spacing: 0) {
                 sessionInfoBar
+                if selectedSessionIsChat {
+                    permissionBar
+                }
                 if appState.chatRunState != .idle {
                     runStateBar
                 }
@@ -278,6 +315,14 @@ struct ChatConversationView: View {
                 inputBar
             }
         }
+        .alert("Apply permission settings?", isPresented: $showPermissionConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Apply", role: .destructive) {
+                applyPermissionSettings()
+            }
+        } message: {
+            Text("This will restart the current chat session to apply new permissions.")
+        }
         #if os(macOS)
         .fileImporter(
             isPresented: $showImageImporter,
@@ -291,7 +336,7 @@ struct ChatConversationView: View {
 
     private var sessionInfoBar: some View {
         HStack(spacing: 8) {
-            Text(appState.selectedChatSessionID.map { "Chat: \(String($0.prefix(8)))" } ?? "Chat: (none)")
+            Text(selectedSessionIDForConversation.map { "Session: \(String($0.prefix(8)))" } ?? "Session: (none)")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(WorkspaceTheme.textMuted)
                 .lineLimit(1)
@@ -302,11 +347,81 @@ struct ChatConversationView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .tint(WorkspaceTheme.accent)
-            .disabled(appState.selectedChatSessionID == nil)
+            .disabled(selectedSessionIDForConversation == nil)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(WorkspaceTheme.surfaceStrong.opacity(0.95))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(WorkspaceTheme.border.opacity(0.65))
+                .frame(height: 1)
+        }
+    }
+
+    private var permissionBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Permission Settings")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(WorkspaceTheme.text)
+                Spacer()
+                Button(permissionExpanded ? "▲" : "▼") {
+                    permissionExpanded.toggle()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(WorkspaceTheme.accent)
+            }
+
+            if permissionExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("permission_mode")
+                            .font(.caption)
+                            .foregroundColor(WorkspaceTheme.textSoft)
+                        Picker("permission_mode", selection: $permissionMode) {
+                            Text("dontAsk").tag("dontAsk")
+                            Text("acceptEdits").tag("acceptEdits")
+                            Text("bypassPermissions").tag("bypassPermissions")
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("allowed_tools")
+                            .font(.caption)
+                            .foregroundColor(WorkspaceTheme.textSoft)
+                        TextField("Bash(git:*) Read Edit", text: $permissionAllowedTools)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("disallowed_tools")
+                            .font(.caption)
+                            .foregroundColor(WorkspaceTheme.textSoft)
+                        TextField("", text: $permissionDisallowedTools)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    HStack {
+                        Spacer()
+                        Button {
+                            showPermissionConfirm = true
+                        } label: {
+                            if applyingPermissions {
+                                ProgressView()
+                            } else {
+                                Text("Apply (Restart Session)")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(WorkspaceTheme.accent)
+                        .disabled(applyingPermissions || appState.selectedChatSessionID == nil)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(WorkspaceTheme.surfaceStrong.opacity(0.82))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(WorkspaceTheme.border.opacity(0.65))
@@ -333,12 +448,37 @@ struct ChatConversationView: View {
                             Image(systemName: "bubble.left.and.bubble.right")
                                 .font(.system(size: 28))
                                 .foregroundColor(WorkspaceTheme.textSoft.opacity(0.75))
-                            Text("No messages yet")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(WorkspaceTheme.textMuted)
-                            Text("Create or select a chat session from the left rail to start.")
-                                .font(.caption)
-                                .foregroundColor(WorkspaceTheme.textSoft)
+                            if selectedSessionForConversation == nil {
+                                Text("Select a session")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(WorkspaceTheme.textMuted)
+                            } else if !selectedSessionIsChat {
+                                Text("This session is currently in Terminal mode.")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(WorkspaceTheme.textMuted)
+                                Text("Use \"Switch to Chat\" to continue the shared conversation here.")
+                                    .font(.caption)
+                                    .foregroundColor(WorkspaceTheme.textSoft)
+                                Button {
+                                    switchSelectedSessionToChat()
+                                } label: {
+                                    if switchingToChat {
+                                        ProgressView()
+                                    } else {
+                                        Text("Switch to Chat")
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(WorkspaceTheme.accent)
+                                .disabled(switchingToChat)
+                            } else {
+                                Text("No messages yet")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(WorkspaceTheme.textMuted)
+                                Text("Create or select a chat session from the left rail to start.")
+                                    .font(.caption)
+                                    .foregroundColor(WorkspaceTheme.textSoft)
+                            }
                         }
                         .padding(.top, 30)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -364,7 +504,19 @@ struct ChatConversationView: View {
                 scrollToBottom(proxy)
             }
             .onChange(of: appState.selectedChatSessionID) { _ in
+                permissionExpanded = false
+                localErrorText = nil
+                if !selectedSessionIsChat { dismissKeyboard() }
                 scrollToBottom(proxy)
+            }
+            .onChange(of: appState.selectedSessionID) { _ in
+                permissionExpanded = false
+                localErrorText = nil
+                if !selectedSessionIsChat { dismissKeyboard() }
+                scrollToBottom(proxy)
+            }
+            .onTapGesture {
+                dismissKeyboard()
             }
         }
     }
@@ -406,7 +558,7 @@ struct ChatConversationView: View {
                 composerActionButton(icon: "doc.on.clipboard") {
                     addClipboardImage()
                 }
-                .disabled(attachments.count >= ChatAttachmentCodec.maxItemsPerMessage)
+                .disabled(attachments.count >= ChatAttachmentCodec.maxItemsPerMessage || !selectedSessionIsChat)
 
                 TextEditor(text: $draftText)
                     .frame(height: composerTextHeight)
@@ -421,6 +573,10 @@ struct ChatConversationView: View {
                             .stroke(WorkspaceTheme.border.opacity(0.9), lineWidth: 1)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .disabled(!selectedSessionIsChat)
+                    #if os(iOS)
+                    .focused($composerFocused)
+                    #endif
 
                 Button {
                     sendMessage()
@@ -470,7 +626,7 @@ struct ChatConversationView: View {
                 )
         }
         .buttonStyle(.plain)
-        .disabled(remainingSlots <= 0)
+        .disabled(remainingSlots <= 0 || !selectedSessionIsChat)
         .onChange(of: pickerItems) { newItems in
             Task { await loadPickerItems(newItems) }
         }
@@ -509,7 +665,7 @@ struct ChatConversationView: View {
     }
 
     private var sendDisabled: Bool {
-        appState.selectedChatSessionID == nil ||
+        !selectedSessionIsChat ||
         (draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty)
     }
 
@@ -540,7 +696,7 @@ struct ChatConversationView: View {
     }
 
     private func copySessionID() {
-        let value = appState.selectedChatSessionID ?? ""
+        let value = selectedSessionIDForConversation ?? ""
         guard !value.isEmpty else { return }
         #if os(iOS)
         UIPasteboard.general.string = value
@@ -552,13 +708,60 @@ struct ChatConversationView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { copiedSessionID = false }
     }
 
+    private func dismissKeyboard() {
+        #if os(iOS)
+        composerFocused = false
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #endif
+    }
+
     private func sendMessage() {
         localErrorText = nil
+        guard selectedSessionIsChat else {
+            localErrorText = "This session is currently in Terminal mode. Switch to Chat first."
+            return
+        }
         if appState.sendChatMessage(text: draftText, attachments: attachments) {
             draftText = ""
             attachments = []
         } else if case .error(let reason) = appState.chatRunState {
             localErrorText = reason
+        }
+    }
+
+    private func switchSelectedSessionToChat() {
+        guard let sessionID = selectedSessionIDForConversation, !sessionID.isEmpty else { return }
+        localErrorText = nil
+        switchingToChat = true
+        Task {
+            do {
+                try await appState.switchSessionToChat(sessionID)
+            } catch {
+                await MainActor.run { localErrorText = error.localizedDescription }
+            }
+            await MainActor.run { switchingToChat = false }
+        }
+    }
+
+    private func applyPermissionSettings() {
+        guard let sessionID = appState.selectedChatSessionID, !sessionID.isEmpty else { return }
+        localErrorText = nil
+        applyingPermissions = true
+        Task {
+            do {
+                try await appState.applyChatPermissions(
+                    sessionID: sessionID,
+                    permissionMode: permissionMode,
+                    allowedTools: permissionAllowedTools,
+                    disallowedTools: permissionDisallowedTools
+                )
+                await MainActor.run {
+                    permissionExpanded = false
+                }
+            } catch {
+                await MainActor.run { localErrorText = error.localizedDescription }
+            }
+            await MainActor.run { applyingPermissions = false }
         }
     }
 

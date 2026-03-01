@@ -47,7 +47,8 @@ struct TerminalTabView: View {
                 if showSessionDrawer {
                     SessionDrawerView(
                         isOpen: $showSessionDrawer,
-                        selectedTab: $selectedTab
+                        selectedTab: $selectedTab,
+                        preferredTabAfterSelection: .terminal
                     )
                     .environmentObject(appState)
                     .frame(width: min(UIScreen.main.bounds.width * 0.82, 340))
@@ -173,6 +174,9 @@ struct SessionDrawerView: View {
     @EnvironmentObject var appState: AppState
     @Binding var isOpen: Bool
     @Binding var selectedTab: AppTab
+    var preferredTabAfterSelection: AppTab
+    @State private var switchingSessionID: String?
+    @State private var switchErrorText: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -195,6 +199,13 @@ struct SessionDrawerView: View {
 
             ScrollView {
                 VStack(spacing: 8) {
+                    if let switchErrorText, !switchErrorText.isEmpty {
+                        Text(switchErrorText)
+                            .font(.caption)
+                            .foregroundColor(WorkspaceTheme.danger)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     Button {
                         appState.showNewSessionSheet = true
                         withAnimation(.easeInOut(duration: 0.22)) {
@@ -239,16 +250,54 @@ struct SessionDrawerView: View {
 
     private func sessionButton(_ session: Session) -> some View {
         Button {
-            appState.openSession(session)
-            selectedTab = session.isChat ? .chat : .terminal
+            guard switchingSessionID == nil else { return }
+            let targetTab = preferredTabAfterSelection
+            if targetTab == .chat {
+                if session.isChat {
+                    appState.openSession(session)
+                } else {
+                    appState.selectSessionForChatView(session.sessionID)
+                }
+            } else {
+                if session.isChat {
+                    switchErrorText = nil
+                    switchingSessionID = session.sessionID
+                    Task {
+                        do {
+                            try await appState.switchSessionToPTY(session.sessionID)
+                        } catch {
+                            await MainActor.run {
+                                switchErrorText = error.localizedDescription
+                            }
+                        }
+                        await MainActor.run {
+                            switchingSessionID = nil
+                        }
+                    }
+                } else {
+                    appState.openSession(session)
+                }
+            }
+            selectedTab = targetTab
             withAnimation(.easeInOut(duration: 0.22)) {
                 isOpen = false
             }
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(session.shortID)
-                        .font(.system(.body, design: .monospaced))
+                    HStack(spacing: 6) {
+                        Text(session.shortID)
+                            .font(.system(.body, design: .monospaced))
+                        Text(session.isChat ? "CHAT" : "PTY")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(session.isChat ? WorkspaceTheme.accent : WorkspaceTheme.textSoft)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(session.isChat ? WorkspaceTheme.accentSoft : WorkspaceTheme.surfaceStrong.opacity(0.7))
+                            )
+                    }
                     Text(session.cwd)
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -259,10 +308,15 @@ struct SessionDrawerView: View {
                     Image(systemName: "checkmark")
                         .foregroundColor(WorkspaceTheme.accent)
                 }
+                if switchingSessionID == session.sessionID {
+                    ProgressView()
+                        .controlSize(.small)
+                }
                 StatusBadge(label: session.status, isOnline: session.isRunning)
             }
         }
         .foregroundColor(WorkspaceTheme.text)
+        .disabled(switchingSessionID != nil)
     }
 
     private func groupTitle(_ title: String) -> some View {
