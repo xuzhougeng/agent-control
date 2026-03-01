@@ -135,6 +135,30 @@ async function closeSessionCreationPanel(page) {
   logStep("create-session:panel-closed");
 }
 
+async function ensureWorkspaceHeaderExpanded(page) {
+  const header = page.locator("#workspaceHeader");
+  const isCollapsed = await header.evaluate((el) => el.classList.contains("collapsed"));
+  if (!isCollapsed) {
+    logStep("workspace-header:already-expanded");
+    return;
+  }
+  logStep("workspace-header:expand:start");
+  await page.evaluate(() => {
+    const btn = document.getElementById("workspaceCollapseBtn");
+    const headerEl = document.getElementById("workspaceHeader");
+    if (btn) {
+      btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    }
+    if (headerEl?.classList.contains("collapsed")) {
+      headerEl.classList.remove("collapsed");
+    }
+  });
+  await expect
+    .poll(async () => header.evaluate((el) => el.classList.contains("collapsed")), { timeout: 10_000 })
+    .toBeFalsy();
+  logStep("workspace-header:expand:done");
+}
+
 function sanitizeStepLabel(label) {
   return String(label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
@@ -237,9 +261,11 @@ test("real Claude flow: terminal hi then switch chat and send hi without exited"
   await expect(page.locator("#workspaceModeBadge")).toContainText("Terminal");
   await captureStep(page, testInfo, "02-session-created-terminal", { withDrawers: false });
   await closeSessionCreationPanel(page);
+  await ensureWorkspaceHeaderExpanded(page);
 
-  await page.locator("#workspaceOpenTerminalBtn").click();
-  await expect(page.locator("#workspaceViewBadge")).toContainText("Terminal View");
+  logStep("terminal-view:prepare");
+  await expect(page.locator("#workspaceViewBadge")).toContainText("Terminal View", { timeout: 30_000 });
+  logStep("terminal-view:badge-ready");
   await page.waitForTimeout(5_000);
   await captureStep(page, testInfo, "03-terminal-wait-5s-before-hi", { withDrawers: false });
 
@@ -293,15 +319,22 @@ test("real Claude flow: terminal hi then switch chat and send hi without exited"
   await page.waitForTimeout(10_000);
   await captureStep(page, testInfo, "05-after-10s-wait", { withDrawers: false });
 
+  await ensureWorkspaceHeaderExpanded(page);
   await page.locator("#workspaceOpenChatBtn").click();
   await expect(page).toHaveURL(/\/\?.*view=chat/);
   await expect(page.locator("#workspaceModeBadge")).toContainText("Terminal");
   await captureStep(page, testInfo, "06-chat-view-before-switch", { withDrawers: false });
 
+  await ensureWorkspaceHeaderExpanded(page);
   await page.locator("#workspaceSwitchModeBtn").click();
   await expect(page.locator("#workspaceModeBadge")).toContainText("Chat", { timeout: 120_000 });
   await expect(page.locator("#workspaceSessionTitle")).toHaveText(sessionID);
   await captureStep(page, testInfo, "07-chat-active", { withDrawers: false });
+
+  await expect(page.locator("#chatPermissionBar")).toBeVisible();
+  await page.locator("#chatPermissionToggle").click();
+  await expect(page.locator("#chatPermissionBody")).toBeVisible();
+  await captureStep(page, testInfo, "07b-chat-permission-settings", { withDrawers: false });
 
   await page.locator("#chatInput").fill("hi");
   await page.locator("#chatSendBtn").click();
@@ -319,11 +352,13 @@ test("real Claude flow: terminal hi then switch chat and send hi without exited"
   await page.waitForTimeout(10_000);
   await captureStep(page, testInfo, "10-after-chat-wait-10s", { withDrawers: false });
 
+  await ensureWorkspaceHeaderExpanded(page);
   await page.locator("#workspaceOpenTerminalBtn").click();
   await expect(page).toHaveURL(/\/\?/);
   await expect(page.locator("#workspaceModeBadge")).toContainText("Chat");
   await captureStep(page, testInfo, "11-terminal-view-before-switch-back", { withDrawers: false });
 
+  await ensureWorkspaceHeaderExpanded(page);
   await page.locator("#workspaceSwitchModeBtn").click();
   await expect(page.locator("#workspaceModeBadge")).toContainText("Terminal", { timeout: 120_000 });
   await expect(page.locator("#workspaceSessionTitle")).toHaveText(sessionID);

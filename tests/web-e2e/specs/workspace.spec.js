@@ -137,6 +137,52 @@ test("workspace switches chat to terminal and back without growing instances for
   await expect(page.locator("#workspaceSessionTitle")).toHaveText(sessionID);
 });
 
+test("chat permission settings can be applied and captured", async ({ page }, testInfo) => {
+  await page.goto("/?view=chat");
+  await waitForWorkspaceReady(page);
+
+  await createSession(page);
+  await expect(page.locator("#workspaceModeBadge")).toContainText("Chat");
+  await expect(page.locator("#chatPermissionBar")).toBeVisible();
+
+  await page.locator("#chatPermissionToggle").click();
+  await expect(page.locator("#chatPermissionBody")).toBeVisible();
+
+  await page.locator("#permModeInput").selectOption("allowEdits");
+  await page.locator("#permAllowedInput").fill("Read Edit");
+  await page.locator("#permDisallowedInput").fill("Bash");
+
+  const switchReqPromise = page.waitForRequest((req) => {
+    if (req.method() !== "POST") return false;
+    const pathname = new URL(req.url()).pathname;
+    return /\/api\/sessions\/[^/]+\/switch$/.test(pathname);
+  });
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.locator("#permApplyBtn").click();
+
+  const switchReq = await switchReqPromise;
+  const switchBody = JSON.parse(switchReq.postData() || "{}");
+  expect(switchBody.session_type).toBe("chat");
+  expect(switchBody.env.CC_CLAUDE_PERMISSION_MODE).toBe("allowEdits");
+  expect(switchBody.env.CC_CLAUDE_ALLOWED_TOOLS).toBe("Read Edit");
+  expect(switchBody.env.CC_CLAUDE_DISALLOWED_TOOLS).toBe("Bash");
+
+  await expect(page.locator("#workspaceModeBadge")).toContainText("Chat");
+  await openRightDrawer(page);
+  await expect
+    .poll(async () => page.locator("#instanceHistoryList > li").count())
+    .toBeGreaterThan(1);
+
+  await page.locator("#chatPermissionToggle").click();
+  await expect(page.locator("#chatPermissionBody")).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("chat-permission-settings.png"),
+    fullPage: false,
+    animations: "disabled",
+  });
+});
+
 test("terminal workspace can attach to a preseeded external Claude session", async ({ page }) => {
   await page.goto("/");
   await waitForWorkspaceReady(page);
