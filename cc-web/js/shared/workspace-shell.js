@@ -32,6 +32,16 @@ export function createWorkspaceShell({
   const copyBtn = document.getElementById("workspaceCopyBtn");
   const mobileMedia = window.matchMedia("(max-width: 900px)");
 
+  // Collapsible header elements
+  const headerEl = document.getElementById("workspaceHeader");
+  const collapseBtn = document.getElementById("workspaceCollapseBtn");
+  const summaryTitle = document.getElementById("workspaceSummaryTitle");
+  const summaryStatus = document.getElementById("workspaceSummaryStatus");
+
+  collapseBtn?.addEventListener("click", () => {
+    headerEl?.classList.toggle("collapsed");
+  });
+
   let currentViewMode = viewMode;
 
   function applyViewMode() {
@@ -96,6 +106,12 @@ export function createWorkspaceShell({
         switchBtn.textContent = mobileMedia.matches ? "Switch" : `Switch to ${modeLabel(currentViewMode)}`;
       }
       if (copyBtn) copyBtn.disabled = true;
+      // Update summary row
+      if (summaryTitle) summaryTitle.textContent = "No session";
+      if (summaryStatus) {
+        summaryStatus.className = "badge";
+        summaryStatus.textContent = "-";
+      }
       return;
     }
 
@@ -132,6 +148,14 @@ export function createWorkspaceShell({
       }
     }
     if (copyBtn) copyBtn.disabled = false;
+
+    // Update summary row
+    const shortId = (session.session_id || "").slice(0, 8) || "Session";
+    if (summaryTitle) summaryTitle.textContent = `${modeLabel(activeMode)} · ${shortId}`;
+    if (summaryStatus) {
+      summaryStatus.className = statusBadgeClass(session.status);
+      summaryStatus.textContent = session.status || "-";
+    }
   }
 
   function setViewMode(nextViewMode) {

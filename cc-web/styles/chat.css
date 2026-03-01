@@ -23,12 +23,15 @@
 
 .chat-bubble {
   max-width: min(76%, 820px);
+  min-width: 0;
   padding: 15px 18px;
   border-radius: 18px;
   line-height: 1.65;
   font-size: 15px;
   word-wrap: break-word;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
+  overflow: hidden;
   box-shadow: 0 14px 28px rgba(46, 35, 25, 0.08);
 }
 
@@ -200,6 +203,7 @@
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .chat-input-bar {

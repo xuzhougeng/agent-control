@@ -102,24 +102,33 @@
       <div class="workspace-layout">
         <section class="workspace-main-column">
           <section class="workspace-shell">
-            <div class="workspace-header">
-              <div class="workspace-header-top">
-                <div class="workspace-title-wrap">
-                  <p class="workspace-kicker">Active Workspace</p>
-                  <h2 id="workspaceSessionTitle" class="workspace-title">No session selected</h2>
-                  <p id="workspaceHint" class="workspace-subtitle">Pick a session from the left.</p>
-                </div>
-                <div class="workspace-badges workspace-badges-inline">
-                  <span id="workspaceViewBadge" class="badge">Terminal View</span>
-                  <span id="workspaceModeBadge" class="badge">Mode: -</span>
-                  <span id="workspaceStatusBadge" class="badge">No Session</span>
+            <div class="workspace-header collapsed" id="workspaceHeader">
+              <div class="workspace-header-summary">
+                <span class="workspace-summary-title" id="workspaceSummaryTitle">No session</span>
+                <div class="workspace-summary-right">
+                  <span id="workspaceSummaryStatus" class="badge">-</span>
+                  <button type="button" class="workspace-collapse-toggle" id="workspaceCollapseBtn" aria-label="Toggle details"></button>
                 </div>
               </div>
-              <div class="workspace-actions">
-                <button id="workspaceOpenTerminalBtn" type="button" class="btn-secondary workspace-mode-btn workspace-action-desktop">Terminal</button>
-                <button id="workspaceOpenChatBtn" type="button" class="btn-secondary workspace-mode-btn workspace-action-desktop">Chat</button>
-                <button id="workspaceToggleViewBtn" type="button" class="btn-secondary workspace-mode-btn workspace-action-mobile">Chat</button>
-                <button id="workspaceSwitchModeBtn" type="button" class="btn-primary">Switch to Terminal</button>
+              <div class="workspace-header-collapsible">
+                <div class="workspace-header-top">
+                  <div class="workspace-title-wrap">
+                    <p class="workspace-kicker">Active Workspace</p>
+                    <h2 id="workspaceSessionTitle" class="workspace-title">No session selected</h2>
+                    <p id="workspaceHint" class="workspace-subtitle">Pick a session from the left.</p>
+                  </div>
+                  <div class="workspace-badges workspace-badges-inline">
+                    <span id="workspaceViewBadge" class="badge">Terminal View</span>
+                    <span id="workspaceModeBadge" class="badge">Mode: -</span>
+                    <span id="workspaceStatusBadge" class="badge">No Session</span>
+                  </div>
+                </div>
+                <div class="workspace-actions">
+                  <button id="workspaceOpenTerminalBtn" type="button" class="btn-secondary workspace-mode-btn workspace-action-desktop">Terminal</button>
+                  <button id="workspaceOpenChatBtn" type="button" class="btn-secondary workspace-mode-btn workspace-action-desktop">Chat</button>
+                  <button id="workspaceToggleViewBtn" type="button" class="btn-secondary workspace-mode-btn workspace-action-mobile">Chat</button>
+                  <button id="workspaceSwitchModeBtn" type="button" class="btn-primary">Switch to Terminal</button>
+                </div>
               </div>
             </div>
           </section>
