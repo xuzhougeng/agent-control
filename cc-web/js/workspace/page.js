@@ -69,6 +69,13 @@ export function initWorkspacePage() {
   const chatAttachmentBar = document.getElementById("chatAttachmentBar");
   const chatAttachmentList = document.getElementById("chatAttachmentList");
   const chatRunState = document.getElementById("chatRunState");
+  const chatPermissionBar = document.getElementById("chatPermissionBar");
+  const chatPermissionToggle = document.getElementById("chatPermissionToggle");
+  const chatPermissionBody = document.getElementById("chatPermissionBody");
+  const permModeInput = document.getElementById("permModeInput");
+  const permAllowedInput = document.getElementById("permAllowedInput");
+  const permDisallowedInput = document.getElementById("permDisallowedInput");
+  const permApplyBtn = document.getElementById("permApplyBtn");
 
   // ── Helpers ──
   function getSelectedSession() {
@@ -146,6 +153,11 @@ export function initWorkspacePage() {
     chatRunState,
     chatAttachmentBar,
     chatAttachmentList,
+    chatPermissionBar,
+    chatPermissionBody,
+    permModeInput,
+    permAllowedInput,
+    permDisallowedInput,
   });
 
   // ── Workspace shell ── (依赖 session.openView，延迟绑定)
@@ -188,6 +200,9 @@ export function initWorkspacePage() {
     cwdInput,
     sessionIDInput,
     envInput,
+    permModeInput,
+    permAllowedInput,
+    permDisallowedInput,
   });
 
   // ── WS handler ──
@@ -259,6 +274,13 @@ export function initWorkspacePage() {
   document.getElementById("refreshSessionsBtn")?.addEventListener("click", session.fetchSessions);
   newSessionBtn?.addEventListener("click", session.createNewSession);
   chatSendBtn?.addEventListener("click", chat.sendChatMessage);
+  chatPermissionToggle?.addEventListener("click", () => {
+    const body = chatPermissionBody;
+    if (!body) return;
+    body.hidden = !body.hidden;
+    if (chatPermissionToggle) chatPermissionToggle.textContent = body.hidden ? "▼" : "▲";
+  });
+  permApplyBtn?.addEventListener("click", () => session.applyPermissions());
   chatAttachBtn?.addEventListener("click", () => chatImageInput?.click());
   chatImageInput?.addEventListener("change", async () => {
     await chat.addScreenshotFiles(chatImageInput.files);

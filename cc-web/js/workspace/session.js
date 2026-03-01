@@ -25,6 +25,9 @@ import { renderSessionList } from "../shared/session-list.js";
  * @param {HTMLElement} ctx.cwdInput
  * @param {HTMLElement} ctx.sessionIDInput
  * @param {HTMLElement} ctx.envInput
+ * @param {HTMLElement} ctx.permModeInput
+ * @param {HTMLElement} ctx.permAllowedInput
+ * @param {HTMLElement} ctx.permDisallowedInput
  */
 export function createSessionController(ctx) {
   function isWindowsServer(server) {
@@ -302,6 +305,7 @@ export function createSessionController(ctx) {
   async function syncSelectedSession() {
     const session = ctx.getSelectedSession();
     ctx.workspace.render(session);
+    ctx.chat.renderPermissionBar();
     if (!session) {
       ctx.chat.renderChatMessages();
       ctx.chat.renderPendingScreenshots();
@@ -449,6 +453,32 @@ export function createSessionController(ctx) {
     await attachSession(created.session_id);
   }
 
+  async function applyPermissions() {
+    const session = ctx.getSelectedSession();
+    if (!session || session.session_type !== "chat") return;
+    if (!confirm("将重启当前 chat 会话以应用新权限，继续？")) return;
+
+    const permMode = ctx.permModeInput ? ctx.permModeInput.value : "";
+    const allowed = ctx.permAllowedInput ? ctx.permAllowedInput.value.trim() : "";
+    const disallowed = ctx.permDisallowedInput ? ctx.permDisallowedInput.value.trim() : "";
+
+    const baseEnv = parseEnv(ctx.envInput.value);
+    if (permMode) baseEnv["CC_CLAUDE_PERMISSION_MODE"] = permMode;
+    if (allowed) baseEnv["CC_CLAUDE_ALLOWED_TOOLS"] = allowed;
+    else delete baseEnv["CC_CLAUDE_ALLOWED_TOOLS"];
+    if (disallowed) baseEnv["CC_CLAUDE_DISALLOWED_TOOLS"] = disallowed;
+    else delete baseEnv["CC_CLAUDE_DISALLOWED_TOOLS"];
+
+    const body = { session_type: "chat", env: baseEnv };
+    const resp = await ctx.api(
+      `/api/sessions/${encodeURIComponent(session.session_id)}/switch`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    if (!resp.ok) return alert(await resp.text());
+    await fetchSessions();
+    await attachSession(session.session_id);
+  }
+
   return {
     fetchServers,
     fetchSessions,
@@ -458,6 +488,7 @@ export function createSessionController(ctx) {
     deleteSession,
     switchSessionTo,
     createNewSession,
+    applyPermissions,
     renderServers,
     renderSessions,
     renderInstanceHistory,

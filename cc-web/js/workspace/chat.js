@@ -11,6 +11,11 @@ import { renderChatMarkdown } from "../chat/markdown.js";
  * @param {HTMLElement} ctx.chatRunState
  * @param {HTMLElement} ctx.chatAttachmentBar
  * @param {HTMLElement} ctx.chatAttachmentList
+ * @param {HTMLElement} ctx.chatPermissionBar
+ * @param {HTMLElement} ctx.chatPermissionBody
+ * @param {HTMLElement} ctx.permModeInput
+ * @param {HTMLElement} ctx.permAllowedInput
+ * @param {HTMLElement} ctx.permDisallowedInput
  */
 export function createChatController(ctx) {
   const MAX_SCREENSHOTS_PER_MESSAGE = 3;
@@ -309,6 +314,16 @@ export function createChatController(ctx) {
     ctx.chatMessagesEl.scrollTop = ctx.chatMessagesEl.scrollHeight;
   }
 
+  function renderPermissionBar() {
+    if (!ctx.chatPermissionBar) return;
+    const session = ctx.getSelectedSession();
+    const isChat = session && session.session_type === "chat";
+    ctx.chatPermissionBar.hidden = !isChat;
+    if (!isChat) return;
+    // Collapse the body when switching sessions
+    if (ctx.chatPermissionBody) ctx.chatPermissionBody.hidden = true;
+  }
+
   function sendChatMessage() {
     if (!ctx.chatInput) return;
     const text = ctx.chatInput.value.trim();
@@ -359,6 +374,7 @@ export function createChatController(ctx) {
   return {
     renderChatMessages,
     renderPendingScreenshots,
+    renderPermissionBar,
     addScreenshotFiles,
     sendChatMessage,
     beginPendingTurn,

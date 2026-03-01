@@ -161,6 +161,31 @@
             </section>
 
             <div id="chatContainer" class="chat-container" hidden>
+              <div id="chatPermissionBar" class="chat-permission-bar" hidden>
+                <div class="chat-permission-header">
+                  <span>Permission Settings</span>
+                  <button id="chatPermissionToggle" type="button" class="btn-secondary btn-sm">▼</button>
+                </div>
+                <div id="chatPermissionBody" class="chat-permission-body" hidden>
+                  <div class="chat-permission-field">
+                    <label for="permModeInput">permission_mode</label>
+                    <select id="permModeInput">
+                      <option value="dontAsk" selected>dontAsk</option>
+                      <option value="allowEdits">allowEdits</option>
+                      <option value="bypassPermissions">bypassPermissions</option>
+                    </select>
+                  </div>
+                  <div class="chat-permission-field">
+                    <label for="permAllowedInput">allowed_tools</label>
+                    <input id="permAllowedInput" type="text" placeholder="Bash(git:*) Read Edit">
+                  </div>
+                  <div class="chat-permission-field">
+                    <label for="permDisallowedInput">disallowed_tools</label>
+                    <input id="permDisallowedInput" type="text" placeholder="">
+                  </div>
+                  <button id="permApplyBtn" type="button" class="btn-primary btn-sm">Apply (Restart Session)</button>
+                </div>
+              </div>
               <div id="chatRunState" class="chat-run-state" hidden></div>
               <div id="chatMessages" class="chat-messages"></div>
               <div class="chat-input-bar">
@@ -248,6 +273,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-unicode11/lib/xterm-addon-unicode11.js"></script>
   <script type="module" src="/js/main-workspace.js?v=mod1"></script>
 </body>
 </html>

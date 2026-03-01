@@ -86,13 +86,19 @@ export function createTerminalController({
     term = new Terminal({
       cursorBlink: true,
       convertEol: true,
+      allowProposedApi: true,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: 14,
       lineHeight: 1.2,
-      theme: { background: "#0b1020" },
+      theme: { background: "#0b1020", cursor: "#f0f0f0", cursorAccent: "#0b1020" },
     });
     fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
+    if (typeof Unicode11Addon !== "undefined") {
+      const unicode11 = new Unicode11Addon.Unicode11Addon();
+      term.loadAddon(unicode11);
+      term.unicode.activeVersion = "11";
+    }
     term.open(terminalHost);
     fitAddon.fit();
 
