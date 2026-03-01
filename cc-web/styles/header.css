@@ -1,0 +1,90 @@
+/* ── Header ────────────────────────────────────────────── */
+header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(201, 183, 159, 0.5);
+  background: rgba(255, 252, 247, 0.88);
+  box-shadow: 0 8px 20px rgba(58, 43, 27, 0.05);
+  backdrop-filter: blur(16px);
+  position: relative;
+  z-index: 60;
+}
+
+.header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  grid-column: 1;
+}
+
+h1, h2 { margin: 0; font-weight: 600; }
+h1 { font-size: 21px; letter-spacing: -.03em; font-weight: 700; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 10px; }
+
+.brand-lockup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brand-kicker {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.icon-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+
+/* ── Header collapse toggle ─────────────────────────── */
+.header-collapse-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid rgba(201, 183, 159, 0.5);
+  border-radius: 8px;
+  background: rgba(255, 250, 242, 0.9);
+  color: var(--text-soft);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-collapse-btn::after {
+  content: "\25B2";
+}
+
+header.collapsed .header-collapse-btn::after {
+  content: "\25BC";
+}
+
+header.collapsed {
+  padding: 6px 24px;
+}
+
+header.collapsed .token-row {
+  display: none;
+}
+
+header.collapsed .brand-kicker {
+  display: none;
+}

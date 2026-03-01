@@ -1,0 +1,107 @@
+/* ── Admin Tabs & Panels ──────────────────────────────── */
+.admin-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-tab {
+  flex: 1 1 0;
+  min-height: 36px;
+  border-radius: 7px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.admin-tab:hover {
+  border-color: transparent;
+  background: var(--bg-hover);
+}
+
+.admin-tab.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.admin-panel {
+  display: none;
+}
+
+.admin-panel.active {
+  display: block;
+}
+
+/* ── Admin Stats Grid ────────────────────────────────── */
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.admin-stat-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--bg-elevated);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+}
+
+.admin-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.1;
+}
+
+.admin-stat-detail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── Admin Filter Row ────────────────────────────────── */
+.admin-filter-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.admin-filter-row input {
+  flex: 1;
+  margin: 0;
+}
+
+.admin-filter-row select {
+  width: 140px;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+/* ── Admin Server / Session Lists ────────────────────── */
+#adminServersList,
+#adminSessionsList {
+  max-height: 60vh;
+  overflow: auto;
+}

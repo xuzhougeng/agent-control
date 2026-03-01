@@ -1,3 +1,11 @@
 @import url("/styles/tokens.css");
-@import url("/styles/layout.css");
+@import url("/styles/base.css");
+@import url("/styles/header.css");
+@import url("/styles/sidebar.css");
+@import url("/styles/forms.css");
+@import url("/styles/token.css");
+@import url("/styles/workspace.css");
+@import url("/styles/badges.css");
+@import url("/styles/admin.css");
 @import url("/styles/chat.css");
+@import url("/styles/responsive.css");
