@@ -49,6 +49,7 @@
     letter-spacing: 0;
     background: rgba(255, 250, 242, 0.96);
     box-shadow: 0 10px 22px rgba(49, 95, 114, 0.18);
+    touch-action: none;
   }
 
   .drawer-peek-left {
@@ -174,7 +175,7 @@
   .toolbar-keys-row { justify-content: flex-end; }
   .toolbar-keys .btn-key { flex: 0 0 auto; }
 
-  button, input, select { min-height: 42px; font-size: 16px; }
+  button, input, select, textarea { min-height: 42px; font-size: 16px; }
 
   .chat-input-bar {
     padding: 10px 10px 12px;
@@ -190,7 +191,13 @@
 
   .chat-messages {
     padding: 12px 10px 10px;
-    gap: 12px;
+    gap: 6px;
+    overflow-x: clip;
+  }
+  .chat-md-code,
+  .chat-md-table-wrap {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
   }
   .chat-bubble {
     max-width: 92%;

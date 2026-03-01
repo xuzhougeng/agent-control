@@ -113,6 +113,8 @@
   padding: 0;
   display: block;
   white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .chat-markdown a {
@@ -190,6 +192,8 @@
   color: var(--text-muted);
   margin-top: 8px;
   white-space: normal;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .chat-bubble-ops {
@@ -200,6 +204,8 @@
   flex-direction: column;
   gap: 4px;
   white-space: normal;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .chat-bubble-ops-title {
@@ -219,6 +225,7 @@
 
 .chat-input-bar {
   display: flex;
+  flex-shrink: 0;
   gap: 8px;
   padding: 14px 18px 16px;
   border-top: 1px solid rgba(201, 183, 159, 0.62);

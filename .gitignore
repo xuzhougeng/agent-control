@@ -53,3 +53,7 @@ node_modules/
 test-results/
 playwright-report/
 tests/web-e2e/fixtures/__pycache__/
+
+# Plan files
+plan*.md
+plan-*

@@ -232,6 +232,113 @@ export function createSidebarController({
     });
   }
 
+  function bindPeekDrag(side) {
+    const { peek } = getDesktopDrawerElements(side);
+    if (!peek) return;
+
+    const MOBILE_STORAGE_KEY = `mobile_peek_${side}_bottom`;
+    const DRAG_THRESHOLD = 4;
+    const SWIPE_COMMIT = 36;
+    let dragging = false;
+    let didMove = false;
+    let dragAxis = null;
+    let startClientY = 0;
+    let startClientX = 0;
+    let startPos = 0;
+
+    function viewportHeight() {
+      return window.visualViewport?.height || window.innerHeight;
+    }
+
+    function clampMobileBottom(val) {
+      return Math.max(4, Math.min(viewportHeight() - 44, val));
+    }
+
+    function getRenderedBottom() {
+      const rect = peek.getBoundingClientRect();
+      return viewportHeight() - rect.bottom;
+    }
+
+    function restoreMobilePosition() {
+      if (!isMobileViewport()) return;
+      const saved = localStorage.getItem(MOBILE_STORAGE_KEY);
+      if (saved !== null) {
+        peek.style.bottom = `${clampMobileBottom(Number(saved))}px`;
+      }
+    }
+
+    peek.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      dragging = true;
+      didMove = false;
+      dragAxis = null;
+      startClientY = e.clientY;
+      startClientX = e.clientX;
+      startPos = isMobileViewport() ? getRenderedBottom() : peek.offsetTop;
+      peek.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+
+    peek.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const deltaY = startClientY - e.clientY;
+      const deltaX = e.clientX - startClientX;
+
+      if (!didMove) {
+        if (Math.abs(deltaY) < DRAG_THRESHOLD && Math.abs(deltaX) < DRAG_THRESHOLD) return;
+        dragAxis = Math.abs(deltaX) > Math.abs(deltaY) ? "x" : "y";
+        didMove = true;
+      }
+
+      if (dragAxis === "y") {
+        if (isMobileViewport()) {
+          peek.style.bottom = `${clampMobileBottom(startPos + deltaY)}px`;
+        } else {
+          applyDrawerOffset(side, startPos + (e.clientY - startClientY));
+          onLayoutChange();
+        }
+      }
+    });
+
+    peek.addEventListener("pointerup", (e) => {
+      if (!dragging) return;
+      dragging = false;
+
+      if (dragAxis === "y") {
+        if (didMove && isMobileViewport()) {
+          const bottom = clampMobileBottom(startPos + (startClientY - e.clientY));
+          localStorage.setItem(MOBILE_STORAGE_KEY, String(Math.round(bottom)));
+        }
+      } else if (dragAxis === "x") {
+        const deltaX = e.clientX - startClientX;
+        if (Math.abs(deltaX) >= SWIPE_COMMIT) {
+          const shouldOpen = side === "left" ? deltaX > 0 : deltaX < 0;
+          toggleDrawer(side, shouldOpen);
+        }
+      }
+    });
+
+    peek.addEventListener("pointercancel", () => {
+      dragging = false;
+      didMove = false;
+      dragAxis = null;
+    });
+
+    peek.addEventListener("click", (e) => {
+      if (didMove) {
+        didMove = false;
+        e.stopImmediatePropagation();
+      }
+    }, true);
+
+    mobileMedia.addEventListener("change", () => {
+      if (isMobileViewport()) restoreMobilePosition();
+      else peek.style.bottom = "";
+    });
+
+    restoreMobilePosition();
+  }
+
   function handleMobileViewportChange() {
     if (!isControllerPage) return;
     if (!isMobileViewport()) {
@@ -303,6 +410,8 @@ export function createSidebarController({
 
     bindDrawerDrag("left");
     bindDrawerDrag("right");
+    bindPeekDrag("left");
+    bindPeekDrag("right");
   }
 
   return {
