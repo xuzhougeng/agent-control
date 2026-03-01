@@ -20,7 +20,18 @@ npx playwright install
 sudo npx playwright install-deps chromium
 ```
 
-## 直接运行
+## 快速入口
+
+仓库根目录下有三条常用命令：
+
+1. 默认回归（fake Claude）  
+   `npm run test:web:e2e`
+2. 移动端样式回归（echo worker）  
+   `npm run test:web:mobile`
+3. 真实 Claude 烟测  
+   `npm run test:web:e2e:real-claude`
+
+## 默认回归（fake Claude）
 
 在仓库根目录执行：
 
@@ -36,20 +47,59 @@ npm run test:web:e2e
 4. 运行 Playwright 用例
 5. 为每条用例输出 screenshot，默认保存在 `test-results/`
 
-默认模式是 `fake`。如果要单独跑真实 Claude smoke，用下面这条：
+如需指定端口（默认 `18110`）：
+
+```bash
+CC_WEB_E2E_PORT=18120 npm run test:web:e2e
+```
+
+## 移动端样式回归（echo worker）
+
+```bash
+npm run test:web:mobile
+```
+
+这条命令使用 `tests/web-e2e/playwright.mobile.config.mjs`，仅执行 `mobile-scroll.spec.js`，并且：
+
+1. 使用 `tests/web-e2e/run-harness-echo.sh`
+2. 在临时目录启动 `cc-control`、`cc-agent`、`cc-chat-echo`
+3. 设备配置固定为 `iPhone 14`
+4. 默认端口 `18112`
+
+如需指定端口：
+
+```bash
+CC_WEB_E2E_PORT=18122 npm run test:web:mobile
+```
+
+## 真实 Claude 烟测
 
 ```bash
 npm run test:web:e2e:real-claude
 ```
 
-这条命令会把 harness 切到 `CC_WEB_E2E_CLAUDE_MODE=real`，并默认使用：
+这条命令会把 harness 切到 `CC_WEB_E2E_CLAUDE_MODE=real`，并在 npm 脚本中默认设置：
+
+- `CC_WEB_E2E_PORT=18111`
+- `CC_WEB_E2E_VIDEO=on`
+- 运行 `tests/web-e2e/specs/real-claude.spec.js`
+
+默认使用：
 
 - `CC_WEB_E2E_CLAUDE_PATH=/home/xzg/.local/bin/claude`
 - `CC_WEB_E2E_CLAUDE_HOME=$HOME`
-- `CC_WEB_E2E_VIDEO=on`（整条流程录屏）
-- 真实 `xterm.js` 渲染（不再默认 stub）
+- 真实 `xterm.js` 渲染（不默认 stub）
 
-真实 Claude smoke 当前只覆盖一条窄用例：
+如果要单独覆盖 Claude 安装路径或 HOME，用：
+
+```bash
+CC_WEB_E2E_PORT=18111 \
+CC_WEB_E2E_CLAUDE_PATH=/custom/path/to/claude \
+CC_WEB_E2E_CLAUDE_HOME=/custom/home \
+npm run test:web:e2e:real-claude
+```
+
+真实 Claude smoke 当前覆盖一条窄路径：
 
 1. 在 Terminal 视图创建 session
 2. 点击该 session，并将左侧抽屉折叠回去
@@ -92,37 +142,21 @@ real-claude 用例里，Terminal 输入默认走“真实键盘路径”：
 - `terminal:send:*:keyboard-ok` 或 `terminal:send:*:ws-fallback-ok`
 - `terminal:term-out-observed` / `terminal:final-term-out-observed`
 
-如果你需要覆盖不同账号或不同 Claude 安装路径，可以显式传：
-
-```bash
-CC_WEB_E2E_CLAUDE_PATH=/custom/path/to/claude \
-CC_WEB_E2E_CLAUDE_HOME=/custom/home \
-npm run test:web:e2e:real-claude
-```
-
-## 指定端口
-
-默认端口是 `18110`。如果本机端口冲突，可以改：
-
-```bash
-CC_WEB_E2E_PORT=18120 npm run test:web:e2e
-```
-
 ## Screenshot 策略
 
-默认会为每条用例保存整页 screenshot，方便直接检查页面状态，输出目录是：
+默认会为每条用例保存 screenshot，输出目录：
 
 - `test-results/`
 
-录屏文件（当 `CC_WEB_E2E_VIDEO=on`）默认也会写在 `test-results/` 下的每个 case 目录里，文件名通常是 `video.webm`。
+录屏文件（当 `CC_WEB_E2E_VIDEO=on`）也会写在 `test-results/` 下对应 case 目录中，常见文件名是 `video.webm`。
 
-如果你只想在失败时保留 screenshot：
+只在失败时保留 screenshot：
 
 ```bash
 CC_WEB_E2E_SCREENSHOT=only-on-failure npm run test:web:e2e
 ```
 
-如果你临时不想生成 screenshot：
+临时关闭 screenshot：
 
 ```bash
 CC_WEB_E2E_SCREENSHOT=off npm run test:web:e2e
@@ -130,13 +164,28 @@ CC_WEB_E2E_SCREENSHOT=off npm run test:web:e2e
 
 ## 当前覆盖
 
-当前这批用例主要覆盖：
+### `workspace.spec.js`
 
 1. Chat 视图创建统一 session 并发送消息
 2. `Chat -> Terminal -> Chat` 模式切换
 3. 实例列表不会因为来回切换而膨胀
 4. 预先存在的外部 Claude session 能通过 PTY 接入
-5. `/chat` 兼容入口会重定向到统一 workspace
+5. 左右抽屉支持垂直拖拽
+6. 移动端抽屉互斥开合和 backdrop 关闭
+7. Terminal copy 写入 clipboard
+8. `/chat` 兼容入口重定向到统一 workspace
+
+### `mobile-scroll.spec.js`
+
+1. Chat 代码块在移动端可横向滚动
+2. 长标识符不会被 `break-all` 强制断词
+3. 消息加载后输入栏和 `Send` 按钮仍可见
+
+### `real-claude.spec.js`
+
+1. Terminal 发 `hi`
+2. 切到 Chat 发 `hi` 且会话不进入 `exited/error`
+3. 切回 Terminal 发 `say hi`
 
 ## 常用调试点
 
@@ -145,8 +194,11 @@ CC_WEB_E2E_SCREENSHOT=off npm run test:web:e2e
 入口脚本是：
 
 - `tests/web-e2e/run-harness.sh`
+- `tests/web-e2e/run-harness-echo.sh`
 
-这里负责：
+前者用于默认回归/real-claude，后者用于 mobile 回归（`cc-chat-echo`）。
+
+`run-harness.sh` 主要负责：
 
 - 编译本地二进制
 - 起 control / agent
@@ -174,7 +226,15 @@ CC_WEB_E2E_SCREENSHOT=off npm run test:web:e2e
 npx playwright test tests/web-e2e/specs/workspace.spec.js --config=tests/web-e2e/playwright.config.mjs
 ```
 
-### 4. 打开 Playwright UI
+```bash
+npx playwright test tests/web-e2e/specs/mobile-scroll.spec.js --config=tests/web-e2e/playwright.mobile.config.mjs
+```
+
+```bash
+CC_WEB_E2E_PORT=18111 CC_WEB_E2E_CLAUDE_MODE=real npx playwright test tests/web-e2e/specs/real-claude.spec.js --config=tests/web-e2e/playwright.config.mjs
+```
+
+### 4. 打开 Playwright UI（默认回归）
 
 ```bash
 npx playwright test --ui --config=tests/web-e2e/playwright.config.mjs
@@ -183,7 +243,7 @@ npx playwright test --ui --config=tests/web-e2e/playwright.config.mjs
 ## 相关环境变量
 
 - `CC_WEB_E2E_PORT`
-  - harness 对外暴露的 control 端口
+  - harness 对外暴露的 control 端口（默认回归 `18110`，mobile 回归 `18112`）
 - `CC_WEB_E2E_UI_TOKEN`
   - Web UI 使用的 token
 - `CC_WEB_E2E_AGENT_TOKEN`
@@ -205,7 +265,7 @@ npx playwright test --ui --config=tests/web-e2e/playwright.config.mjs
 - `CC_WEB_E2E_VIDEO`
   - Playwright 录屏模式，支持 `on` / `off` / `retain-on-failure`
 - `CC_WEB_E2E_XTERM_STUB`
-  - 是否在 real Claude 用例里强制使用 xterm stub，默认关闭；仅排查渲染问题时设为 `1`
+  - real Claude 用例里是否强制使用 xterm stub，默认关闭；仅排查渲染问题时设为 `1`
 
 ## 常见问题
 
@@ -219,7 +279,7 @@ sudo npx playwright install-deps chromium
 
 ### 端口占用
 
-如果 `18110` 已被占用，改 `CC_WEB_E2E_PORT`。
+如果默认端口冲突，改 `CC_WEB_E2E_PORT`。
 
 ### 想验证真实 Claude，而不是 fake Claude
 
