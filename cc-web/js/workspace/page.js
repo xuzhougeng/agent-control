@@ -1032,6 +1032,17 @@ export function initWorkspacePage() {
 
   tokenInput.value = state.token;
   saveTokenBtn?.addEventListener("click", () => applyUIToken(tokenInput.value.trim()));
+
+  // Header collapse
+  const pageHeaderEl = document.querySelector("header");
+  const headerCollapseBtn = document.getElementById("headerCollapseBtn");
+  if (localStorage.getItem("header_collapsed") === "1") {
+    pageHeaderEl?.classList.add("collapsed");
+  }
+  headerCollapseBtn?.addEventListener("click", () => {
+    const isCollapsed = pageHeaderEl?.classList.toggle("collapsed");
+    localStorage.setItem("header_collapsed", isCollapsed ? "1" : "0");
+  });
   document.getElementById("refreshServersBtn")?.addEventListener("click", fetchServers);
   document.getElementById("refreshSessionsBtn")?.addEventListener("click", fetchSessions);
   newSessionBtn?.addEventListener("click", createNewSession);
