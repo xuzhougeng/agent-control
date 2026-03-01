@@ -39,9 +39,15 @@ func main() {
 		if content == "" && len(msg.ContentParts) > 0 {
 			content = "[parts]"
 		}
+		echoContent := "[echo]"
+		if content != "" {
+			// Keep markdown block boundaries intact (e.g. fenced code) by
+			// separating the echo prefix from the original content.
+			echoContent = "[echo]\n\n" + content
+		}
 		reply := Message{
 			MessageID: msg.MessageID,
-			Content:   "[echo] " + content,
+			Content:   echoContent,
 			SessionID: sessionID,
 		}
 		data, _ := json.Marshal(reply)

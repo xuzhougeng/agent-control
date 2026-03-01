@@ -178,7 +178,8 @@
   button, input, select, textarea { min-height: 42px; font-size: 16px; }
 
   .chat-input-bar {
-    padding: 10px 10px 12px;
+    /* Leave room for fixed drawer-peek buttons on both sides. */
+    padding: 10px calc(10px + 46px) 12px calc(10px + 46px);
     gap: 6px;
   }
   .chat-attach-btn {
