@@ -41,19 +41,21 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detailBody: some View {
-        if appState.selectedPage == .chat {
-            ChatDetailView()
-                .padding(14)
-        } else {
-            VStack(spacing: 10) {
-                if let hint = appState.connectionHint {
-                    ConnectionHintBanner(message: hint)
+        Group {
+            if appState.selectedPage == .chat {
+                ChatDetailView()
+                    .padding(14)
+            } else {
+                VStack(spacing: 10) {
+                    if let hint = appState.connectionHint {
+                        ConnectionHintBanner(message: hint)
+                    }
+                    TerminalContainerView()
                 }
-                TerminalContainerView()
+                .padding(14)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(14)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     #if os(macOS)
@@ -182,6 +184,7 @@ struct ContentView: View {
             SidebarView(onOpenSettings: { showSettings = true })
         } detail: {
             detailBody
+                .toolbar(.hidden, for: .navigationBar)
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar {

@@ -215,10 +215,7 @@ struct SidebarView: View {
             WorkspaceSectionTitle(text: title)
             ForEach(sessions) { session in
                 Button {
-                    appState.openSession(session)
-                    if session.isPTY {
-                        onOpenSessionTerminal?()
-                    }
+                    handleSessionSelection(session)
                 } label: {
                     SessionRow(session: session, isSelected: isSelected(session))
                 }
@@ -271,6 +268,33 @@ struct SidebarView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private func handleSessionSelection(_ session: Session) {
+        if appState.selectedPage == .terminal {
+            if session.isPTY {
+                appState.attachSession(session.sessionID)
+                onOpenSessionTerminal?()
+                return
+            }
+            Task {
+                do {
+                    try await appState.switchSessionToPTY(session.sessionID)
+                    await MainActor.run {
+                        onOpenSessionTerminal?()
+                    }
+                } catch {
+                    print("[ui] switchSessionToPTY failed: \(error)")
+                }
+            }
+            return
+        }
+
+        if session.isChat {
+            appState.openSession(session)
+        } else {
+            appState.selectSessionForChatView(session.sessionID)
+        }
     }
 
     private func iconButton(_ icon: String, action: @escaping () -> Void) -> some View {
