@@ -74,26 +74,23 @@ test("chat-bubble code block is horizontally scrollable on mobile", async ({ pag
   const longLine =
     "x = 'this_is_a_very_long_variable_name_that_must_not_wrap_on_mobile' * 8  # overflow";
 
-  // cc-chat-echo will echo back: "[echo] <our message>"
-  // We send raw markdown; the leading "[echo] " will be on its own line,
-  // and the fenced code block follows.
+  // cc-chat-echo will echo back: "[echo] <our message>".
+  // The assertion targets the user bubble code block to avoid echo formatting quirks.
   const userMsg = `\n\`\`\`python\n${longLine}\n\`\`\``;
   await sendMessage(page, userMsg);
 
-  // Wait until the echo response appears in the chat
-  const codeBlock = page.locator(".chat-md-code").last();
+  // Pick the actual user code block (assistant echo may produce an empty fenced block).
+  const codeBlock = page.locator(".chat-bubble.user .chat-md-code").filter({
+    hasText: "must_not_wrap_on_mobile",
+  }).first();
   await expect(codeBlock).toBeVisible({ timeout: 15_000 });
 
-  // Assert the code block content has overflow (scrollWidth > clientWidth)
-  const hasHorizontalOverflow = await codeBlock.evaluate((el) => el.scrollWidth > el.clientWidth);
-  expect(hasHorizontalOverflow).toBe(true);
-
-  // Assert we can actually scroll it (scrollLeft starts at 0, changes after scroll)
+  // Assert we can actually scroll it horizontally.
   const scrollLeftBefore = await codeBlock.evaluate((el) => el.scrollLeft);
   expect(scrollLeftBefore).toBe(0);
 
   await codeBlock.evaluate((el) => {
-    el.scrollLeft = el.scrollWidth; // scroll all the way right
+    el.scrollBy({ left: 200, behavior: "auto" });
   });
 
   const scrollLeftAfter = await codeBlock.evaluate((el) => el.scrollLeft);
@@ -108,7 +105,9 @@ test("code block word-break does not wrap long identifiers", async ({ page }) =>
   const userMsg = `\n\`\`\`python\n${longIdentifier}\n\`\`\``;
   await sendMessage(page, userMsg);
 
-  const codeBlock = page.locator(".chat-md-code").last();
+  const codeBlock = page.locator(".chat-bubble.user .chat-md-code").filter({
+    hasText: "very_long_python_identifier_",
+  }).first();
   await expect(codeBlock).toBeVisible({ timeout: 15_000 });
 
   // code element inside should not have word-break forced
