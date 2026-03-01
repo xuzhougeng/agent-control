@@ -8,8 +8,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REMOTE_HOST="${REMOTE_HOST:-ubuntu@106.54.201.18}"
-REMOTE_TMP="/home/ubuntu/server.tar.gz"
-ARTIFACT="$REPO_ROOT/dist/multichat-release/artifacts/server.tar.gz"
+SERVER_DIR="$REPO_ROOT/dist/multichat-release/server"
 
 MODE="${1:-full}"
 
@@ -24,45 +23,29 @@ esac
 echo "==> Building release bundle (mode: $MODE)"
 bash "$REPO_ROOT/scripts/build-release-bundle.sh"
 
-echo "==> Uploading server.tar.gz to $REMOTE_HOST"
-scp "$ARTIFACT" "$REMOTE_HOST:$REMOTE_TMP"
-
-echo "==> Deploying on remote host (mode: $MODE)"
+rsync_to_opt() { rsync -av -e ssh --rsync-path="sudo rsync" "$@"; }
 
 case "$MODE" in
   control)
-    ssh "$REMOTE_HOST" bash -s <<'REMOTE_SCRIPT'
-set -euo pipefail
-cd /home/ubuntu
-tar xf server.tar.gz
-sudo mv server/bin/cc-control /opt/cc-control/cc-control
-rm -rf server server.tar.gz
-sudo systemctl restart cc-control
-echo "==> Deploy complete (control only), cc-control restarted"
-REMOTE_SCRIPT
+    echo "==> Rsync cc-control binary to $REMOTE_HOST"
+    rsync_to_opt "$SERVER_DIR/bin/cc-control" "$REMOTE_HOST:/opt/cc-control/cc-control"
+    echo "==> Restarting cc-control on remote"
+    ssh "$REMOTE_HOST" sudo systemctl restart cc-control
+    echo "==> Deploy complete (control only), cc-control restarted"
     ;;
 
   web)
-    ssh "$REMOTE_HOST" bash -s <<'REMOTE_SCRIPT'
-set -euo pipefail
-cd /home/ubuntu
-tar xf server.tar.gz
-sudo rsync -av --delete server/cc-web/ /opt/cc-control/cc-web/
-rm -rf server server.tar.gz
-echo "==> Deploy complete (web only), no restart needed"
-REMOTE_SCRIPT
+    echo "==> Rsync cc-web to $REMOTE_HOST"
+    rsync_to_opt --delete "$SERVER_DIR/cc-web/" "$REMOTE_HOST:/opt/cc-control/cc-web/"
+    echo "==> Deploy complete (web only), no restart needed"
     ;;
 
   full)
-    ssh "$REMOTE_HOST" bash -s <<'REMOTE_SCRIPT'
-set -euo pipefail
-cd /home/ubuntu
-tar xf server.tar.gz
-sudo mv server/bin/cc-control /opt/cc-control/cc-control
-sudo rsync -av --delete server/cc-web/ /opt/cc-control/cc-web/
-rm -rf server server.tar.gz
-sudo systemctl restart cc-control
-echo "==> Deploy complete (full), cc-control restarted"
-REMOTE_SCRIPT
+    echo "==> Rsync cc-control binary and cc-web to $REMOTE_HOST"
+    rsync_to_opt "$SERVER_DIR/bin/cc-control" "$REMOTE_HOST:/opt/cc-control/cc-control"
+    rsync_to_opt --delete "$SERVER_DIR/cc-web/" "$REMOTE_HOST:/opt/cc-control/cc-web/"
+    echo "==> Restarting cc-control on remote"
+    ssh "$REMOTE_HOST" sudo systemctl restart cc-control
+    echo "==> Deploy complete (full), cc-control restarted"
     ;;
 esac
