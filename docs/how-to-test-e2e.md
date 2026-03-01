@@ -179,7 +179,9 @@ CC_WEB_E2E_SCREENSHOT=off npm run test:web:e2e
 
 1. Chat 代码块在移动端可横向滚动
 2. 长标识符不会被 `break-all` 强制断词
-3. 消息加载后输入栏和 `Send` 按钮仍可见
+3. Markdown 表格会被正确渲染为 table 结构
+4. Markdown data URL 图片可正常渲染
+5. 消息加载后输入栏和 `Send` 按钮仍可见
 
 ### `real-claude.spec.js`
 

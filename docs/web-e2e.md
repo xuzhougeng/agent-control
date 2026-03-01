@@ -37,7 +37,9 @@ Web E2E 当前由三套入口组成：
 
 1. Chat 气泡中的代码块在移动端可横向滚动
 2. 代码块不会因 `word-break: break-all` 被强行断词
-3. 消息加载后输入栏和 `Send` 按钮仍在可视区内
+3. Markdown 表格会被正确渲染为 table 结构
+4. Markdown data URL 图片可正常渲染
+5. 消息加载后输入栏和 `Send` 按钮仍在可视区内
 
 ### `real-claude.spec.js`（真实 Claude 烟测）
 

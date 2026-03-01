@@ -1,10 +1,8 @@
 /**
  * mobile-scroll.spec.js
  *
- * Tests that code blocks inside chat bubbles can be scrolled horizontally on
- * mobile viewports.  Uses cc-chat-echo as the backend so the user message is
- * echoed back verbatim, and the long-line code block inside will be rendered
- * by the markdown renderer.
+ * Exercises markdown rendering on mobile (code blocks, tables, and images)
+ * using cc-chat-echo as backend.
  */
 
 const { test, expect } = require("@playwright/test");
@@ -117,6 +115,45 @@ test("code block word-break does not wrap long identifiers", async ({ page }) =>
   );
   // Should be "normal" (or "keep-all"), NOT "break-all"
   expect(wordBreak).not.toBe("break-all");
+});
+
+test("markdown table renders with expected structure on mobile", async ({ page }) => {
+  const tableMarkdown = [
+    "| Name | Status | Detail |",
+    "| --- | --- | --- |",
+    "| Alpha | ok | row-1 |",
+    "| Beta | pending | row-2 |",
+  ].join("\n");
+  await sendMessage(page, tableMarkdown);
+
+  const tableWrap = page.locator(".chat-bubble.user .chat-md-table-wrap").filter({
+    hasText: "Alpha",
+  }).first();
+  await expect(tableWrap).toBeVisible({ timeout: 15_000 });
+
+  const table = tableWrap.locator("table");
+  await expect(table).toBeVisible();
+  await expect(tableWrap.locator("thead th")).toHaveCount(3);
+  await expect(tableWrap.locator("tbody tr")).toHaveCount(2);
+
+  const overflowX = await tableWrap.evaluate((el) => window.getComputedStyle(el).overflowX);
+  expect(overflowX === "auto" || overflowX === "scroll").toBeTruthy();
+});
+
+test("markdown image renders from data URL on mobile", async ({ page }) => {
+  const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Y5WQAAAAASUVORK5CYII=";
+  const userMsg = `![tiny](data:image/png;base64,${tinyPngBase64})`;
+  await sendMessage(page, userMsg);
+
+  const img = page.locator(".chat-bubble.user .chat-markdown img[alt='tiny']").first();
+  await expect(img).toBeVisible({ timeout: 15_000 });
+  await expect(img).toHaveAttribute("src", new RegExp("^data:image/png;base64,"));
+
+  const imageLoaded = await img.evaluate((el) => {
+    if (!(el instanceof HTMLImageElement)) return false;
+    return el.naturalWidth > 0 && el.naturalHeight > 0;
+  });
+  expect(imageLoaded).toBe(true);
 });
 
 test("chat input is visible and not hidden after messages load on mobile", async ({ page }) => {
