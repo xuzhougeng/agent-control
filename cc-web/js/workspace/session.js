@@ -1,4 +1,4 @@
-import { WINDOWS_PTY_UNSUPPORTED_ERROR, escapeHtml, parseEnv } from "../shared/utils.js";
+import { WINDOWS_PTY_UNSUPPORTED_ERROR, escapeHtml, parseEnv, customConfirm } from "../shared/utils.js";
 import { renderServerList } from "../shared/server-list.js";
 import { renderSessionList } from "../shared/session-list.js";
 
@@ -356,7 +356,7 @@ export function createSessionController(ctx) {
   async function deleteSession(session) {
     if (!session?.session_id) return;
     if (session.status === "running") return alert("cannot delete running session");
-    if (!window.confirm(`Delete session ${session.session_id.slice(0, 8)}?`)) return;
+    if (!await customConfirm(`Delete session ${session.session_id.slice(0, 8)}?`, { danger: true, confirmLabel: "删除", cancelLabel: "取消" })) return;
     const resp = await ctx.api(`/api/sessions/${encodeURIComponent(session.session_id)}`, { method: "DELETE" });
     if (!resp.ok) return alert(await resp.text());
 
@@ -456,7 +456,7 @@ export function createSessionController(ctx) {
   async function applyPermissions() {
     const session = ctx.getSelectedSession();
     if (!session || session.session_type !== "chat") return;
-    if (!confirm("将重启当前 chat 会话以应用新权限，继续？")) return;
+    if (!await customConfirm("将重启当前 chat 会话以应用新权限，继续？", { confirmLabel: "应用", cancelLabel: "取消" })) return;
 
     const permMode = ctx.permModeInput ? ctx.permModeInput.value : "";
     const allowed = ctx.permAllowedInput ? ctx.permAllowedInput.value.trim() : "";

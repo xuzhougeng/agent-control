@@ -84,6 +84,51 @@ export function downloadBlob(filename, text, mimeType) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Custom confirm dialog — returns a Promise<boolean>.
+ * Falls back to window.confirm if the modal element is not in the DOM.
+ */
+export function customConfirm(message, { confirmLabel = "确认", cancelLabel = "取消", danger = false } = {}) {
+  const modal = document.getElementById("customConfirmModal");
+  if (!modal) return Promise.resolve(window.confirm(message));
+
+  return new Promise((resolve) => {
+    const msgEl = modal.querySelector(".cc-modal-message");
+    const confirmBtn = modal.querySelector(".cc-modal-confirm");
+    const cancelBtn = modal.querySelector(".cc-modal-cancel");
+
+    if (msgEl) msgEl.textContent = message;
+    if (confirmBtn) {
+      confirmBtn.textContent = confirmLabel;
+      confirmBtn.className = "cc-modal-confirm " + (danger ? "cc-modal-btn-danger" : "cc-modal-btn-primary");
+    }
+    if (cancelBtn) cancelBtn.textContent = cancelLabel;
+
+    modal.removeAttribute("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    if (confirmBtn) confirmBtn.focus();
+
+    function cleanup(result) {
+      modal.setAttribute("hidden", "");
+      modal.setAttribute("aria-hidden", "true");
+      confirmBtn.removeEventListener("click", onConfirm);
+      cancelBtn.removeEventListener("click", onCancel);
+      modal.removeEventListener("keydown", onKeydown);
+      resolve(result);
+    }
+
+    function onConfirm() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onKeydown(e) {
+      if (e.key === "Escape") cleanup(false);
+    }
+
+    confirmBtn.addEventListener("click", onConfirm);
+    cancelBtn.addEventListener("click", onCancel);
+    modal.addEventListener("keydown", onKeydown);
+  });
+}
+
 export function timestampedFilename(prefix, ext) {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");

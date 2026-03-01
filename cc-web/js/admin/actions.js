@@ -13,6 +13,7 @@ import {
   renderAdminServers,
   renderAdminSessions,
 } from "./render.js";
+import { customConfirm } from "../shared/utils.js";
 
 export function createAdminActions(ctx) {
   const {
@@ -137,7 +138,7 @@ export function createAdminActions(ctx) {
 
   async function revokeAdminToken(tokenID) {
     if (!tokenID) return;
-    if (!window.confirm(`Revoke tenant token ${tokenID.slice(0, 8)}?`)) return;
+    if (!await customConfirm(`Revoke tenant token ${tokenID.slice(0, 8)}?`, { danger: true, confirmLabel: "撤销", cancelLabel: "取消" })) return;
 
     const token = adminTokenInput.value.trim();
     if (!token) return setAdminMessage("Admin token is required.", true);
@@ -277,7 +278,7 @@ export function createAdminActions(ctx) {
 
   async function adminStopSession(sessionID) {
     if (!sessionID) return;
-    if (!window.confirm(`Stop session ${sessionID.slice(0, 8)}?`)) return;
+    if (!await customConfirm(`Stop session ${sessionID.slice(0, 8)}?`, { danger: true, confirmLabel: "停止", cancelLabel: "取消" })) return;
 
     const resp = await adminApi(`/admin/sessions/${encodeURIComponent(sessionID)}/stop`, {
       method: "POST",

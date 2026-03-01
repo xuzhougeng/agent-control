@@ -271,6 +271,17 @@
 
   <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
 
+  <!-- Custom confirm dialog -->
+  <div id="customConfirmModal" class="cc-modal-backdrop" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="ccModalMessage">
+    <div class="cc-modal">
+      <p id="ccModalMessage" class="cc-modal-message"></p>
+      <div class="cc-modal-actions">
+        <button class="cc-modal-cancel cc-modal-btn-ghost" type="button"></button>
+        <button class="cc-modal-confirm cc-modal-btn-primary" type="button"></button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-unicode11/lib/xterm-addon-unicode11.js"></script>
