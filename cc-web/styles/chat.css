@@ -4,6 +4,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.64), transparent 22%),
     linear-gradient(180deg, rgba(248, 242, 235, 0.82), rgba(255, 252, 247, 0.92));
@@ -227,16 +228,16 @@
 
 .chat-input-bar {
   display: flex;
+  flex-direction: column;
   flex-shrink: 0;
   gap: 8px;
   padding: 14px 18px 16px;
   border-top: 1px solid rgba(201, 183, 159, 0.62);
   background: rgba(255, 250, 244, 0.92);
-  align-items: flex-end;
 }
 
 .chat-input {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   resize: none;
   border: 1px solid rgba(201, 183, 159, 0.82);
@@ -249,6 +250,7 @@
   line-height: 1.4;
   max-height: 120px;
   min-height: 46px;
+  box-sizing: border-box;
 }
 
 .chat-input:focus {
@@ -257,15 +259,22 @@
   box-shadow: 0 0 0 3px rgba(68, 105, 127, 0.12);
 }
 
+.chat-input-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .chat-send-btn {
   flex-shrink: 0;
-  min-height: 46px;
+  min-height: 36px;
   padding: 0 20px;
 }
 
 .chat-attach-btn {
   flex-shrink: 0;
-  min-height: 46px;
+  min-height: 36px;
   padding: 0 12px;
 }
 

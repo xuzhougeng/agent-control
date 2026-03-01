@@ -182,6 +182,9 @@
     padding: 10px calc(10px + 46px) 12px calc(10px + 46px);
     gap: 6px;
   }
+  .chat-input-actions {
+    flex-wrap: wrap;
+  }
   .chat-attach-btn {
     padding: 0 8px;
     font-size: 13px;
