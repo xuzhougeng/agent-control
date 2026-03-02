@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <_IsWslUncProjectDir>$([System.String]::Copy('$(MSBuildProjectDirectory)').StartsWith('\\wsl$\'))</_IsWslUncProjectDir>
+    <BaseIntermediateOutputPath Condition="'$(_IsWslUncProjectDir)' == 'True'">$(LOCALAPPDATA)\AgentControlWin\obj\</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath Condition="'$(_IsWslUncProjectDir)' == 'True'">$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+  </PropertyGroup>
+</Project>

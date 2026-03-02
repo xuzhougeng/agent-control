@@ -19,6 +19,13 @@ dotnet run
 
 Or open `AgentControlWin.csproj` in Visual Studio 2022 and press F5.
 
+## Self-contained publish (no Windows App Runtime preinstall required)
+
+```powershell
+cd app\AgentControlWin
+dotnet publish -c Release -r win-x64 --self-contained true -o .\publish\win-x64
+```
+
 ## Project Structure
 
 ```

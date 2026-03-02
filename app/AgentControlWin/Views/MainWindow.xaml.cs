@@ -65,11 +65,11 @@ public sealed partial class MainWindow : Window
 
     private void UpdateNavButtonHighlight(bool isTerminal)
     {
-        var accentBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x31, 0x5f, 0x72));
-        var mutedBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x59, 0x61, 0x6c));
-        var surfaceBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xf5, 0xed, 0xe0));
+        var accentBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x31, 0x5f, 0x72));
+        var mutedBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x59, 0x61, 0x6c));
+        var surfaceBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xf5, 0xed, 0xe0));
         var whiteBrush = new SolidColorBrush(Colors.White);
-        var borderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xd0, 0xc8, 0xbe));
+        var borderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xd0, 0xc8, 0xbe));
 
         TerminalNavBtn.Background = isTerminal ? accentBrush : surfaceBrush;
         TerminalNavBtn.Foreground = isTerminal ? whiteBrush : mutedBrush;
@@ -85,8 +85,8 @@ public sealed partial class MainWindow : Window
         if (e.PropertyName == nameof(AppState.WsConnected))
         {
             WsIndicator.Fill = AppState.WsConnected
-                ? new SolidColorBrush(Color.FromArgb(0xFF, 0x3a, 0x9e, 0x74))
-                : new SolidColorBrush(Color.FromArgb(0xFF, 0xd9, 0x4f, 0x4f));
+                ? new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x3a, 0x9e, 0x74))
+                : new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xd9, 0x4f, 0x4f));
             ToolTipService.SetToolTip(WsIndicator,
                 AppState.WsConnected ? "WebSocket Connected" : "WebSocket Disconnected");
         }

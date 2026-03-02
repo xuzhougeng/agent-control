@@ -1,3 +1,4 @@
+using AgentControlWin.Views;
 using Microsoft.UI.Xaml;
 
 namespace AgentControlWin;

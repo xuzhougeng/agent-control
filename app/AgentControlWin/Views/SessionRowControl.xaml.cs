@@ -23,11 +23,11 @@ public sealed partial class SessionRowControl : UserControl
     public event EventHandler<Session>? SessionDeleteClicked;
 
     private static readonly SolidColorBrush AccentSoftBrush =
-        new(Color.FromArgb(0x1A, 0x31, 0x5f, 0x72));
+        new(Windows.UI.Color.FromArgb(0x1A, 0x31, 0x5f, 0x72));
     private static readonly SolidColorBrush AccentBrush =
-        new(Color.FromArgb(0xFF, 0x31, 0x5f, 0x72));
+        new(Windows.UI.Color.FromArgb(0xFF, 0x31, 0x5f, 0x72));
     private static readonly SolidColorBrush SurfaceStrongBrush =
-        new(Color.FromArgb(0xFF, 0xf5, 0xed, 0xe0));
+        new(Windows.UI.Color.FromArgb(0xFF, 0xf5, 0xed, 0xe0));
 
     public SessionRowControl()
     {

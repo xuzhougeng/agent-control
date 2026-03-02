@@ -55,12 +55,17 @@ public class WsClient
 
     private string BuildWsUrl()
     {
-        var scheme = _baseUrl.StartsWith("https", StringComparison.OrdinalIgnoreCase) ? "wss" : "ws";
-        var host = _baseUrl
-            .Replace("https://", "")
-            .Replace("http://", "");
+        if (!Uri.TryCreate(_baseUrl, UriKind.Absolute, out var baseUri))
+            return "";
+
         var encodedToken = Uri.EscapeDataString(_token);
-        return $"{scheme}://{host}/ws/client?token={encodedToken}&v={ProtocolVersion}";
+        var builder = new UriBuilder(baseUri)
+        {
+            Scheme = baseUri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? "wss" : "ws",
+            Path = "/ws/client",
+            Query = $"token={encodedToken}&v={ProtocolVersion}",
+        };
+        return builder.Uri.ToString();
     }
 
     private async Task ConnectAsync()
@@ -72,11 +77,14 @@ public class WsClient
         try
         {
             var url = BuildWsUrl();
-            _ws = new ClientWebSocket();
-            _ws.Options.SetRequestHeader("Authorization", $"Bearer {_token}");
+            if (string.IsNullOrWhiteSpace(url))
+                throw new InvalidOperationException($"invalid base url: {_baseUrl}");
 
-            // Note: ClientWebSocket doesn't support per-connection TLS bypass easily.
-            // For _skipTlsVerify in production builds, a custom handler would be needed.
+            _ws = new ClientWebSocket();
+            if (!string.IsNullOrWhiteSpace(_token))
+                _ws.Options.SetRequestHeader("Authorization", $"Bearer {_token}");
+            if (_skipTlsVerify)
+                _ws.Options.RemoteCertificateValidationCallback = (_, _, _, _) => true;
 
             await _ws.ConnectAsync(new Uri(url), token);
 

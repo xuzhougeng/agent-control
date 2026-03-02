@@ -118,16 +118,16 @@ public sealed partial class ChatPage : Page
         RunStateText.Text = text;
         RunStateBar.Background = state switch
         {
-            ChatRunState.Running => new SolidColorBrush(Color.FromArgb(0x1A, 0x31, 0x5f, 0x72)),
-            ChatRunState.Slow => new SolidColorBrush(Color.FromArgb(0x1A, 0xc8, 0x75, 0x33)),
-            ChatRunState.Error => new SolidColorBrush(Color.FromArgb(0x1A, 0xd9, 0x4f, 0x4f)),
+            ChatRunState.Running => new SolidColorBrush(Windows.UI.Color.FromArgb(0x1A, 0x31, 0x5f, 0x72)),
+            ChatRunState.Slow => new SolidColorBrush(Windows.UI.Color.FromArgb(0x1A, 0xc8, 0x75, 0x33)),
+            ChatRunState.Error => new SolidColorBrush(Windows.UI.Color.FromArgb(0x1A, 0xd9, 0x4f, 0x4f)),
             _ => new SolidColorBrush(Colors.Transparent),
         };
         RunStateText.Foreground = state switch
         {
-            ChatRunState.Running => new SolidColorBrush(Color.FromArgb(0xFF, 0x31, 0x5f, 0x72)),
-            ChatRunState.Slow => new SolidColorBrush(Color.FromArgb(0xFF, 0xc8, 0x75, 0x33)),
-            ChatRunState.Error => new SolidColorBrush(Color.FromArgb(0xFF, 0xd9, 0x4f, 0x4f)),
+            ChatRunState.Running => new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x31, 0x5f, 0x72)),
+            ChatRunState.Slow => new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xc8, 0x75, 0x33)),
+            ChatRunState.Error => new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xd9, 0x4f, 0x4f)),
             _ => new SolidColorBrush(Colors.Gray),
         };
     }
@@ -161,14 +161,14 @@ public sealed partial class ChatPage : Page
 
         if (isUser)
         {
-            border.Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x31, 0x5f, 0x72));
-            border.BorderBrush = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF));
+            border.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x31, 0x5f, 0x72));
+            border.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF));
             border.BorderThickness = new Thickness(1);
         }
         else
         {
-            border.Background = new SolidColorBrush(Color.FromArgb(0xFF, 0xf5, 0xed, 0xe0));
-            border.BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xd0, 0xc8, 0xbe));
+            border.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xf5, 0xed, 0xe0));
+            border.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xd0, 0xc8, 0xbe));
             border.BorderThickness = new Thickness(1);
         }
 
@@ -179,7 +179,7 @@ public sealed partial class ChatPage : Page
             FontSize = 13,
             Foreground = isUser
                 ? new SolidColorBrush(Colors.White)
-                : new SolidColorBrush(Color.FromArgb(0xFF, 0x1d, 0x24, 0x30)),
+                : new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x1d, 0x24, 0x30)),
             TextWrapping = TextWrapping.Wrap,
         };
 
@@ -193,8 +193,8 @@ public sealed partial class ChatPage : Page
                 Text = "INTERMEDIATE STEPS",
                 FontSize = 9,
                 Foreground = new SolidColorBrush(isUser
-                    ? Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF)
-                    : Color.FromArgb(0xFF, 0x59, 0x61, 0x6c)),
+                    ? Windows.UI.Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF)
+                    : Windows.UI.Color.FromArgb(0xFF, 0x59, 0x61, 0x6c)),
                 Margin = new Thickness(0, 6, 0, 2),
             };
             stack.Children.Add(opHeader);
@@ -205,8 +205,8 @@ public sealed partial class ChatPage : Page
                     Text = $"{i + 1}. {msg.Meta.Operations[i]}",
                     FontSize = 11,
                     Foreground = new SolidColorBrush(isUser
-                        ? Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)
-                        : Color.FromArgb(0xFF, 0x59, 0x61, 0x6c)),
+                        ? Windows.UI.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)
+                        : Windows.UI.Color.FromArgb(0xFF, 0x59, 0x61, 0x6c)),
                     TextWrapping = TextWrapping.Wrap,
                 });
             }

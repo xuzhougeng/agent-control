@@ -9,7 +9,7 @@ namespace AgentControlWin.Views;
 public sealed partial class TerminalPage : Page
 {
     private AppState? _appState;
-    private Microsoft.Web.WebView2.WinUI.WebView2? _webView;
+    private Microsoft.UI.Xaml.Controls.WebView2? _webView;
     private bool _webViewReady;
     private SessionEvent? _currentApproval;
 
@@ -42,7 +42,7 @@ public sealed partial class TerminalPage : Page
 
     private async void InitWebView()
     {
-        _webView = new Microsoft.Web.WebView2.WinUI.WebView2
+        _webView = new Microsoft.UI.Xaml.Controls.WebView2
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,

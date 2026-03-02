@@ -50,8 +50,8 @@ public sealed partial class SettingsPage : Page
         if (_appState == null) return;
         var connected = _appState.WsConnected;
         WsStatusDot.Fill = connected
-            ? new SolidColorBrush(Color.FromArgb(0xFF, 0x3a, 0x9e, 0x74))
-            : new SolidColorBrush(Color.FromArgb(0xFF, 0xd9, 0x4f, 0x4f));
+            ? new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x3a, 0x9e, 0x74))
+            : new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xd9, 0x4f, 0x4f));
         WsStatusText.Text = connected ? "Connected" : "Disconnected";
         ServersCountText.Text = _appState.Servers.Count.ToString();
         SessionsCountText.Text = _appState.Sessions.Count.ToString();
@@ -68,7 +68,7 @@ public sealed partial class SettingsPage : Page
         CheckConnectionBtn.IsEnabled = false;
         ConnectionResultText.Visibility = Visibility.Visible;
         ConnectionResultText.Text = "Checking...";
-        ConnectionResultText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x59, 0x61, 0x6c));
+        ConnectionResultText.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x59, 0x61, 0x6c));
 
         try
         {
@@ -77,12 +77,12 @@ public sealed partial class SettingsPage : Page
                 TokenBox.Password.Trim(),
                 SkipTlsToggle.IsOn);
             ConnectionResultText.Text = "✓ Connection successful";
-            ConnectionResultText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x3a, 0x9e, 0x74));
+            ConnectionResultText.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x3a, 0x9e, 0x74));
         }
         catch (Exception ex)
         {
             ConnectionResultText.Text = $"✕ Failed: {ex.Message}";
-            ConnectionResultText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xd9, 0x4f, 0x4f));
+            ConnectionResultText.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xd9, 0x4f, 0x4f));
         }
         finally
         {
