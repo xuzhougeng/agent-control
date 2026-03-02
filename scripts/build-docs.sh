@@ -49,6 +49,7 @@ cat > "${SITE_DIR}/index.html" <<'INDEX_EOF'
             <nav>
                 <ul>
                     <li><a href="#features">Features</a></li>
+                    <li><a href="#getting-started">Get Started</a></li>
                     <li><a href="#architecture">Architecture</a></li>
                     <li><a href="deploy-public-server.html">Deploy</a></li>
                 </ul>
@@ -124,6 +125,47 @@ cat > "${SITE_DIR}/index.html" <<'INDEX_EOF'
                 <div class="card-icon"><i class="fas fa-code-branch"></i></div>
                 <h3>Open Source</h3>
                 <p>MIT Licensed. Hackable. Deploy it on your own infrastructure.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="getting-started" class="getting-started">
+        <div class="container">
+            <h2 class="section-title">Get Started in 2 Steps</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-body">
+                        <h3>Register &amp; Get Your Tenant Credentials</h3>
+                        <p>Sign up at <a href="https://console.cc-remote.app" target="_blank">console.cc-remote.app</a> to create your tenant. You'll receive a <strong>Tenant ID</strong> and <strong>Admin Token</strong> — these are the master keys to your control plane.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-body">
+                        <h3>Generate UI Token &amp; Agent Token</h3>
+                        <p>Use your Admin Token to create two types of credentials:</p>
+                        <div class="token-cards">
+                            <div class="token-card">
+                                <div class="token-icon"><i class="fas fa-desktop"></i></div>
+                                <strong>UI Token</strong>
+                                <p>Authenticates the browser dashboard. Grants read-only or operator access to view sessions, logs, and real-time terminal output.</p>
+                            </div>
+                            <div class="token-card">
+                                <div class="token-icon"><i class="fas fa-robot"></i></div>
+                                <strong>Agent Token</strong>
+                                <p>Authenticates each <code>cc-agent</code> instance on your servers. The agent connects outbound to the control plane and spawns PTY sessions for AI coding tools.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="self-deploy-note">
+                <i class="fas fa-server"></i>
+                <div>
+                    <strong>Prefer self-hosting?</strong>
+                    Agent Control is fully open source. You can <a href="deploy-public-server.html">deploy your own control plane</a> on any Linux server — no third-party dependency required.
+                </div>
             </div>
         </div>
     </section>

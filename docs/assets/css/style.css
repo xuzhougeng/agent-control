@@ -269,6 +269,107 @@ nav a:hover { color: var(--text); }
 .card h3 { margin: 0 0 0.75rem; font-size: 1.25rem; color: var(--text); }
 .card p { color: var(--text-dim); margin: 0; font-size: 0.95rem; }
 
+/* Getting Started */
+.getting-started {
+    padding: 6rem 1.5rem;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.steps {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+}
+
+.step {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+.step-number {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.25rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(49, 95, 114, 0.25);
+}
+
+.step-body h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.3rem;
+    color: var(--text);
+}
+
+.step-body > p {
+    color: var(--text-dim);
+    margin: 0 0 1rem;
+    line-height: 1.7;
+}
+
+.step-body a { color: var(--accent); font-weight: 500; text-decoration: none; }
+.step-body a:hover { text-decoration: underline; }
+.step-body code { background: var(--accent-soft); padding: 0.15rem 0.4rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.9em; color: var(--accent); }
+
+.token-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.token-card {
+    background: rgba(255, 252, 247, 0.92);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-card);
+}
+
+.token-icon {
+    font-size: 1.25rem;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+}
+
+.token-card strong { display: block; margin-bottom: 0.4rem; color: var(--text); font-size: 1rem; }
+.token-card p { margin: 0; color: var(--text-dim); font-size: 0.9rem; line-height: 1.6; }
+
+.self-deploy-note {
+    margin-top: 3rem;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 1.25rem 1.5rem;
+    background: var(--accent-soft);
+    border: 1px solid rgba(49, 95, 114, 0.2);
+    border-radius: var(--radius-sm);
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.self-deploy-note > i {
+    color: var(--accent);
+    font-size: 1.25rem;
+    margin-top: 0.15rem;
+}
+
+.self-deploy-note a { color: var(--accent); font-weight: 500; text-decoration: none; }
+.self-deploy-note a:hover { text-decoration: underline; }
+
+@media (max-width: 768px) {
+    .token-cards { grid-template-columns: 1fr; }
+    .step { flex-direction: column; }
+}
+
 /* Architecture */
 .architecture {
     background: rgba(255, 252, 247, 0.6);
