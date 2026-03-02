@@ -92,7 +92,16 @@
     <div class="section">
       <h3>Quick Start</h3>
       <div class="token-display">
-        <div class="token-label">Connect your agent</div>
+        <div class="token-label">Step 1: Download</div>
+        <div class="token-value" style="margin-top:8px;font-size:12px;line-height:1.8;word-break:normal;white-space:pre-wrap;">
+# Install cc-agent (Linux / macOS)
+curl -fsSL https://cc-remote.app/install.sh | bash
+# Install cc-agent (Windows PowerShell)
+irm https://cc-remote.app/install.ps1 | iex
+        </div>
+      </div>
+      <div class="token-display">
+        <div class="token-label">Step 2: Connect</div>
         <div class="token-value" style="margin-top:8px;font-size:12px;line-height:1.8;">
           cc-agent \<br>
           &nbsp;&nbsp;-control-url wss://YOUR_CONTROL/ws/agent \<br>
@@ -100,6 +109,16 @@
           &nbsp;&nbsp;-server-id srv-01 \<br>
           &nbsp;&nbsp;-allow-root /path/to/repo \<br>
           &nbsp;&nbsp;-claude-path /path/to/claude
+        </div>
+      </div>
+      <div class="token-display">
+        <div class="token-label">Step 3: Control</div>
+        <div class="token-value" style="margin-top:8px;font-size:12px;line-height:1.8;">
+          Web: Click <strong>Open Tenant Panel</strong> above to control from browser.<br>
+          iOS App:
+          <a href="https://apps.apple.com/us/app/cc-remote/id6759078097" target="_blank" rel="noopener">
+            https://apps.apple.com/us/app/cc-remote/id6759078097
+          </a>
         </div>
       </div>
     </div>
