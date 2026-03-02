@@ -131,7 +131,7 @@ cat > "${SITE_DIR}/index.html" <<'INDEX_EOF'
 
     <section id="getting-started" class="getting-started">
         <div class="container">
-            <h2 class="section-title">Get Started in 2 Steps</h2>
+            <h2 class="section-title">Get Started in 4 Steps</h2>
             <div class="steps">
                 <div class="step">
                     <div class="step-number">1</div>
@@ -156,6 +156,34 @@ cat > "${SITE_DIR}/index.html" <<'INDEX_EOF'
                                 <strong>Agent Token</strong>
                                 <p>Authenticates each <code>cc-agent</code> instance on your servers. The agent connects outbound to the control plane and spawns PTY sessions for AI coding tools.</p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-body">
+                        <h3>Connect Agent to Control</h3>
+                        <p>Run the installed <code>cc-agent</code> on your target machine, pointing it to the control plane with your Agent Token:</p>
+                        <div class="install-block" style="margin: 0;">
+                            <div class="command" style="margin-bottom: 0;">
+                                <span class="cmd-text">cc-agent \
+  -control-url wss://cc-remote.app/ws/agent \
+  -agent-token &lt;your-agent-token&gt; \
+  -server-id srv-01 \
+  -allow-root /path/to/repo \
+  -claude-path /path/to/claude</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-body">
+                        <h3>Control Your Agents</h3>
+                        <p>Log in with your <strong>UI Token</strong> to view and control your agents from anywhere.</p>
+                        <div class="hero-buttons" style="margin-top: 1rem;">
+                            <a href="https://console.cc-remote.app/tenant" class="btn btn-primary"><i class="fas fa-globe"></i>&nbsp; Web UI</a>
+                            <a href="https://apps.apple.com/us/app/cc-remote/id6759078097" target="_blank" class="btn btn-secondary"><i class="fab fa-apple"></i>&nbsp; iOS / macOS App</a>
                         </div>
                     </div>
                 </div>
