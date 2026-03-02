@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"cc-agent/internal/claudecli"
 	"cc-agent/internal/echocli"
 	"cc-agent/internal/pty"
 	"cc-agent/internal/security"
@@ -159,20 +160,27 @@ func (m *SessionManager) startSession(sessionID, instanceID string, req StartSes
 	}
 
 	cmdPath := strings.TrimSpace(m.cfg.ClaudePath)
-	args := []string{"--session-id", sessionID}
+	args := []string(nil)
 	if len(req.Cmd) > 0 {
 		cmdPath = strings.TrimSpace(req.Cmd[0])
 		if len(req.Cmd) > 1 {
 			args = append([]string(nil), req.Cmd[1:]...)
-		} else {
-			args = nil
 		}
+	} else if strings.TrimSpace(sessionID) != "" {
+		args = []string{"--session-id", sessionID}
 	}
 	if cmdPath == "" {
 		cmdPath = "claude-code"
 	}
-	args = normalizeClaudeSessionArgs(sessionID, args)
-	fallbackArgs, hasFallbackArgs := alternateClaudeSessionArgs(sessionID, args)
+	supportsSessionFlags := claudecli.SupportsSessionFlags(cmdPath)
+	if !supportsSessionFlags {
+		args = stripClaudeSessionArgs(args)
+	}
+	fallbackArgs, hasFallbackArgs := []string(nil), false
+	if supportsSessionFlags {
+		args = normalizeClaudeSessionArgs(sessionID, args)
+		fallbackArgs, hasFallbackArgs = alternateClaudeSessionArgs(sessionID, args)
+	}
 
 	env := security.FilterEnv(req.Env, m.cfg.EnvAllowKeys, m.cfg.EnvAllowPrefix)
 	if strings.EqualFold(runtimeGOOS, "windows") {
@@ -321,6 +329,27 @@ func alternateClaudeSessionArgs(sessionID string, args []string) ([]string, bool
 		}
 	}
 	return nil, false
+}
+
+func stripClaudeSessionArgs(args []string) []string {
+	if len(args) == 0 {
+		return args
+	}
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		flag := strings.TrimSpace(strings.ToLower(args[i]))
+		if flag == "--session-id" || flag == "--resume" {
+			if i+1 < len(args) {
+				i++
+			}
+			continue
+		}
+		if strings.HasPrefix(flag, "--session-id=") || strings.HasPrefix(flag, "--resume=") {
+			continue
+		}
+		out = append(out, args[i])
+	}
+	return out
 }
 
 func shouldRetryClaudeSessionStartup(code *int, reason, recentOutput string) bool {

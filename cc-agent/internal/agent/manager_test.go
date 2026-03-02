@@ -177,6 +177,26 @@ func TestAlternateClaudeSessionArgsNoSessionFlag(t *testing.T) {
 	}
 }
 
+func TestStripClaudeSessionArgs(t *testing.T) {
+	in := []string{
+		"--session-id", "s1",
+		"-p",
+		"--resume=s2",
+		"--model", "sonnet",
+		"--resume", "s3",
+	}
+	got := stripClaudeSessionArgs(in)
+	want := []string{"-p", "--model", "sonnet"}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected args length: got=%#v want=%#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("unexpected args: got=%#v want=%#v", got, want)
+		}
+	}
+}
+
 func TestShouldRetryClaudeSessionStartup(t *testing.T) {
 	code := 1
 	cases := []struct {

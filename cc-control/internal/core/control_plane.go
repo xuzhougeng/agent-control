@@ -503,10 +503,12 @@ func (cp *ControlPlane) sendStartInstance(conn AgentSender, server *Server, sess
 			cmdPath = "claude-code"
 		}
 		cmd := []string{cmdPath}
-		if resumePTY {
-			cmd = append(cmd, "--resume", sess.SessionID)
-		} else {
-			cmd = append(cmd, "--session-id", sess.SessionID)
+		if supportsClaudeSessionFlags(cmdPath) {
+			if resumePTY {
+				cmd = append(cmd, "--resume", sess.SessionID)
+			} else {
+				cmd = append(cmd, "--session-id", sess.SessionID)
+			}
 		}
 		sess.Cmd = append([]string(nil), cmd...)
 		payload := map[string]any{
@@ -523,6 +525,29 @@ func (cp *ControlPlane) sendStartInstance(conn AgentSender, server *Server, sess
 	msg.InstanceID = inst.InstanceID
 	msg.Data = data
 	return conn.Send(msg)
+}
+
+func supportsClaudeSessionFlags(cmdPath string) bool {
+	base := normalizedCommandBase(cmdPath)
+	if base == "" {
+		return false
+	}
+	return base == "claude" || base == "claude-code"
+}
+
+func normalizedCommandBase(cmdPath string) string {
+	cmdPath = strings.TrimSpace(cmdPath)
+	if cmdPath == "" {
+		return ""
+	}
+	if idx := strings.LastIndexAny(cmdPath, `/\`); idx >= 0 {
+		cmdPath = cmdPath[idx+1:]
+	}
+	cmdPath = strings.ToLower(strings.TrimSpace(cmdPath))
+	for _, ext := range []string{".exe", ".cmd", ".bat", ".ps1", ".sh"} {
+		cmdPath = strings.TrimSuffix(cmdPath, ext)
+	}
+	return cmdPath
 }
 
 func (cp *ControlPlane) SwitchSessionMode(actor, tenantID, sessionID string, req SwitchSessionRequest) (*Session, error) {

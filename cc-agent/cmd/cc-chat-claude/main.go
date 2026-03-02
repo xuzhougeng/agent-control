@@ -166,7 +166,7 @@ func handleMessage(ctx context.Context, cfg claudecli.Config, sessionID string, 
 
 func runClaude(parentCtx context.Context, cfg claudecli.Config, sessionID string, continueSession bool, input string, onOperation func(op string)) (string, json.RawMessage, string, error) {
 	args := claudecli.BaseArgs(cfg)
-	if sessionID != "" {
+	if sessionID != "" && claudecli.SupportsSessionFlags(cfg.Cmd) {
 		if continueSession {
 			args = append(args, "--resume", sessionID)
 		} else {
