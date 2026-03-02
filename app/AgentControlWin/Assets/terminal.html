@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Terminal</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0f20; }
+  #terminal { width: 100%; height: 100%; }
+</style>
+<!-- xterm.js 5.x from CDN (replace with local copy for offline use) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css"/>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+</head>
+<body>
+<div id="terminal"></div>
+<script>
+(function() {
+  const term = new Terminal({
+    allowTransparency: false,
+    fontFamily: '"Cascadia Code", "Consolas", "Courier New", monospace',
+    fontSize: 13,
+    lineHeight: 1.2,
+    theme: {
+      background: '#0b0f20',
+      foreground: '#e8e8e8',
+      cursor: '#5bc8fa',
+      selectionBackground: 'rgba(91,200,250,0.25)',
+      black: '#1a1d2b',
+      red: '#f07070',
+      green: '#5ec47a',
+      yellow: '#e6c77a',
+      blue: '#6baed6',
+      magenta: '#c678dd',
+      cyan: '#5bc8fa',
+      white: '#e8e8e8',
+      brightBlack: '#4a4f66',
+      brightRed: '#f07070',
+      brightGreen: '#5ec47a',
+      brightYellow: '#e6c77a',
+      brightBlue: '#6baed6',
+      brightMagenta: '#c678dd',
+      brightCyan: '#5bc8fa',
+      brightWhite: '#ffffff',
+    },
+    cursorBlink: true,
+    scrollback: 5000,
+  });
+
+  const fitAddon = new FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+  term.open(document.getElementById('terminal'));
+  fitAddon.fit();
+
+  // Send input from xterm to C# host
+  term.onData(function(data) {
+    const b64 = btoa(unescape(encodeURIComponent(data)));
+    window.chrome.webview.postMessage(JSON.stringify({ type: 'term_in', data_b64: b64 }));
+  });
+
+  // Send resize to C# host
+  term.onResize(function(size) {
+    window.chrome.webview.postMessage(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+  });
+
+  // Receive messages from C# host
+  window.chrome.webview.addEventListener('message', function(event) {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'term_out') {
+        const bytes = Uint8Array.from(atob(msg.data_b64), c => c.charCodeAt(0));
+        term.write(bytes);
+      } else if (msg.type === 'reset') {
+        term.reset();
+        term.clear();
+        fitAddon.fit();
+      } else if (msg.type === 'resize_request') {
+        fitAddon.fit();
+      }
+    } catch (e) {
+      console.error('message parse error', e);
+    }
+  });
+
+  // Refit on window resize
+  window.addEventListener('resize', function() {
+    fitAddon.fit();
+  });
+
+  // Initial fit notification after a short delay
+  setTimeout(function() {
+    fitAddon.fit();
+  }, 100);
+})();
+</script>
+</body>
+</html>

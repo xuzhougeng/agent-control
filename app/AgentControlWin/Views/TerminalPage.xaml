@@ -1,0 +1,72 @@
+<Page
+    x:Class="AgentControlWin.Views.TerminalPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#FF0b0f20">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- Approval panel (collapsible) -->
+            <RowDefinition Height="Auto"/>
+            <!-- Terminal WebView2 placeholder -->
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Approval overlay (shown when pending approval for current session) -->
+        <Border x:Name="ApprovalOverlay"
+                Grid.Row="0"
+                Background="#CC1a1d2b"
+                BorderBrush="#33c87533"
+                BorderThickness="0,0,0,1"
+                Padding="12,8"
+                Visibility="Collapsed">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Approval required"
+                               FontSize="12" FontWeight="SemiBold"
+                               Foreground="#FFc87533"/>
+                    <TextBlock x:Name="ApprovalExcerptText"
+                               Text=""
+                               FontSize="11"
+                               Foreground="#FFa0a8b0"
+                               MaxLines="2"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        x:Name="ApproveBtn"
+                        Content="Approve"
+                        Click="Approve_Click"
+                        Background="#FF3a9e74"
+                        Foreground="White"
+                        Padding="10,4"
+                        CornerRadius="6"
+                        Margin="8,0,4,0"/>
+                <Button Grid.Column="2"
+                        x:Name="RejectBtn"
+                        Content="Reject"
+                        Click="Reject_Click"
+                        Background="#FFd94f4f"
+                        Foreground="White"
+                        Padding="10,4"
+                        CornerRadius="6"/>
+            </Grid>
+        </Border>
+
+        <!-- WebView2 terminal container -->
+        <Grid x:Name="TerminalContainer" Grid.Row="1">
+            <TextBlock x:Name="NoSessionHint"
+                       Text="Select or create a PTY session from the sidebar."
+                       FontSize="13"
+                       Foreground="#FF59616c"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"/>
+            <!-- WebView2 is added here dynamically in code-behind -->
+        </Grid>
+    </Grid>
+</Page>

@@ -1,0 +1,87 @@
+<Application
+    x:Class="AgentControlWin.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Workspace Theme Colors (mirrors macOS WorkspaceTheme) -->
+            <Color x:Key="BgBaseColor">#FFefe6da</Color>
+            <Color x:Key="BgBaseDarkColor">#FFe3d9cc</Color>
+            <Color x:Key="SurfaceColor">#FFfffdf9</Color>
+            <Color x:Key="SurfaceStrongColor">#FFf5ede0</Color>
+            <Color x:Key="AccentColor">#FF315f72</Color>
+            <Color x:Key="AccentSoftColor">#1A315f72</Color>
+            <Color x:Key="TextColor">#FF1d2430</Color>
+            <Color x:Key="TextMutedColor">#FF59616c</Color>
+            <Color x:Key="TextSoftColor">#FF8a9099</Color>
+            <Color x:Key="BorderColor">#FFd0c8be</Color>
+            <Color x:Key="SuccessColor">#FF3a9e74</Color>
+            <Color x:Key="SuccessSoftColor">#1A3a9e74</Color>
+            <Color x:Key="DangerColor">#FFd94f4f</Color>
+            <Color x:Key="DangerSoftColor">#1Ad94f4f</Color>
+            <Color x:Key="WarningColor">#FFc87533</Color>
+            <Color x:Key="WarningSoftColor">#1Ac87533</Color>
+
+            <SolidColorBrush x:Key="BgBaseBrush" Color="{StaticResource BgBaseColor}"/>
+            <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
+            <SolidColorBrush x:Key="SurfaceStrongBrush" Color="{StaticResource SurfaceStrongColor}"/>
+            <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
+            <SolidColorBrush x:Key="AccentSoftBrush" Color="{StaticResource AccentSoftColor}"/>
+            <SolidColorBrush x:Key="TextBrush" Color="{StaticResource TextColor}"/>
+            <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}"/>
+            <SolidColorBrush x:Key="TextSoftBrush" Color="{StaticResource TextSoftColor}"/>
+            <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
+            <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
+            <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}"/>
+            <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}"/>
+            <SolidColorBrush x:Key="WarningSoftBrush" Color="{StaticResource WarningSoftColor}"/>
+
+            <!-- Override system accent to our teal -->
+            <SolidColorBrush x:Key="SystemControlBackgroundAccentBrush" Color="{StaticResource AccentColor}"/>
+            <SolidColorBrush x:Key="SystemAccentColor" Color="{StaticResource AccentColor}"/>
+
+            <!-- Corner Radii -->
+            <CornerRadius x:Key="PanelCornerRadius">12</CornerRadius>
+            <CornerRadius x:Key="SmallCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="TinyCornerRadius">6</CornerRadius>
+
+            <!-- Spacing -->
+            <x:Double x:Key="PanelPadding">10</x:Double>
+
+            <!-- NavigationView background override -->
+            <SolidColorBrush x:Key="NavigationViewContentBackground" Color="{StaticResource SurfaceColor}"/>
+
+            <!-- Shared Button Styles -->
+            <Style x:Key="IconButtonStyle" TargetType="Button">
+                <Setter Property="Padding" Value="4"/>
+                <Setter Property="MinWidth" Value="24"/>
+                <Setter Property="MinHeight" Value="24"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                <Setter Property="CornerRadius" Value="6"/>
+            </Style>
+
+            <Style x:Key="TransparentButtonStyle" TargetType="Button">
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            </Style>
+
+            <Style x:Key="ListItemButtonStyle" TargetType="Button">
+                <Setter Property="Padding" Value="8,6"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="CornerRadius" Value="8"/>
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

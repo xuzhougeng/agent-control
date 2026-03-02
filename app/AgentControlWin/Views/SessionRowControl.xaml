@@ -1,0 +1,96 @@
+<UserControl
+    x:Class="AgentControlWin.Views.SessionRowControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:core="using:AgentControlWin.Core"
+    xmlns:conv="using:AgentControlWin.Converters">
+
+    <UserControl.Resources>
+        <conv:OnlineToBrushConverter x:Key="OnlineToBrush"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <Border x:Name="RowBorder"
+            Background="{StaticResource SurfaceStrongBrush}"
+            CornerRadius="{StaticResource SmallCornerRadius}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            Padding="8,7">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Row 1: ID + status + context menu trigger -->
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Ellipse Width="6" Height="6" Margin="0,0,8,0"
+                         Fill="{x:Bind SessionData.IsRunning, Converter={StaticResource OnlineToBrush}, Mode=OneWay}"
+                         VerticalAlignment="Center"/>
+
+                <!-- Clickable area -->
+                <Button Grid.Column="1" x:Name="MainClickArea"
+                        HorizontalAlignment="Stretch"
+                        Style="{StaticResource TransparentButtonStyle}"
+                        Click="MainArea_Click">
+                    <TextBlock Text="{x:Bind SessionData.ShortId, Mode=OneWay}"
+                               FontFamily="Cascadia Code, Consolas, Courier New"
+                               FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextBrush}"
+                               TextTrimming="CharacterEllipsis"/>
+                </Button>
+
+                <!-- Stop button (only for running PTY) -->
+                <Button Grid.Column="2" x:Name="StopBtn"
+                        Click="Stop_Click"
+                        Visibility="Collapsed"
+                        ToolTipService.ToolTip="Stop session"
+                        Style="{StaticResource IconButtonStyle}"
+                        Margin="2,0">
+                    <FontIcon Glyph="&#xE71A;" FontSize="10"/>
+                </Button>
+
+                <!-- Delete button -->
+                <Button Grid.Column="3"
+                        Click="Delete_Click"
+                        ToolTipService.ToolTip="Delete session"
+                        Style="{StaticResource IconButtonStyle}">
+                    <FontIcon Glyph="&#xE74D;" FontSize="10"/>
+                </Button>
+            </Grid>
+
+            <!-- Row 2: cwd -->
+            <TextBlock Grid.Row="1"
+                       Text="{x:Bind SessionData.Cwd, Mode=OneWay}"
+                       FontSize="10"
+                       Foreground="{StaticResource TextMutedBrush}"
+                       TextTrimming="CharacterEllipsis"
+                       Margin="0,2,0,0"/>
+
+            <!-- Row 3: type tag + approval tag -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4" Margin="0,3,0,0">
+                <Border CornerRadius="8" Padding="5,1"
+                        Background="{StaticResource AccentSoftBrush}">
+                    <TextBlock FontSize="9" FontWeight="SemiBold"
+                               Foreground="{StaticResource AccentBrush}"
+                               Text="{x:Bind SessionData.SessionTypeRaw, Mode=OneWay}"/>
+                </Border>
+                <Border x:Name="ApprovalTag"
+                        CornerRadius="8" Padding="5,1"
+                        Background="{StaticResource WarningSoftBrush}"
+                        Visibility="Collapsed">
+                    <TextBlock Text="approval" FontSize="9" FontWeight="SemiBold"
+                               Foreground="{StaticResource WarningBrush}"/>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

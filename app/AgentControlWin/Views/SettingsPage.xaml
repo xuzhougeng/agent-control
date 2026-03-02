@@ -1,0 +1,142 @@
+<Page
+    x:Class="AgentControlWin.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="using:AgentControlWin.Converters"
+    Background="{StaticResource BgBaseBrush}">
+
+    <Page.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:OnlineToBrushConverter x:Key="OnlineToBrush"/>
+    </Page.Resources>
+
+    <ScrollViewer Padding="24" VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="560" Spacing="16">
+
+            <TextBlock Text="Settings"
+                       FontSize="22" FontWeight="Bold"
+                       Foreground="{StaticResource TextBrush}"/>
+
+            <!-- Connection card -->
+            <Border Background="{StaticResource SurfaceStrongBrush}"
+                    CornerRadius="{StaticResource PanelCornerRadius}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="CONNECTION" FontSize="10" FontWeight="SemiBold"
+                               CharacterSpacing="80" Foreground="{StaticResource TextMutedBrush}"/>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Base URL" FontSize="12" Foreground="{StaticResource TextBrush}"/>
+                        <TextBox x:Name="BaseUrlBox"
+                                 PlaceholderText="http://127.0.0.1:18080"
+                                 FontFamily="Cascadia Code, Consolas, Courier New"
+                                 FontSize="13"
+                                 TextChanged="BaseUrl_Changed"/>
+                        <TextBlock x:Name="BaseUrlError"
+                                   Text="Invalid URL. Use format: http://host:port"
+                                   FontSize="11"
+                                   Foreground="{StaticResource DangerBrush}"
+                                   Visibility="Collapsed"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="UI Token" FontSize="12" Foreground="{StaticResource TextBrush}"/>
+                        <PasswordBox x:Name="TokenBox"
+                                     PlaceholderText="admin-dev-token"
+                                     FontSize="13"/>
+                    </StackPanel>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Skip TLS verification"
+                                   FontSize="12" Foreground="{StaticResource TextBrush}"
+                                   VerticalAlignment="Center"/>
+                        <ToggleSwitch x:Name="SkipTlsToggle" Grid.Column="1"
+                                      OnContent="" OffContent=""
+                                      Margin="0"/>
+                    </Grid>
+                    <TextBlock Text="Enable only for self-signed certificates during development."
+                               FontSize="11" Foreground="{StaticResource TextSoftBrush}"/>
+
+                    <!-- Connection check result -->
+                    <TextBlock x:Name="ConnectionResultText"
+                               FontSize="11"
+                               Visibility="Collapsed"
+                               TextWrapping="Wrap"/>
+
+                    <!-- Action buttons -->
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="CheckConnectionBtn"
+                                Content="Check Connection"
+                                Click="CheckConnection_Click"
+                                Padding="10,6"
+                                CornerRadius="{StaticResource SmallCornerRadius}"
+                                Background="{StaticResource SurfaceStrongBrush}"
+                                Foreground="{StaticResource AccentBrush}"
+                                BorderBrush="{StaticResource AccentBrush}"
+                                BorderThickness="1"/>
+                        <Button x:Name="SaveBtn"
+                                Content="Save &amp; Reconnect"
+                                Click="Save_Click"
+                                Padding="10,6"
+                                CornerRadius="{StaticResource SmallCornerRadius}"
+                                Background="{StaticResource AccentBrush}"
+                                Foreground="White"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Status card -->
+            <Border Background="{StaticResource SurfaceStrongBrush}"
+                    CornerRadius="{StaticResource PanelCornerRadius}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="STATUS" FontSize="10" FontWeight="SemiBold"
+                               CharacterSpacing="80" Foreground="{StaticResource TextMutedBrush}"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="WebSocket" FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Ellipse x:Name="WsStatusDot" Width="8" Height="8"/>
+                            <TextBlock x:Name="WsStatusText" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Servers" FontSize="12" Foreground="{StaticResource TextBrush}"/>
+                        <TextBlock x:Name="ServersCountText" Grid.Column="1" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Sessions" FontSize="12" Foreground="{StaticResource TextBrush}"/>
+                        <TextBlock x:Name="SessionsCountText" Grid.Column="1" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- App info -->
+            <TextBlock Text="AgentControlWin — WinUI 3 native client for cc-control"
+                       FontSize="11" Foreground="{StaticResource TextSoftBrush}"
+                       HorizontalAlignment="Center"/>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

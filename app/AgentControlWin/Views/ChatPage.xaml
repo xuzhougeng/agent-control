@@ -1,0 +1,158 @@
+<Page
+    x:Class="AgentControlWin.Views.ChatPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="using:AgentControlWin.Converters"
+    Background="{StaticResource SurfaceBrush}">
+
+    <Page.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:InvertBoolConverter x:Key="InvertBool"/>
+        <conv:NullToVisibilityConverter x:Key="NullToVis"/>
+        <conv:ChatRunStateToColorConverter x:Key="ChatRunStateToColor"/>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- Session info bar -->
+            <RowDefinition Height="Auto"/>
+            <!-- Run state bar -->
+            <RowDefinition Height="Auto"/>
+            <!-- Messages list -->
+            <RowDefinition Height="*"/>
+            <!-- Input bar -->
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Session info bar -->
+        <Border Grid.Row="0"
+                Background="{StaticResource SurfaceStrongBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="12,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="SessionInfoText"
+                           Text="Session: (none)"
+                           FontFamily="Cascadia Code, Consolas, Courier New"
+                           FontSize="11"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"/>
+                <Button Grid.Column="1"
+                        x:Name="SwitchToChatBtn"
+                        Content="Switch to Chat"
+                        Click="SwitchToChat_Click"
+                        Visibility="Collapsed"
+                        Padding="8,4"
+                        CornerRadius="6"
+                        Margin="4,0"
+                        Background="{StaticResource AccentBrush}"
+                        Foreground="White"
+                        FontSize="11"/>
+                <Button Grid.Column="2"
+                        x:Name="CopySessionIdBtn"
+                        Content="Copy ID"
+                        Click="CopySessionId_Click"
+                        Padding="8,4"
+                        CornerRadius="6"
+                        FontSize="11"
+                        Foreground="{StaticResource AccentBrush}"
+                        Background="{StaticResource AccentSoftBrush}"/>
+            </Grid>
+        </Border>
+
+        <!-- Run state bar -->
+        <Border x:Name="RunStateBar"
+                Grid.Row="1"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="12,5"
+                Visibility="Collapsed">
+            <TextBlock x:Name="RunStateText"
+                       FontSize="11"
+                       TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Messages -->
+        <ScrollViewer x:Name="MessagesScrollViewer"
+                      Grid.Row="2"
+                      VerticalScrollBarVisibility="Auto"
+                      Padding="16">
+            <StackPanel x:Name="MessagesPanel" Spacing="0">
+                <!-- Empty state -->
+                <StackPanel x:Name="EmptyState"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Margin="0,40,0,0"
+                            Spacing="8">
+                    <FontIcon Glyph="&#xE8BD;"
+                              FontSize="28"
+                              Foreground="{StaticResource TextSoftBrush}"
+                              HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="EmptyStateTitle"
+                               Text="Select a session"
+                               FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="EmptyStateSubtitle"
+                               Text="Create or select a chat session from the sidebar."
+                               FontSize="11"
+                               Foreground="{StaticResource TextSoftBrush}"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="300"
+                               TextAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Message bubbles are added dynamically in code-behind -->
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Input bar -->
+        <Border Grid.Row="3"
+                Background="{StaticResource SurfaceStrongBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="12,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Background="{StaticResource SurfaceBrush}"
+                        CornerRadius="10"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        Padding="8,4">
+                    <TextBox x:Name="InputBox"
+                             PlaceholderText="Type a message... (Enter to send, Shift+Enter for newline)"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             MaxHeight="120"
+                             FontSize="13"
+                             Foreground="{StaticResource TextBrush}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             KeyDown="InputBox_KeyDown"/>
+                </Border>
+
+                <Button Grid.Column="1"
+                        x:Name="SendBtn"
+                        Click="Send_Click"
+                        Width="38" Height="38"
+                        Margin="8,0,0,0"
+                        CornerRadius="19"
+                        Background="{StaticResource AccentBrush}"
+                        ToolTipService.ToolTip="Send (Enter)">
+                    <FontIcon Glyph="&#xE72A;" FontSize="13" Foreground="White"/>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>
