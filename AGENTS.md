@@ -45,3 +45,25 @@
 ## Security & Configuration Tips
 - Do not commit tokens or audit logs; prefer env vars or local flags.
 - For local runs, set `-admin-token`, `-ui-dir`, and `-audit-path` explicitly; see `README.md` examples.
+
+## Cursor Cloud specific instructions
+
+### Go version
+The project requires **Go 1.25**. The update script installs it to `/usr/local/go`. Ensure `/usr/local/go/bin` is on `PATH` (already added to `~/.bashrc`).
+
+### Running tests
+- `go test ./cc-control/...` and `go test ./cc-agent/...` (not `go test ./...` — the workspace root pattern fails with `go.work`).
+- Two process-tree-kill tests (`TestSession_StopKillsChildProcessTree` in `echocli`, `TestSessionStopKillsChildProcessTree` in `pty`) may fail in containerized environments due to PID namespace limitations. This is expected.
+
+### Starting services for dev
+See `README.md` Quick Start. Minimal flow:
+1. Build binaries: `go build -o /tmp/cc-control ./cc-control/cmd/cc-control && go build -o /tmp/cc-agent ./cc-agent/cmd/cc-agent && go build -o /tmp/cc-chat-echo ./cc-agent/cmd/cc-chat-echo`
+2. Start cc-control: `/tmp/cc-control -addr :18080 -ui-dir ./cc-web -admin-token admin-dev-token -ui-token "" -agent-token "" -audit-path /tmp/audit.jsonl -offline-after-sec 30`
+3. Create tokens via `curl` (see README), then start cc-agent with the agent token and `-chat-worker /tmp/cc-chat-echo` for chat testing.
+4. Web UI at `http://127.0.0.1:18080`, admin at `/admin`.
+
+### Lint
+- `gofmt -l ./cc-control/ ./cc-agent/` — check formatting. Note: `prompt_detector.go` has a pre-existing formatting issue.
+
+### Playwright E2E
+- `npm run test:web:e2e` runs the web E2E suite. Requires `npm install` first and Playwright browsers (`npx playwright install`).
