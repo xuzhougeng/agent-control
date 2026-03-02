@@ -48,6 +48,8 @@ app/**/*.app
 # Generated docs site
 docs/_site/
 
+.wrangler/
+
 # Web E2E / Playwright
 node_modules/
 test-results/

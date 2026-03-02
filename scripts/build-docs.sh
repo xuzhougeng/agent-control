@@ -24,6 +24,9 @@ echo
 
 # --- Copy static assets ---------------------------------------------------
 cp "${DOCS_DIR}/assets/css/style.css" "${SITE_DIR}/assets/css/style.css"
+cp "${ROOT_DIR}/scripts/install.sh" "${SITE_DIR}/install.sh"
+cp "${ROOT_DIR}/scripts/install.ps1" "${SITE_DIR}/install.ps1"
+echo "  Copied: install.sh, install.ps1"
 
 # --- Generate index.html (landing page) -----------------------------------
 cat > "${SITE_DIR}/index.html" <<'INDEX_EOF'
@@ -47,8 +50,7 @@ cat > "${SITE_DIR}/index.html" <<'INDEX_EOF'
                 <ul>
                     <li><a href="#features">Features</a></li>
                     <li><a href="#architecture">Architecture</a></li>
-                    <li><a href="deploy-public-server.html">Docs</a></li>
-                    <li><a href="https://github.com/xuzhougeng/agent-control" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+                    <li><a href="deploy-public-server.html">Deploy</a></li>
                 </ul>
             </nav>
         </div>
@@ -59,7 +61,7 @@ cat > "${SITE_DIR}/index.html" <<'INDEX_EOF'
             <h1>Orchestrate Your AI Agents.</h1>
             <p>The centralized control plane for AI coding tools. Manage Claude Code, Codex, Gemini, and OpenCode sessions across multiple servers.</p>
             <div class="hero-buttons">
-                <a href="deploy-public-server.html" class="btn btn-primary">Get Started</a>
+                <a href="https://console.cc-remote.app" class="btn btn-primary">Get Started</a>
                 <a href="https://github.com/xuzhougeng/agent-control" class="btn btn-secondary">Star on GitHub</a>
             </div>
         </div>
@@ -71,22 +73,17 @@ cat > "${SITE_DIR}/index.html" <<'INDEX_EOF'
                 <div class="dot green"></div>
             </div>
             <div class="terminal-body">
-                <div class="comment"># Start the control plane</div>
+                <div class="comment"># Install cc-agent (Linux / macOS)</div>
                 <div class="command">
                     <span class="prompt">$</span>
-                    <span class="cmd-text">./cc-control -addr :18080 -admin-token $ADMIN_TOKEN</span>
+                    <span class="cmd-text">curl -fsSL https://cc-remote.app/install.sh | bash</span>
                 </div>
-                <div class="comment"># Issue tenant tokens via Admin API</div>
+                <div class="comment"># Install cc-agent (Windows PowerShell)</div>
                 <div class="command">
                     <span class="prompt">$</span>
-                    <span class="cmd-text">curl -X POST https://api.ac.dev/admin/tokens</span>
+                    <span class="cmd-text">irm https://cc-remote.app/install.ps1 | iex</span>
                 </div>
-                <div class="comment"># Connect an agent securely</div>
-                <div class="command">
-                    <span class="prompt">$</span>
-                    <span class="cmd-text">./cc-agent -control-url wss://api.ac.dev/ws/agent</span>
-                </div>
-                <div class="comment"># Agent connected. Ready to code.</div>
+                <div class="comment"># Agent installed. Ready to connect.</div>
                 <div class="command">
                     <span class="prompt">$</span>
                     <span class="cmd-text blinking-cursor">_</span>
@@ -155,12 +152,13 @@ cat > "${SITE_DIR}/index.html" <<'INDEX_EOF'
         CC <-->|"Secure WS"| A1
         CC <-->|"Secure WS"| A2
 
-        style Clients fill:#111,stroke:#333,color:#fff
-        style Control fill:#111,stroke:#333,color:#fff
-        style Agents fill:#111,stroke:#333,color:#fff
-        style CC fill:#2563eb,stroke:#1d4ed8,color:#fff
+        style Clients fill:#111725,stroke:#44697f,color:#d4d4d4
+        style Control fill:#111725,stroke:#44697f,color:#d4d4d4
+        style Agents fill:#111725,stroke:#44697f,color:#d4d4d4
+        style CC fill:#315f72,stroke:#274f62,color:#fff
                 </div>
             </div>
+
         </div>
     </section>
 
@@ -173,7 +171,7 @@ cat > "${SITE_DIR}/index.html" <<'INDEX_EOF'
 
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ startOnLoad: true, theme: 'dark', themeVariables: { darkMode: true, background: '#000000', primaryColor: '#2563eb', lineColor: '#666' } });
+        mermaid.initialize({ startOnLoad: true, theme: 'dark', themeVariables: { darkMode: true, background: '#111725', primaryColor: '#315f72', lineColor: '#44697f' } });
     </script>
 </body>
 </html>
@@ -218,37 +216,39 @@ PART1_EOF
 EOF
 
     cat >> "$html_file" <<'PART1B_EOF'
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css">
     <style>
         .doc-content {
             max-width: 900px;
             margin: 0 auto;
             padding: 4rem 1.5rem;
-            color: #d4d4d4;
+            color: var(--text, #1d2430);
         }
         .doc-content h1, .doc-content h2, .doc-content h3 {
-            color: #fff;
+            color: var(--text, #1d2430);
             margin-top: 2rem;
             margin-bottom: 1rem;
         }
-        .doc-content h1 { font-size: 2.5rem; border-bottom: 1px solid #333; padding-bottom: 1rem; }
-        .doc-content h2 { font-size: 1.8rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem; }
-        .doc-content h3 { font-size: 1.4rem; color: #fff; margin-top: 1.5rem; }
+        .doc-content h1 { font-size: 2.5rem; border-bottom: 1px solid rgba(201, 183, 159, 0.5); padding-bottom: 1rem; }
+        .doc-content h2 { font-size: 1.8rem; border-bottom: 1px solid rgba(201, 183, 159, 0.5); padding-bottom: 0.5rem; }
+        .doc-content h3 { font-size: 1.4rem; margin-top: 1.5rem; }
         .doc-content p { line-height: 1.7; margin-bottom: 1.2rem; }
-        .doc-content code { background: #2d2d2d; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; color: #e06c75; }
-        .doc-content pre { background: #1e1e1e; padding: 1rem; border-radius: 8px; overflow-x: auto; margin-bottom: 1.5rem; border: 1px solid #333; }
-        .doc-content pre code { background: none; color: inherit; padding: 0; }
+        .doc-content code { background: rgba(49, 95, 114, 0.08); padding: 0.2rem 0.4rem; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; color: #315f72; }
+        .doc-content pre { background: #111725; padding: 1rem; border-radius: 10px; overflow-x: auto; margin-bottom: 1.5rem; border: 1px solid rgba(201, 183, 159, 0.3); box-shadow: 0 8px 20px rgba(49, 41, 31, 0.08); }
+        .doc-content pre code { background: none; color: #d4d4d4; padding: 0; }
         .doc-content table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
-        .doc-content th, .doc-content td { padding: 0.75rem; border: 1px solid #333; text-align: left; }
-        .doc-content th { background: #252525; color: #fff; }
-        .doc-content a { color: #3b82f6; text-decoration: none; }
-        .doc-content a:hover { text-decoration: underline; }
+        .doc-content th, .doc-content td { padding: 0.75rem; border: 1px solid rgba(201, 183, 159, 0.5); text-align: left; }
+        .doc-content th { background: rgba(255, 252, 247, 0.92); color: var(--text, #1d2430); font-weight: 600; }
+        .doc-content td { background: rgba(255, 252, 247, 0.5); }
+        .doc-content a { color: #315f72; text-decoration: none; font-weight: 500; }
+        .doc-content a:hover { text-decoration: underline; color: #274f62; }
         .doc-content ul, .doc-content ol { padding-left: 1.5rem; margin-bottom: 1.5rem; }
-        .doc-content li { margin-bottom: 0.5rem; }
-        .doc-content blockquote { border-left: 3px solid #3b82f6; padding-left: 1rem; color: #aaa; margin-bottom: 1.5rem; }
-        .mermaid { background: #000; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; text-align: center; }
-        .back-link { display: inline-flex; align-items: center; color: #888; margin-bottom: 2rem; font-weight: 500; }
-        .back-link:hover { color: #fff; text-decoration: none; }
+        .doc-content li { margin-bottom: 0.5rem; background: none; border: none; padding: 0; cursor: default; border-radius: 0; }
+        .doc-content li:hover { background: none; border: none; box-shadow: none; }
+        .doc-content blockquote { border-left: 3px solid #315f72; padding-left: 1rem; color: var(--text-dim, #59616c); margin-bottom: 1.5rem; }
+        .mermaid { background: #111725; padding: 1rem; border-radius: 10px; margin-bottom: 1.5rem; text-align: center; }
+        .back-link { display: inline-flex; align-items: center; color: var(--text-soft, #8a847a); margin-bottom: 2rem; font-weight: 500; }
+        .back-link:hover { color: var(--text, #1d2430); text-decoration: none; }
         .back-link i { margin-right: 0.5rem; }
     </style>
 </head>
@@ -268,8 +268,7 @@ PART1B_EOF
                 <ul>
                     <li><a href="${assets_prefix}index.html#features">Features</a></li>
                     <li><a href="${assets_prefix}index.html#architecture">Architecture</a></li>
-                    <li><a href="${assets_prefix}deploy-public-server.html" style="color: #fff;">Docs</a></li>
-                    <li><a href="https://github.com/xuzhougeng/agent-control" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+                    <li><a href="${assets_prefix}deploy-public-server.html" style="color: #315f72; font-weight: 600;">Deploy</a></li>
                 </ul>
             </nav>
         </div>
@@ -314,7 +313,7 @@ EOF
         });
 
         // Initialize mermaid
-        mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { darkMode: true, background: '#000000', primaryColor: '#2563eb' } });
+        mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { darkMode: true, background: '#111725', primaryColor: '#315f72', lineColor: '#44697f' } });
 
         // Render markdown
         const markdownSource = document.getElementById('markdown-source').textContent;
@@ -396,3 +395,7 @@ echo "Open docs/_site/index.html in a browser to preview."
 echo
 echo "Deploy to Cloudflare Pages:"
 echo "  npx wrangler pages deploy docs/_site --project-name=agent-control"
+echo ""
+echo "After deploy, install cc-agent one-liners:"
+echo "  Linux/macOS: curl -fsSL https://cc-remote.app/install.sh | bash"
+echo "  Windows:    irm https://cc-remote.app/install.ps1 | iex"
