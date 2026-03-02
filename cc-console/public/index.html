@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Control Console</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="brand">
+    <span class="brand-kicker">Agent Control</span>
+    <span class="brand-title">Console</span>
+  </div>
+  <div class="header-actions">
+    <span class="user-email" id="headerEmail"></span>
+    <button class="btn btn-secondary btn-small" id="logoutBtn" style="display:none" onclick="logout()">Logout</button>
+  </div>
+</div>
+
+<!-- Login View -->
+<div class="view active" id="loginView">
+  <div class="auth-card">
+    <h2>Sign In</h2>
+    <p>Enter your email to receive a verification code.</p>
+    <div id="loginMsg"></div>
+
+    <div id="emailStep">
+      <div class="form-group">
+        <label for="emailInput">Email</label>
+        <input type="email" id="emailInput" placeholder="you@example.com" autofocus>
+      </div>
+      <button class="btn btn-primary" id="sendCodeBtn" onclick="sendCode()">Send Code</button>
+      <p style="margin-top:10px;font-size:12px;color:var(--text-soft);">Max 5 codes per hour per email.</p>
+    </div>
+
+    <div id="codeStep" style="display:none">
+      <div class="form-group">
+        <label for="codeInput">Verification Code</label>
+        <input type="text" id="codeInput" class="code-input" maxlength="6" placeholder="000000"
+               inputmode="numeric" autocomplete="one-time-code">
+      </div>
+      <button class="btn btn-primary" id="verifyBtn" onclick="verifyCode()">Verify</button>
+      <p style="margin-top:16px;font-size:13px;color:var(--text-soft);">
+        Didn't receive it? <a href="#" onclick="backToEmail();return false" style="color:var(--accent)">Try again</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard View -->
+<div class="view" id="dashboardView">
+  <div class="container">
+
+    <div class="section">
+      <h3>Account</h3>
+      <div class="info-grid">
+        <span class="info-label">Email</span>
+        <span class="info-value" id="acctEmail">—</span>
+        <span class="info-label">Tenant ID</span>
+        <span class="info-value" id="acctTenant">—</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Tenant Token</h3>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">
+        Use this token to log in to the management panel and generate UI / Agent tokens.
+      </p>
+      <div class="token-display" id="tenantTokenSection" style="display:none">
+        <div class="token-row">
+          <span class="token-value" id="tenantTokenValue">—</span>
+          <button class="copy-btn" onclick="copyToken('tenantTokenValue')">Copy</button>
+        </div>
+      </div>
+      <div id="tenantTokenMsg"></div>
+    </div>
+
+    <div class="section">
+      <h3>Generate Tokens</h3>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">
+        Use your Tenant Token to log in to the management panel below, then generate UI + Agent tokens.
+      </p>
+      <a class="btn btn-primary" style="width:auto;text-decoration:none;display:inline-block"
+         id="tenantPanelLink" href="#" target="_blank" rel="noopener">
+        Open Tenant Panel &rarr;
+      </a>
+    </div>
+
+    <div class="section">
+      <h3>Quick Start</h3>
+      <div class="token-display">
+        <div class="token-label">Connect your agent</div>
+        <div class="token-value" style="margin-top:8px;font-size:12px;line-height:1.8;">
+          cc-agent \<br>
+          &nbsp;&nbsp;-control-url wss://YOUR_CONTROL/ws/agent \<br>
+          &nbsp;&nbsp;-agent-token <span style="color:#315f72">&lt;agent-token&gt;</span> \<br>
+          &nbsp;&nbsp;-server-id srv-01 \<br>
+          &nbsp;&nbsp;-allow-root /path/to/repo \<br>
+          &nbsp;&nbsp;-claude-path /path/to/claude
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="footer">
+  <a href="https://github.com/xuzhougeng/agent-control">GitHub</a> ·
+  <a href="https://cc-remote.app">Docs</a>
+</div>
+
+<script src="/assets/app.js"></script>
+</body>
+</html>

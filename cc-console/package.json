@@ -1,0 +1,15 @@
+{
+  "name": "cc-console",
+  "private": true,
+  "scripts": {
+    "dev": "npx wrangler pages dev public --d1 DB=cc-console-db --compatibility-date 2024-12-01",
+    "deploy": "npx wrangler pages deploy public --project-name=cc-console",
+    "migrate:local": "npx wrangler d1 execute cc-console-db --local --file=migrations/0001_init.sql",
+    "migrate:remote": "npx wrangler d1 execute cc-console-db --remote --file=migrations/0001_init.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241230.0",
+    "typescript": "^5.7.0",
+    "wrangler": "^3.99.0"
+  }
+}

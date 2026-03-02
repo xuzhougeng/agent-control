@@ -1,0 +1,13 @@
+name = "cc-console"
+compatibility_date = "2024-12-01"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cc-console-db"
+database_id = "0519bcf7-00c1-46a2-bfec-e6b7870dc44d"
+
+# Set these via `wrangler pages secret put`:
+#   RESEND_API_KEY     - API key from resend.com
+#   CC_CONTROL_URL     - e.g. https://api.cc-remote.app
+#   CC_ADMIN_TOKEN     - admin token for cc-control
