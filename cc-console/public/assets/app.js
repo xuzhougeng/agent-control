@@ -107,6 +107,19 @@ function copyToken(id) {
   });
 }
 
+function switchGuideLang(lang) {
+  const validLang = lang === "zh" ? "zh" : "en";
+  document.querySelectorAll(".guide-content").forEach((el) => {
+    el.classList.toggle("active", el.dataset.guideLang === validLang);
+  });
+  const zhBtn = document.getElementById("guideLangZhBtn");
+  const enBtn = document.getElementById("guideLangEnBtn");
+  if (zhBtn && enBtn) {
+    zhBtn.classList.toggle("active", validLang === "zh");
+    enBtn.classList.toggle("active", validLang === "en");
+  }
+}
+
 async function logout() {
   await fetch("/api/auth/logout", { method: "POST" });
   document.getElementById("headerEmail").textContent = "";
@@ -133,5 +146,7 @@ document.getElementById("emailInput").addEventListener("keydown", (e) => {
 document.getElementById("codeInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") verifyCode();
 });
+
+switchGuideLang(navigator.language && navigator.language.startsWith("zh") ? "zh" : "en");
 
 checkSession();

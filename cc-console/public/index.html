@@ -90,35 +90,171 @@
     </div>
 
     <div class="section">
-      <h3>Quick Start</h3>
-      <div class="token-display">
-        <div class="token-label">Step 1: Download</div>
-        <div class="token-value" style="margin-top:8px;font-size:12px;line-height:1.8;word-break:normal;white-space:pre-wrap;">
-# Install cc-agent (Linux / macOS)
-curl -fsSL https://cc-remote.app/install.sh | bash
-# Install cc-agent (Windows PowerShell)
-irm https://cc-remote.app/install.ps1 | iex
+      <div class="guide-header">
+        <h3>Linux Guide</h3>
+        <div class="guide-lang-toggle">
+          <button class="guide-lang-btn" id="guideLangZhBtn" type="button" onclick="switchGuideLang('zh')">中文</button>
+          <button class="guide-lang-btn" id="guideLangEnBtn" type="button" onclick="switchGuideLang('en')">English</button>
         </div>
       </div>
-      <div class="token-display">
-        <div class="token-label">Step 2: Connect</div>
-        <div class="token-value" style="margin-top:8px;font-size:12px;line-height:1.8;">
-          cc-agent \<br>
-          &nbsp;&nbsp;-control-url wss://YOUR_CONTROL/ws/agent \<br>
-          &nbsp;&nbsp;-agent-token <span style="color:#315f72">&lt;agent-token&gt;</span> \<br>
-          &nbsp;&nbsp;-server-id srv-01 \<br>
-          &nbsp;&nbsp;-allow-root /path/to/repo \<br>
-          &nbsp;&nbsp;-claude-path /path/to/claude
+
+      <div class="guide-content active" data-guide-lang="zh">
+        <div class="guide-intro">
+          按下面 4 步操作：先拿凭证，再在 Tenant Panel 生成 Token，最后安装并连接 Agent。
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-title">1) 获取凭证（当前页面）</div>
+          <ul class="guide-list">
+            <li>先记录 <code>TENANT_ID</code>（Account 区域）与 <code>TENANT_TOKEN</code>（Tenant Token 区域）。</li>
+            <li><code>TENANT_TOKEN</code> 仅用于登录 Tenant Panel，不用于 Agent 连接。</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-title">2) 配置面板（Tenant Panel）</div>
+          <ul class="guide-list">
+            <li>点击上方 <strong>Open Tenant Panel</strong>，用 <code>TENANT_TOKEN</code> 登录。</li>
+            <li>在面板中创建 <code>UI Token</code>（网页查看/操作）与 <code>Agent Token</code>（Agent 连中心服务）。</li>
+            <li><strong>必须区分：</strong><code>UI Token</code> 不能用于 <code>-agent-token</code>，<code>Agent Token</code> 才能给 Agent 启动参数使用。</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-title">3) 安装与启动（不要用 Quick Start）</div>
+
+          <div class="guide-subtitle">3.1 无 Claude 时（用 bash 作为执行器）</div>
+          <pre class="guide-code"><code>curl -fL -o cc-agent https://github.com/xuzhougeng/agent-control/releases/latest/download/cc-agent-linux-amd64
+chmod +x cc-agent
+
+./cc-agent \
+  -control-url wss://106.54.201.18/ws/agent \
+  -tls-skip-verify \
+  -agent-token &lt;AGENT_TOKEN&gt; \
+  -server-id &lt;SERVER_ID&gt; \
+  -allow-root "$HOME" \
+  -claude-path "$(which bash)"</code></pre>
+
+          <div class="guide-subtitle">3.2 已安装 Claude 时（推荐）</div>
+          <pre class="guide-code"><code>curl -fL -o cc-agent https://github.com/xuzhougeng/agent-control/releases/latest/download/cc-agent-linux-amd64
+curl -fL -o cc-chat-claude https://github.com/xuzhougeng/agent-control/releases/latest/download/cc-chat-claude-linux-amd64
+chmod +x cc-agent cc-chat-claude
+
+./cc-agent \
+  -control-url wss://106.54.201.18/ws/agent \
+  -tls-skip-verify \
+  -agent-token &lt;AGENT_TOKEN&gt; \
+  -server-id &lt;SERVER_ID&gt; \
+  -allow-root "$HOME" \
+  -chat-worker "$PWD/cc-chat-claude" \
+  -claude-path "$(which claude)"</code></pre>
+
+          <div class="guide-subtitle">3.3 参数说明（重点）</div>
+          <ul class="guide-list">
+            <li><strong>必填：</strong><code>-control-url</code>、<code>-agent-token</code>、<code>-server-id</code>。</li>
+            <li><strong>按需：</strong><code>-allow-root</code>（允许访问目录）、<code>-chat-worker</code>（启用 Claude worker）、<code>-claude-path</code>（可执行程序路径）。</li>
+            <li><strong>证书提示：</strong><code>-tls-skip-verify</code> 仅在自签名/证书不完整时使用；生产环境建议配好证书后去掉。</li>
+            <li><strong>不要填错：</strong>不要把 <code>TENANT_TOKEN</code> 或 <code>UI Token</code> 填到 <code>-agent-token</code>。</li>
+            <li><strong>避免冲突：</strong><code>-server-id</code> 需要全局唯一，重复名称会导致管理混淆。</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-title">4) 界面连接与会话使用</div>
+          <ul class="guide-list">
+            <li>网页端进入左侧 <strong>Sessions</strong>。</li>
+            <li>点击 <strong>Workspace Task</strong>，先创建一个 Session。</li>
+            <li>若不创建 Session，页面不会显示可用会话内容（这是正常现象）。</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-title">Windows 重点说明</div>
+          <ul class="guide-list">
+            <li><strong>Windows 端目前仅支持 Chat 模式。</strong></li>
+            <li><strong>不支持 PTY（终端模拟）</strong>，因此无法像 Linux 一样提供交互式 shell 会话。</li>
+            <li>如果需要终端类操作，请优先使用 Linux/macOS Agent。</li>
+          </ul>
         </div>
       </div>
-      <div class="token-display">
-        <div class="token-label">Step 3: Control</div>
-        <div class="token-value" style="margin-top:8px;font-size:12px;line-height:1.8;">
-          Web: Click <strong>Open Tenant Panel</strong> above to control from browser.<br>
-          iOS App:
-          <a href="https://apps.apple.com/us/app/cc-remote/id6759078097" target="_blank" rel="noopener">
-            https://apps.apple.com/us/app/cc-remote/id6759078097
-          </a>
+
+      <div class="guide-content" data-guide-lang="en">
+        <div class="guide-intro">
+          Follow these 4 steps: get credentials, create tokens in Tenant Panel, then install and connect your agent.
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-title">1) Get credentials (on this page)</div>
+          <ul class="guide-list">
+            <li>Record <code>TENANT_ID</code> (Account section) and <code>TENANT_TOKEN</code> (Tenant Token section).</li>
+            <li><code>TENANT_TOKEN</code> is for Tenant Panel sign-in only, not for agent connection.</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-title">2) Configure in Tenant Panel</div>
+          <ul class="guide-list">
+            <li>Click <strong>Open Tenant Panel</strong> above and sign in with <code>TENANT_TOKEN</code>.</li>
+            <li>Create both <code>UI Token</code> (web access) and <code>Agent Token</code> (agent to control server).</li>
+            <li><strong>Important:</strong> keep them separate. <code>UI Token</code> cannot be used as <code>-agent-token</code>.</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-title">3) Install and start (do not use Quick Start)</div>
+
+          <div class="guide-subtitle">3.1 Without Claude (use bash worker)</div>
+          <pre class="guide-code"><code>curl -fL -o cc-agent https://github.com/xuzhougeng/agent-control/releases/latest/download/cc-agent-linux-amd64
+chmod +x cc-agent
+
+./cc-agent \
+  -control-url wss://106.54.201.18/ws/agent \
+  -tls-skip-verify \
+  -agent-token &lt;AGENT_TOKEN&gt; \
+  -server-id &lt;SERVER_ID&gt; \
+  -allow-root "$HOME" \
+  -claude-path "$(which bash)"</code></pre>
+
+          <div class="guide-subtitle">3.2 With Claude installed (recommended)</div>
+          <pre class="guide-code"><code>curl -fL -o cc-agent https://github.com/xuzhougeng/agent-control/releases/latest/download/cc-agent-linux-amd64
+curl -fL -o cc-chat-claude https://github.com/xuzhougeng/agent-control/releases/latest/download/cc-chat-claude-linux-amd64
+chmod +x cc-agent cc-chat-claude
+
+./cc-agent \
+  -control-url wss://106.54.201.18/ws/agent \
+  -tls-skip-verify \
+  -agent-token &lt;AGENT_TOKEN&gt; \
+  -server-id &lt;SERVER_ID&gt; \
+  -allow-root "$HOME" \
+  -chat-worker "$PWD/cc-chat-claude" \
+  -claude-path "$(which claude)"</code></pre>
+
+          <div class="guide-subtitle">3.3 Parameter notes (important)</div>
+          <ul class="guide-list">
+            <li><strong>Required:</strong> <code>-control-url</code>, <code>-agent-token</code>, <code>-server-id</code>.</li>
+            <li><strong>Optional:</strong> <code>-allow-root</code>, <code>-chat-worker</code>, <code>-claude-path</code>.</li>
+            <li><strong>TLS note:</strong> use <code>-tls-skip-verify</code> only for self-signed/incomplete certs.</li>
+            <li><strong>Do not mix tokens:</strong> never pass <code>TENANT_TOKEN</code> or <code>UI Token</code> to <code>-agent-token</code>.</li>
+            <li><strong>Server ID:</strong> keep <code>-server-id</code> unique to avoid conflicts.</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-title">4) Connect in web UI</div>
+          <ul class="guide-list">
+            <li>Open <strong>Sessions</strong> in the left sidebar.</li>
+            <li>Go to <strong>Workspace Task</strong> and create a session first.</li>
+            <li>If no session is created yet, the UI will show no session content (expected behavior).</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-title">Windows note (important)</div>
+          <ul class="guide-list">
+            <li><strong>Windows currently supports Chat mode only.</strong></li>
+            <li><strong>PTY terminal emulation is not available</strong>, so interactive shell sessions are not supported on Windows agents.</li>
+            <li>Use a Linux/macOS agent when terminal-style workflows are required.</li>
+          </ul>
         </div>
       </div>
     </div>
