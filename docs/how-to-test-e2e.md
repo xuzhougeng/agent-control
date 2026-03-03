@@ -1,8 +1,6 @@
-# How To Test Web E2E
+# 如何跑 Web E2E 测试
 
-这份文档面向本地开发，重点说明怎么运行和调试 `tests/web-e2e/` 下的浏览器端到端测试。
-
-更偏设计说明的内容见 [docs/web-e2e.md](/home/xzg/project/agent-control/docs/web-e2e.md)。
+本文说明如何运行和调试 `tests/web-e2e/` 下的浏览器端到端测试（执行步骤、环境、调试）。测试范围与设计说明见 [Web E2E 设计说明](web-e2e.md)。
 
 ## 前提
 
@@ -184,38 +182,7 @@ CC_WEB_E2E_SCREENSHOT=only-on-failure npm run test:web:e2e
 CC_WEB_E2E_SCREENSHOT=off npm run test:web:e2e
 ```
 
-## 当前覆盖
-
-### `workspace.spec.js`
-
-1. Chat 视图创建统一 session 并发送消息
-2. `Chat -> Terminal -> Chat` 模式切换
-3. 实例列表不会因为来回切换而膨胀
-4. 预先存在的外部 Claude session 能通过 PTY 接入
-5. 左右抽屉支持垂直拖拽
-6. 移动端抽屉互斥开合和 backdrop 关闭
-7. Terminal copy 写入 clipboard
-8. `/chat` 兼容入口重定向到统一 workspace
-
-### `mobile-scroll.spec.js`
-
-1. Chat 代码块在移动端可横向滚动
-2. 长标识符不会被 `break-all` 强制断词
-3. Markdown 表格会被正确渲染为 table 结构
-4. Markdown data URL 图片可正常渲染
-5. 消息加载后输入栏和 `Send` 按钮仍可见
-
-### `mobile-terminal-fake.spec.js`
-
-1. mobile 视口下创建 Terminal session
-2. fake Claude 启动输出可见
-3. 发送 terminal 输入后可见回显
-
-### `real-claude.spec.js`
-
-1. Terminal 发 `hi`
-2. 切到 Chat 发 `hi` 且会话不进入 `exited/error`
-3. 切回 Terminal 发 `say hi`
+各 spec 的覆盖内容与设计说明见 [Web E2E 设计说明](web-e2e.md)。
 
 ## 常用调试点
 
@@ -274,32 +241,7 @@ CC_WEB_E2E_PORT=18111 CC_WEB_E2E_CLAUDE_MODE=real npx playwright test tests/web-
 npx playwright test --ui --config=tests/web-e2e/playwright.config.mjs
 ```
 
-## 相关环境变量
-
-- `CC_WEB_E2E_PORT`
-  - harness 对外暴露的 control 端口（默认回归 `18110`，mobile 样式回归 `18112`，mobile terminal 回归 `18113`）
-- `CC_WEB_E2E_UI_TOKEN`
-  - Web UI 使用的 token
-- `CC_WEB_E2E_AGENT_TOKEN`
-  - agent 使用的 token
-- `CC_WEB_E2E_SERVER_ID`
-  - 测试 agent 的 server id
-- `CC_WEB_E2E_ALLOW_ROOT`
-  - agent 的 `allow-root`
-- `CC_WEB_E2E_PRESEEDED_SESSION_ID`
-  - 用于模拟“服务器上已存在 Claude session”的会话 id
-- `CC_WEB_E2E_SCREENSHOT`
-  - screenshot 策略，支持 `on` / `only-on-failure` / `off`
-- `CC_WEB_E2E_CLAUDE_MODE`
-  - `fake` 或 `real`，默认 `fake`
-- `CC_WEB_E2E_CLAUDE_PATH`
-  - real Claude 模式下的 Claude CLI 路径，默认 `/home/xzg/.local/bin/claude`
-- `CC_WEB_E2E_CLAUDE_HOME`
-  - real Claude 模式下 agent/chat worker 使用的 `HOME`
-- `CC_WEB_E2E_VIDEO`
-  - Playwright 录屏模式，支持 `on` / `off` / `retain-on-failure`
-- `CC_WEB_E2E_XTERM_STUB`
-  - real Claude 用例里是否强制使用 xterm stub，默认关闭；仅排查渲染问题时设为 `1`
+常用环境变量：`CC_WEB_E2E_PORT`、`CC_WEB_E2E_SCREENSHOT`、`CC_WEB_E2E_CLAUDE_MODE`、`CC_WEB_E2E_CLAUDE_PATH`。完整列表与含义见 [Web E2E 设计说明 - 关键环境变量](web-e2e.md#关键环境变量)。
 
 ## 常见问题
 

@@ -288,6 +288,9 @@ echo worker 仅用于测试。正式使用时，将 `-chat-worker` 指向你自�
 
 ## Docs
 
-- Architecture: `docs/architecture.md`
-- API reference: `docs/api.md`
-- Public deployment guide: `docs/deploy-public-server.md`
+- [文档索引](docs/README.md) — 入门 / 开发 / 部署 / 测试 / 合规
+- [架构说明](docs/architecture.md)
+- [API 参考](docs/api.md)
+- [公网部署](docs/deploy-public-server.md)
+- [快速上手](docs/getting-started.md) · [使用场景](docs/use-cases.md) · [隐私政策](docs/privacy-policy.md)
+- 测试：[如何跑 E2E](docs/how-to-test-e2e.md) · [Web E2E 设计](docs/web-e2e.md)

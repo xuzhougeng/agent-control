@@ -1,6 +1,6 @@
-# Web E2E 自动化
+# Web E2E 设计说明
 
-更偏运行步骤和调试方法见 [docs/how-to-test-e2e.md](/home/xzg/project/agent-control/docs/how-to-test-e2e.md)。
+本文描述 Web E2E 的目录结构、覆盖范围与设计要点。运行步骤与调试见 [如何跑 Web E2E 测试](how-to-test-e2e.md)。
 
 Web E2E 当前由四套入口组成：
 
@@ -57,38 +57,7 @@ Web E2E 当前由四套入口组成：
 3. 再切回 Terminal 发送 `say hi`
 4. 关键步骤落盘截图，便于排查真实链路问题
 
-## 运行方式
-
-先安装依赖：
-
-```bash
-npm install
-npx playwright install
-```
-
-运行默认回归：
-
-```bash
-npm run test:web:e2e
-```
-
-运行移动端样式回归：
-
-```bash
-npm run test:web:mobile
-```
-
-运行移动端 fake Claude Terminal 回归：
-
-```bash
-npm run test:web:mobile:terminal
-```
-
-运行真实 Claude 烟测：
-
-```bash
-npm run test:web:e2e:real-claude
-```
+运行方式与端口、环境变量用法见 [如何跑 Web E2E 测试](how-to-test-e2e.md)。
 
 ## 设计说明
 
