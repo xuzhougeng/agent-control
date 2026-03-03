@@ -14,7 +14,7 @@ SITE_DIR="${DOCS_DIR}/_site"
 
 # --- Clean & create output dirs -------------------------------------------
 rm -rf "${SITE_DIR}"
-mkdir -p "${SITE_DIR}/deploy-public-server" "${SITE_DIR}/assets/css"
+mkdir -p "${SITE_DIR}/deploy-public-server" "${SITE_DIR}/assets/css" "${SITE_DIR}/assets/images"
 
 # ---------------------------------------------------------------------------
 # Build
@@ -26,11 +26,16 @@ echo
 cp "${DOCS_DIR}/assets/css/style.css" "${SITE_DIR}/assets/css/style.css"
 cp "${ROOT_DIR}/scripts/install.sh" "${SITE_DIR}/install.sh"
 cp "${ROOT_DIR}/scripts/install.ps1" "${SITE_DIR}/install.ps1"
+if [ -d "${DOCS_DIR}/assets/images" ]; then
+    cp -R "${DOCS_DIR}/assets/images/." "${SITE_DIR}/assets/images/"
+fi
 echo "  Copied: install.sh, install.ps1"
 
-# --- Copy index.html (landing page) -----------------------------------
-cp "${DOCS_DIR}/assets/templates/index.html" "${SITE_DIR}/index.html"
-echo "  Generated: index.html"
+# --- Copy bilingual landing pages --------------------------------------
+cp "${DOCS_DIR}/assets/templates/index.en.html" "${SITE_DIR}/index.html"
+cp "${DOCS_DIR}/assets/templates/index.en.html" "${SITE_DIR}/index.en.html"
+cp "${DOCS_DIR}/assets/templates/index.zh.html" "${SITE_DIR}/index.zh.html"
+echo "  Generated: index.html, index.en.html, index.zh.html"
 
 # ---------------------------------------------------------------------------
 # generate_doc_page  MD_FILE  HTML_FILE  TITLE  ASSETS_PREFIX  BACK_LINK  BACK_TEXT
@@ -89,6 +94,16 @@ generate_doc_page \
     "${DOCS_DIR}/api.md" \
     "${SITE_DIR}/api.html" \
     "API Reference" "" "index.html" "Back to Home"
+
+generate_doc_page \
+    "${DOCS_DIR}/getting-started.md" \
+    "${SITE_DIR}/getting-started.html" \
+    "Tutorial" "" "index.html" "Back to Home"
+
+generate_doc_page \
+    "${DOCS_DIR}/use-cases.md" \
+    "${SITE_DIR}/use-cases.html" \
+    "Use Cases" "" "getting-started.html" "Back to Tutorial"
 
 generate_doc_page \
     "${DOCS_DIR}/privacy-policy.md" \

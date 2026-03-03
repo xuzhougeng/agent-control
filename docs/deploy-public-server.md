@@ -27,6 +27,12 @@
   - 旧版本破坏性升级（legacy token -> admin token）
   - 常见故障排查
 
+## 4. Agent 后台运行（systemd / NSSM）
+
+- 路径：`deploy-public-server/04-agent-background.md`
+- 适用：将 cc-agent 作为后台服务长期运行
+- 包含：Linux（systemd / nohup / tmux）、Windows（NSSM / 任务计划 / PowerShell）
+
 ---
 
 说明：
