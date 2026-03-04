@@ -858,9 +858,7 @@ private struct ChatBubbleView: View {
         VStack(alignment: isUser ? .trailing : .leading, spacing: 6) {
             VStack(alignment: .leading, spacing: 6) {
                 if !displayText.isEmpty {
-                    markdownText(displayText)
-                        .font(.system(size: 14))
-                        .foregroundColor(isUser ? .white : WorkspaceTheme.text)
+                    MarkdownBlockView(source: displayText, isUser: isUser)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if !imageParts.isEmpty {
@@ -894,6 +892,13 @@ private struct ChatBubbleView: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(isUser ? Color.white.opacity(0.08) : WorkspaceTheme.border.opacity(0.7), lineWidth: 1)
             )
+            .contextMenu {
+                Button {
+                    copyToClipboard(displayText)
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+            }
 
             Text(timestamp)
                 .font(.caption2)
@@ -950,18 +955,155 @@ private struct ChatBubbleView: View {
         return date.formatted(date: .omitted, time: .shortened)
     }
 
+    private func copyToClipboard(_ text: String) {
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #else
+        UIPasteboard.general.string = text
+        #endif
+    }
+}
+
+// MARK: - Markdown block renderer
+
+private struct MarkdownBlockView: View {
+    let source: String
+    let isUser: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                renderBlock(block)
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    // MARK: Block model
+
+    private enum MDBlock {
+        case paragraph(String)
+        case codeBlock(lang: String, code: String)
+        case heading(level: Int, text: String)
+    }
+
+    // MARK: Parser
+
+    private var blocks: [MDBlock] {
+        var result: [MDBlock] = []
+        let lines = source.components(separatedBy: "\n")
+        var i = 0
+        var paraLines: [String] = []
+
+        func flushParagraph() {
+            let text = paraLines.joined(separator: "\n")
+                .trimmingCharacters(in: CharacterSet.newlines)
+            if !text.isEmpty { result.append(.paragraph(text)) }
+            paraLines = []
+        }
+
+        while i < lines.count {
+            let line = lines[i]
+
+            // Fenced code block
+            if line.hasPrefix("```") {
+                flushParagraph()
+                let lang = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                i += 1
+                var codeLines: [String] = []
+                while i < lines.count && !lines[i].hasPrefix("```") {
+                    codeLines.append(lines[i])
+                    i += 1
+                }
+                if i < lines.count { i += 1 }
+                result.append(.codeBlock(lang: lang, code: codeLines.joined(separator: "\n")))
+                continue
+            }
+
+            // ATX heading
+            if line.hasPrefix("#") {
+                flushParagraph()
+                var lvl = 0
+                var rest = line[line.startIndex...]
+                while rest.hasPrefix("#") { lvl += 1; rest = rest.dropFirst() }
+                result.append(.heading(level: min(lvl, 6),
+                                       text: String(rest).trimmingCharacters(in: .whitespaces)))
+                i += 1
+                continue
+            }
+
+            // Blank line = paragraph break
+            if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                flushParagraph()
+                i += 1
+                continue
+            }
+
+            paraLines.append(line)
+            i += 1
+        }
+        flushParagraph()
+        return result
+    }
+
+    // MARK: Renderers
+
     @ViewBuilder
-    private func markdownText(_ raw: String) -> some View {
+    private func renderBlock(_ block: MDBlock) -> some View {
+        switch block {
+        case .paragraph(let text):
+            inlineMarkdown(text)
+                .font(.system(size: 14))
+                .foregroundColor(isUser ? .white : WorkspaceTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+        case .codeBlock(_, let code):
+            Text(code)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(isUser ? Color.white.opacity(0.9) : WorkspaceTheme.text)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.black.opacity(isUser ? 0.25 : 0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(WorkspaceTheme.border.opacity(0.5), lineWidth: 1)
+                        )
+                )
+
+        case .heading(let level, let text):
+            inlineMarkdown(text)
+                .font(headingFont(level))
+                .foregroundColor(isUser ? .white : WorkspaceTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func headingFont(_ level: Int) -> Font {
+        switch level {
+        case 1: return .system(size: 20, weight: .bold)
+        case 2: return .system(size: 17, weight: .bold)
+        case 3: return .system(size: 15, weight: .semibold)
+        default: return .system(size: 14, weight: .semibold)
+        }
+    }
+
+    @ViewBuilder
+    private func inlineMarkdown(_ text: String) -> some View {
         if let attributed = try? AttributedString(
-            markdown: raw,
+            markdown: text,
             options: AttributedString.MarkdownParsingOptions(
-                interpretedSyntax: .full,
+                interpretedSyntax: .inlineOnlyPreservingWhitespace,
                 failurePolicy: .returnPartiallyParsedIfPossible
             )
         ) {
             Text(attributed)
         } else {
-            Text(raw)
+            Text(text)
         }
     }
 }
