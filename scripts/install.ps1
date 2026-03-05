@@ -39,6 +39,113 @@ function Install-Binary {
   Write-Host "==> Installed: $final"
 }
 
+function Convert-ToControlUrl {
+  param([Parameter(Mandatory = $true)][string]$InputUrl)
+
+  $value = $InputUrl.Trim().TrimEnd('/')
+  if ([string]::IsNullOrWhiteSpace($value)) {
+    throw "Control URL cannot be empty."
+  }
+
+  if ($value -match '^wss?://') {
+    $url = $value
+  } elseif ($value -match '^https://') {
+    $url = "wss://" + $value.Substring(8)
+  } elseif ($value -match '^http://') {
+    $url = "ws://" + $value.Substring(7)
+  } else {
+    $url = "wss://$value"
+  }
+
+  if (-not $url.EndsWith('/ws/agent')) {
+    $url = "$url/ws/agent"
+  }
+  return $url
+}
+
+function Read-NonEmptyLine {
+  param([Parameter(Mandatory = $true)][string]$Prompt)
+  while ($true) {
+    $value = Read-Host $Prompt
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+      return $value.Trim()
+    }
+    Write-Host "$Prompt cannot be empty." -ForegroundColor Yellow
+  }
+}
+
+function Read-Token {
+  param([Parameter(Mandatory = $true)][string]$Prompt)
+  while ($true) {
+    $secure = Read-Host $Prompt -AsSecureString
+    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try {
+      $value = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+    } finally {
+      [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+      return $value.Trim()
+    }
+    Write-Host "$Prompt cannot be empty." -ForegroundColor Yellow
+  }
+}
+
+function Resolve-ClaudePath {
+  $which = Get-Command which -ErrorAction SilentlyContinue
+  if ($which) {
+    $whichOutput = & which claude 2>$null
+    foreach ($line in $whichOutput) {
+      if (-not [string]::IsNullOrWhiteSpace($line)) {
+        $candidate = $line.Trim()
+        if ($candidate -match 'aliased to') {
+          $aliasTarget = ($candidate -replace "^.*aliased to\s+", "").Trim("'")
+          if ($aliasTarget -notmatch '\s') {
+            $resolved = Get-Command $aliasTarget -ErrorAction SilentlyContinue
+            if ($resolved -and $resolved.Source) {
+              return $resolved.Source
+            }
+          }
+          continue
+        }
+        if (Test-Path $candidate) {
+          return (Resolve-Path $candidate).Path
+        }
+      }
+    }
+  }
+
+  $command = Get-Command claude -ErrorAction SilentlyContinue
+  if (-not $command) {
+    return $null
+  }
+
+  while ($command -and $command.CommandType -eq "Alias") {
+    $nextName = $command.Definition.Split(' ')[0]
+    $command = Get-Command $nextName -ErrorAction SilentlyContinue
+  }
+
+  if ($command -and $command.Source) {
+    return $command.Source
+  }
+  return $null
+}
+
+function Build-RunCommand {
+  param(
+    [Parameter(Mandatory = $true)][string]$ControlUrl,
+    [Parameter(Mandatory = $true)][string]$ServerId,
+    [Parameter(Mandatory = $true)][string]$AllowRoot,
+    [string]$ClaudePath
+  )
+  $cmd = "cc-agent.exe -control-url `"$ControlUrl`" -agent-token <YOUR_TOKEN> -server-id `"$ServerId`" -allow-root `"$AllowRoot`""
+  if ($ClaudePath) {
+    $cmd += " -claude-path `"$ClaudePath`""
+  }
+  return $cmd
+}
+
 $platform = Get-Platform
 Write-Host "==> Agent Control installer"
 Write-Host "==> Platform: $platform"
@@ -46,13 +153,43 @@ Write-Host "==> Platform: $platform"
 New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
 Install-Binary -Binary "cc-agent" -Platform $platform
 Install-Binary -Binary "cc-chat-claude" -Platform $platform
-Write-Host ""
-Write-Host "Next: get an agent token from your control plane, then run:"
-Write-Host "  cc-agent.exe -control-url wss://YOUR_CONTROL/ws/agent -agent-token YOUR_TOKEN -server-id srv-01 -allow-root C:\projects -claude-path C:\path\to\claude.exe"
-Write-Host ""
-$path = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($path -notlike "*cc-agent*") {
-  Write-Host "Add to PATH (optional):" -ForegroundColor Yellow
-  Write-Host "  [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$INSTALL_DIR', 'User')"
+
+$controlInput = Read-NonEmptyLine -Prompt "Control URL (e.g. https://cc-remote.app)"
+$CONTROL_URL = Convert-ToControlUrl -InputUrl $controlInput
+$AGENT_TOKEN = Read-Token -Prompt "Agent Token"
+
+$CLAUDE_PATH = Resolve-ClaudePath
+if ($CLAUDE_PATH) {
+  Write-Host "==> Claude detected: $CLAUDE_PATH"
+} else {
+  Write-Host "==> Claude not found via 'which claude' / command lookup." -ForegroundColor Yellow
+  Write-Host "    Install Claude CLI, or run later with -claude-path C:\path\to\claude.exe" -ForegroundColor Yellow
 }
+
+$serverHost = if ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { "windows" }
+$SERVER_ID = if ($env:SERVER_ID) { $env:SERVER_ID } else { ("srv-" + ($serverHost.ToLower() -replace '[^a-z0-9]+', '-')) }
+$ALLOW_ROOT = if ($env:ALLOW_ROOT) { $env:ALLOW_ROOT } else { (Get-Location).Path }
+$agentExe = Join-Path $INSTALL_DIR "cc-agent.exe"
+$env:Path = "$INSTALL_DIR;$env:Path"
+
+Write-Host ""
+Write-Host "Reusable command:"
+Write-Host ("  " + (Build-RunCommand -ControlUrl $CONTROL_URL -ServerId $SERVER_ID -AllowRoot $ALLOW_ROOT -ClaudePath $CLAUDE_PATH))
+Write-Host ""
+Write-Host "Add to PATH (optional):" -ForegroundColor Yellow
+Write-Host "  [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$INSTALL_DIR', 'User')"
 Write-Host "Docs: https://github.com/$GITHUB_REPO/blob/main/docs/getting-started.md"
+Write-Host ""
+Write-Host "==> Launching cc-agent..."
+
+$args = @(
+  "-control-url", $CONTROL_URL,
+  "-agent-token", $AGENT_TOKEN,
+  "-server-id", $SERVER_ID,
+  "-allow-root", $ALLOW_ROOT
+)
+if ($CLAUDE_PATH) {
+  $args += @("-claude-path", $CLAUDE_PATH)
+}
+
+& $agentExe @args
