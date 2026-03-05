@@ -22,7 +22,7 @@
 .workspace-context-column {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(180px, auto) minmax(160px, auto) minmax(240px, 1fr);
+  grid-template-rows: minmax(180px, auto) minmax(160px, auto) minmax(180px, auto) minmax(220px, 1fr);
   gap: 16px;
 }
 
@@ -291,6 +291,7 @@
 }
 
 #approvalList,
+#noticeList,
 #instanceHistoryList {
   overflow: auto;
   padding-right: 4px;
@@ -305,6 +306,12 @@
 .context-card-instances {
   background:
     linear-gradient(180deg, rgba(49, 95, 114, 0.08), rgba(255, 252, 247, 0.9)),
+    rgba(255, 252, 247, 0.9);
+}
+
+.context-card-notices {
+  background:
+    linear-gradient(180deg, rgba(38, 136, 91, 0.08), rgba(255, 252, 247, 0.9)),
     rgba(255, 252, 247, 0.9);
 }
 
@@ -327,11 +334,144 @@
   font-size: 11px;
 }
 
+.notice-item {
+  cursor: default;
+  margin-bottom: 5px;
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: rgba(255, 252, 247, 0.66);
+  border-color: rgba(201, 183, 159, 0.36);
+  box-shadow: none;
+}
+
+.notice-item.is-clickable {
+  cursor: pointer;
+}
+
+.notice-item.is-clickable:hover {
+  box-shadow: none;
+  border-color: rgba(49, 95, 114, 0.3);
+}
+
+.notice-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.notice-item-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.notice-item-message {
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.notice-item-meta {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge-notice-info {
+  background: rgba(49, 95, 114, 0.12);
+  color: rgba(36, 74, 92, 0.96);
+}
+
+.badge-notice-success {
+  background: rgba(45, 122, 74, 0.14);
+  color: rgba(31, 101, 58, 0.96);
+}
+
+.badge-notice-warning {
+  background: rgba(183, 116, 41, 0.18);
+  color: rgba(136, 77, 16, 0.98);
+}
+
+.badge-notice-error {
+  background: rgba(192, 57, 43, 0.16);
+  color: rgba(149, 34, 22, 0.98);
+}
+
 #approvalCount {
   min-width: 22px;
   text-align: center;
   font-weight: 700;
   font-size: 12px;
+}
+
+#noticeCount {
+  min-width: 22px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.notification-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 90;
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.notification-toast {
+  border: 1px solid rgba(201, 183, 159, 0.62);
+  border-left-width: 4px;
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: rgba(255, 252, 247, 0.96);
+  box-shadow: 0 12px 26px rgba(41, 31, 23, 0.18);
+  pointer-events: auto;
+}
+
+.notification-toast-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.notification-toast-message {
+  margin-top: 5px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.notification-toast-meta {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.notification-toast.level-info {
+  border-left-color: rgba(49, 95, 114, 0.85);
+}
+
+.notification-toast.level-success {
+  border-left-color: rgba(45, 122, 74, 0.9);
+}
+
+.notification-toast.level-warning {
+  border-left-color: rgba(183, 116, 41, 0.9);
+}
+
+.notification-toast.level-error {
+  border-left-color: rgba(192, 57, 43, 0.9);
 }
 
 /* ── Terminal ──────────────────────────────────────────── */

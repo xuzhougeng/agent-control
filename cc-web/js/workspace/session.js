@@ -20,8 +20,11 @@ import { renderSessionList } from "../shared/session-list.js";
  * @param {HTMLElement} ctx.sessionsList
  * @param {HTMLElement} ctx.approvalList
  * @param {HTMLElement} ctx.approvalCount
+ * @param {HTMLElement} ctx.noticeList
+ * @param {HTMLElement} ctx.noticeCount
  * @param {HTMLElement} ctx.instanceHistoryList
  * @param {HTMLElement} ctx.instanceHistoryCount
+ * @param {HTMLElement} ctx.notificationToasts
  * @param {HTMLElement} ctx.cwdInput
  * @param {HTMLElement} ctx.sessionIDInput
  * @param {HTMLElement} ctx.envInput
@@ -193,6 +196,123 @@ export function createSessionController(ctx) {
       ctx.approvalList.appendChild(li);
     }
     ctx.approvalCount.textContent = String(pendingCount);
+  }
+
+  function formatNoticeTime(tsMS) {
+    if (!tsMS) return "-";
+    try {
+      return new Date(tsMS).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    } catch {
+      return "-";
+    }
+  }
+
+  function noticeLevelBadgeClass(level) {
+    switch (String(level || "").toLowerCase()) {
+      case "success":
+        return "badge badge-notice-success";
+      case "warning":
+        return "badge badge-notice-warning";
+      case "error":
+        return "badge badge-notice-error";
+      default:
+        return "badge badge-notice-info";
+    }
+  }
+
+  function trimNotificationState() {
+    const values = Array.from(ctx.state.notifications.values()).sort((a, b) => (b.ts_ms || 0) - (a.ts_ms || 0));
+    const capped = values.slice(0, 100);
+    ctx.state.notifications = new Map(capped.map((ev) => [ev.notification_id, ev]));
+  }
+
+  function renderNotifications() {
+    if (!ctx.noticeList || !ctx.noticeCount) return;
+    ctx.noticeList.innerHTML = "";
+    const values = Array.from(ctx.state.notifications.values()).sort((a, b) => (b.ts_ms || 0) - (a.ts_ms || 0));
+    ctx.noticeCount.textContent = String(values.length);
+    if (!values.length) {
+      const li = document.createElement("li");
+      li.className = "notice-item";
+      li.textContent = "No notifications yet";
+      ctx.noticeList.appendChild(li);
+      return;
+    }
+
+    for (const ev of values) {
+      const li = document.createElement("li");
+      li.className = "notice-item";
+      const sessionID = ev.session_id ? String(ev.session_id) : "";
+      const hasSession = sessionID !== "";
+      if (hasSession) {
+        li.classList.add("is-clickable");
+        li.tabIndex = 0;
+        li.setAttribute("role", "button");
+        li.setAttribute("aria-label", `Open session ${sessionID.slice(0, 8)} from notification`);
+      }
+      const level = String(ev.level || "info").toLowerCase();
+      const title = String(ev.title || "").trim() || "Notification";
+      const metaBits = [];
+      if (ev.source) metaBits.push(String(ev.source));
+      metaBits.push(formatNoticeTime(ev.ts_ms));
+      if (ev.server_id) metaBits.push(`srv ${String(ev.server_id)}`);
+      if (sessionID) metaBits.push(`sess ${sessionID.slice(0, 8)}`);
+      li.innerHTML = `
+        <div class="notice-item-head">
+          <span class="notice-item-title">${escapeHtml(title)}</span>
+          <span class="${noticeLevelBadgeClass(level)}">${escapeHtml(level)}</span>
+        </div>
+        <div class="notice-item-message">${escapeHtml(String(ev.message || ""))}</div>
+        <div class="notice-item-meta">${escapeHtml(metaBits.join(" · "))}</div>
+      `;
+      if (hasSession) {
+        const open = () => attachSession(sessionID);
+        li.addEventListener("click", open);
+        li.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            open();
+          }
+        });
+      }
+      ctx.noticeList.appendChild(li);
+    }
+  }
+
+  function showNotificationToast(ev) {
+    if (!ctx.notificationToasts) return;
+    const levelRaw = String(ev.level || "info").toLowerCase();
+    const level = ["info", "success", "warning", "error"].includes(levelRaw) ? levelRaw : "info";
+    const title = String(ev.title || "").trim() || "Notification";
+    const toast = document.createElement("div");
+    toast.className = `notification-toast level-${level}`;
+    const metaBits = [];
+    if (ev.source) metaBits.push(String(ev.source));
+    metaBits.push(formatNoticeTime(ev.ts_ms));
+    toast.innerHTML = `
+      <div class="notification-toast-title">${escapeHtml(title)}</div>
+      <div class="notification-toast-message">${escapeHtml(String(ev.message || ""))}</div>
+      <div class="notification-toast-meta">${escapeHtml(metaBits.join(" · "))}</div>
+    `;
+    ctx.notificationToasts.appendChild(toast);
+    while (ctx.notificationToasts.children.length > 4) {
+      ctx.notificationToasts.removeChild(ctx.notificationToasts.firstElementChild);
+    }
+    window.setTimeout(() => {
+      toast.remove();
+    }, 6000);
+  }
+
+  function pushNotification(rawEvent) {
+    const notificationID = String(rawEvent?.notification_id || "").trim();
+    if (!notificationID) return;
+    const existed = ctx.state.notifications.has(notificationID);
+    ctx.state.notifications.set(notificationID, rawEvent);
+    trimNotificationState();
+    renderNotifications();
+    if (!existed) {
+      showNotificationToast(rawEvent);
+    }
   }
 
   async function fetchServers() {
@@ -493,6 +613,8 @@ export function createSessionController(ctx) {
     renderSessions,
     renderInstanceHistory,
     renderApprovals,
+    renderNotifications,
+    pushNotification,
     openView,
     attachSelectedView,
   };

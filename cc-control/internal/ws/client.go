@@ -166,6 +166,20 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.Info("ui ws replay pending approvals", "remote", remote, "count", len(pendingEvents))
 	}
 
+	// Replay recent notifications so short reconnect windows do not lose reminders.
+	recentNotices := h.CP.GetRecentNotificationEvents(rec.TenantID, 20)
+	for _, ev := range recentNotices {
+		evMsg := core.NewEnvelope("event", ev.ServerID, ev.SessionID)
+		evMsg.Data, _ = json.Marshal(ev)
+		select {
+		case sub.Send <- evMsg:
+		default:
+		}
+	}
+	if len(recentNotices) > 0 {
+		slog.Info("ui ws replay notifications", "remote", remote, "count", len(recentNotices))
+	}
+
 	for {
 		var msg core.Envelope
 		if err := conn.ReadJSON(&msg); err != nil {

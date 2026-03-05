@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"cc-control/internal/auth"
@@ -48,6 +49,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/servers", s.withUIAuth(s.handleServers))
 	mux.HandleFunc("/api/sessions", s.withUIAuth(s.handleSessions))
 	mux.HandleFunc("/api/sessions/", s.withUIAuth(s.handleSessionSubroutes))
+	mux.HandleFunc("/api/notifications", s.withUIAuth(s.handleNotifications))
 	mux.HandleFunc("/admin/verify", s.withAdminAuth(s.handleAdminVerify))
 	mux.HandleFunc("/admin/tokens", s.withAdminAuth(s.handleAdminTokens))
 	mux.HandleFunc("/admin/tokens/import", s.withAdminAuth(s.handleAdminTokensImport))
@@ -57,6 +59,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/admin/sessions/", s.withAdminAuth(s.handleAdminSessionSubroutes))
 	mux.HandleFunc("/tenant/verify", s.withTenantAuth(s.handleTenantVerify))
 	mux.HandleFunc("/tenant/tokens", s.withTenantAuth(s.handleTenantTokens))
+	mux.HandleFunc("/tenant/notifications", s.withTenantAuth(s.handleTenantNotifications))
 	mux.HandleFunc("/api/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
@@ -184,6 +187,96 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request, rec *aut
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleNotifications(w http.ResponseWriter, r *http.Request, rec *auth.TokenRecord) {
+	switch r.Method {
+	case http.MethodGet:
+		if !auth.RoleAtLeast(rec.Role, auth.RoleViewer) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		limit := 20
+		if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+				limit = n
+			}
+		}
+		events := s.CP.GetRecentNotificationEvents(rec.TenantID, limit)
+		writeJSON(w, http.StatusOK, map[string]any{"notifications": events})
+	case http.MethodPost:
+		if !auth.RoleAtLeast(rec.Role, auth.RoleOperator) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		req, err := decodePublishNotificationRequest(r)
+		if err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		ev, err := s.CP.PublishNotification("ui:"+rec.TokenID, rec.TenantID, req)
+		if err != nil {
+			code := http.StatusBadRequest
+			if strings.Contains(err.Error(), "not found") {
+				code = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), code)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"ok":           true,
+			"notification": ev,
+		})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleTenantNotifications(w http.ResponseWriter, r *http.Request, rec *auth.TokenRecord) {
+	if rec.TenantID == "" {
+		http.Error(w, "tenant token missing tenant_id", http.StatusBadRequest)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		limit := 20
+		if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+				limit = n
+			}
+		}
+		events := s.CP.GetRecentNotificationEvents(rec.TenantID, limit)
+		writeJSON(w, http.StatusOK, map[string]any{"notifications": events})
+	case http.MethodPost:
+		req, err := decodePublishNotificationRequest(r)
+		if err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		ev, err := s.CP.PublishNotification("tenant:"+rec.TokenID, rec.TenantID, req)
+		if err != nil {
+			code := http.StatusBadRequest
+			if strings.Contains(err.Error(), "not found") {
+				code = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), code)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"ok":           true,
+			"notification": ev,
+		})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func decodePublishNotificationRequest(r *http.Request) (core.PublishNotificationRequest, error) {
+	var req core.PublishNotificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		return core.PublishNotificationRequest{}, err
+	}
+	return req, nil
 }
 
 func sessionCreateErrorStatusCode(err error) int {

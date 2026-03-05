@@ -140,8 +140,19 @@ struct ContentView: View {
             )
             .safeAreaInset(edge: .bottom) {
                 if !isKeyboardVisible {
-                    CompactPageDots(selectedTab: $selectedTab, pendingApprovalCount: appState.pendingApprovals.count)
+                    CompactPageDots(selectedTab: $selectedTab, attentionCount: appState.pendingApprovals.count + appState.recentNotifications.count)
                         .padding(.bottom, 4)
+                }
+            }
+            .overlay(alignment: .top) {
+                if let notification = appState.transientNotification {
+                    InAppNotificationBanner(notification: notification)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                        .onTapGesture {
+                            openNotification(notification)
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
             .onChange(of: selectedTab) { newValue in
@@ -205,6 +216,36 @@ struct ContentView: View {
             SettingsView()
                 .environmentObject(appState)
         }
+        .overlay(alignment: .top) {
+            if let notification = appState.transientNotification {
+                InAppNotificationBanner(notification: notification)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .onTapGesture {
+                        openNotification(notification)
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+    }
+
+    private func openNotification(_ notification: NotificationEvent) {
+        guard let sid = notification.sessionID, !sid.isEmpty else {
+            appState.transientNotification = nil
+            return
+        }
+        if let session = appState.sessions.first(where: { $0.sessionID == sid }) {
+            appState.openSession(session)
+            if horizontalSizeClass == .compact {
+                selectedTab = session.isChat ? .chat : .terminal
+            }
+        } else {
+            appState.attachSession(sid)
+            if horizontalSizeClass == .compact {
+                selectedTab = .terminal
+            }
+        }
+        appState.transientNotification = nil
     }
     #endif
 }
@@ -212,12 +253,12 @@ struct ContentView: View {
 #if os(iOS)
 private struct CompactPageDots: View {
     @Binding var selectedTab: AppTab
-    let pendingApprovalCount: Int
+    let attentionCount: Int
 
     var body: some View {
         HStack(spacing: 10) {
             dot(for: .home)
-            dot(for: .terminal, showBadge: pendingApprovalCount > 0)
+            dot(for: .terminal, showBadge: attentionCount > 0)
             dot(for: .chat)
             dot(for: .settings)
         }
@@ -256,9 +297,73 @@ private struct CompactPageDots: View {
     private func accessibilityLabel(for tab: AppTab) -> String {
         switch tab {
         case .home: return "Home"
-        case .terminal: return pendingApprovalCount > 0 ? "Terminal, has pending approvals" : "Terminal"
+        case .terminal: return attentionCount > 0 ? "Terminal, has pending attention items" : "Terminal"
         case .chat: return "Chat"
         case .settings: return "Settings"
+        }
+    }
+}
+
+private struct InAppNotificationBanner: View {
+    let notification: NotificationEvent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: iconName)
+                .foregroundColor(levelColor)
+                .font(.system(size: 14, weight: .semibold))
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(notification.displayTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(WorkspaceTheme.text)
+                    .lineLimit(1)
+                Text(notification.message)
+                    .font(.system(size: 12))
+                    .foregroundColor(WorkspaceTheme.textMuted)
+                    .lineLimit(2)
+                if let source = notification.source, !source.isEmpty {
+                    Text(source)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(WorkspaceTheme.textSoft)
+                }
+            }
+            Spacer(minLength: 0)
+            if notification.sessionID != nil {
+                Image(systemName: "arrowshape.turn.up.right.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(WorkspaceTheme.accent)
+                    .padding(.top, 2)
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(WorkspaceTheme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .stroke(levelColor.opacity(0.38), lineWidth: 1)
+                )
+                .shadow(color: WorkspaceTheme.shadow, radius: 10, y: 3)
+        )
+    }
+
+    private var levelColor: Color {
+        switch notification.level {
+        case .success: return WorkspaceTheme.success
+        case .warning: return WorkspaceTheme.warning
+        case .error: return WorkspaceTheme.danger
+        case .info: return WorkspaceTheme.accent
+        }
+    }
+
+    private var iconName: String {
+        switch notification.level {
+        case .success: return "checkmark.circle.fill"
+        case .warning: return "exclamationmark.triangle.fill"
+        case .error: return "xmark.octagon.fill"
+        case .info: return "bell.fill"
         }
     }
 }

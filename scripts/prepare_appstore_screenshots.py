@@ -50,13 +50,8 @@ def sample_bg_color(img: Image.Image) -> tuple:
     return (r, g, b)
 
 
-def fit_and_pad(src: Image.Image, target_w: int, target_h: int) -> Image.Image:
-    """等比缩放 src 以填满目标尺寸（cover），然后居中裁剪；
-    若比例极近则缩放后填充背景色。"""
-    src_ratio = src.width / src.height
-    tgt_ratio = target_w / target_h
-
-    bg_color = sample_bg_color(src)
+def fit_and_pad(src: Image.Image, target_w: int, target_h: int, bg_color: tuple) -> Image.Image:
+    """等比缩放 src 以填满目标尺寸（fit），居中贴到填充背景色的画布上。"""
     canvas = Image.new("RGB", (target_w, target_h), bg_color)
 
     # 缩放：使图像完全适合目标（fit，不裁剪）
@@ -90,11 +85,13 @@ def main():
     print(f"找到 {len(sources)} 张 PNG，输出至 {output_dir}\n")
 
     for src_path in sources:
-        img = Image.open(src_path).convert("RGB")
+        with Image.open(src_path) as raw:
+            img = raw.convert("RGB")
         print(f"处理: {src_path.name}  ({img.width}×{img.height})")
+        bg_color = sample_bg_color(img)
 
         for label, (tw, th) in TARGETS.items():
-            out_img = fit_and_pad(img, tw, th)
+            out_img = fit_and_pad(img, tw, th, bg_color)
             stem = src_path.stem
             out_name = f"{stem}_{label}_{tw}x{th}.png"
             out_path = output_dir / out_name

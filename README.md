@@ -256,6 +256,36 @@ export CC_CLAUDE_MODEL=sonnet
 
 `/chat` 仍保留为兼容路径，但现在会自动跳转到统一 workspace 的 Chat 视图。
 
+### 3.1 命令行主动推送提醒（通知到 Web/iOS/Windows）
+
+当后台任务完成后，可以直接从命令行向 cc-control 发送通知：
+
+```bash
+curl -X POST http://127.0.0.1:18080/api/notifications \
+  -H "Authorization: Bearer <your-ui-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Nightly Build",
+    "message": "build + tests finished",
+    "level": "success",
+    "source": "ci"
+  }'
+```
+
+如果你在自动化脚本里只持有 tenant token，可改用：
+
+```bash
+curl -X POST http://127.0.0.1:18080/tenant/notifications \
+  -H "Authorization: Bearer <tenant-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"backup finished","level":"info","source":"cron"}'
+```
+
+说明：
+- 通知会通过 WebSocket 主动推送到该 tenant 下的在线客户端。
+- 控制面会缓存最近一批通知，客户端重连后会自动回放，降低断线漏提醒概率。
+- 详细字段见 [API 参考](docs/api.md) 中 `/api/notifications` 与 `/tenant/notifications`。
+
 ### 4. 替换为真实 worker
 
 echo worker 仅用于测试。正式使用时，将 `-chat-worker` 指向你自己的程序即可。worker 协议是 NDJSON：

@@ -69,6 +69,10 @@ export function createWSHandler(ctx) {
 
     if (msg.type === "event" && msg.data) {
       const ev = msg.data;
+      if (ev.kind === "notification") {
+        ctx.session.pushNotification(ev);
+        return;
+      }
       if (ev.kind === "approval_needed") {
         ctx.state.approvals.set(ev.event_id, ev);
         ctx.session.renderApprovals();

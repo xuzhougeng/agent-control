@@ -18,6 +18,7 @@ export function initWorkspacePage() {
     servers: [],
     sessions: [],
     approvals: new Map(),
+    notifications: new Map(),
     selectedServerID: query.get("server_id") || "",
     requestedSessionID: query.get("session_id") || "",
     selectedSessionID: query.get("session_id") || "",
@@ -52,9 +53,12 @@ export function initWorkspacePage() {
   const sessionsList = document.getElementById("sessionsList");
   const approvalList = document.getElementById("approvalList");
   const approvalCount = document.getElementById("approvalCount");
+  const noticeList = document.getElementById("noticeList");
+  const noticeCount = document.getElementById("noticeCount");
   const approvalDetails = document.getElementById("approvalDetails");
   const instanceHistoryList = document.getElementById("instanceHistoryList");
   const instanceHistoryCount = document.getElementById("instanceHistoryCount");
+  const notificationToasts = document.getElementById("notificationToasts");
   const cwdInput = document.getElementById("cwdInput");
   const sessionIDInput = document.getElementById("sessionIdInput");
   const envInput = document.getElementById("envInput");
@@ -195,8 +199,11 @@ export function initWorkspacePage() {
     sessionsList,
     approvalList,
     approvalCount,
+    noticeList,
+    noticeCount,
     instanceHistoryList,
     instanceHistoryCount,
+    notificationToasts,
     cwdInput,
     sessionIDInput,
     envInput,
@@ -238,6 +245,10 @@ export function initWorkspacePage() {
     state.token = token || "";
     tokenInput.value = state.token;
     localStorage.setItem("ui_token", state.token);
+    state.approvals.clear();
+    state.notifications.clear();
+    session.renderApprovals();
+    session.renderNotifications();
     wsClient.reconnect();
     session.refreshAll();
   }
@@ -253,6 +264,7 @@ export function initWorkspacePage() {
   updateViewVisibility();
   session.renderInstanceHistory();
   session.renderApprovals();
+  session.renderNotifications();
   chat.renderChatMessages();
   chat.renderPendingScreenshots();
   workspace.render(null);

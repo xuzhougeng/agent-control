@@ -28,6 +28,10 @@ struct HomeTabView: View {
                         approvalsCard
                     }
 
+                    if !appState.recentNotifications.isEmpty {
+                        notificationsCard
+                    }
+
                     serversCard
 
                     if !runningSessions.isEmpty {
@@ -145,6 +149,27 @@ struct HomeTabView: View {
                 }
                 ForEach(appState.pendingApprovals) { event in
                     ApprovalRow(event: event)
+                }
+            }
+        }
+    }
+
+    private var notificationsCard: some View {
+        let notices = Array(appState.recentNotifications.prefix(8))
+        return WorkspacePanel(inset: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    WorkspaceSectionTitle(text: "Notifications")
+                    Spacer()
+                    WorkspaceCountBadge(text: "\(appState.recentNotifications.count)", color: WorkspaceTheme.accent)
+                }
+                ForEach(notices) { notification in
+                    Button {
+                        openNotification(notification)
+                    } label: {
+                        NotificationRow(notification: notification)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -278,6 +303,17 @@ struct HomeTabView: View {
             return session.sessionID == appState.selectedChatSessionID
         }
         return session.sessionID == appState.selectedSessionID
+    }
+
+    private func openNotification(_ notification: NotificationEvent) {
+        guard let sid = notification.sessionID, !sid.isEmpty else { return }
+        if let session = appState.sessions.first(where: { $0.sessionID == sid }) {
+            appState.openSession(session)
+            selectedTab = session.isChat ? .chat : .terminal
+            return
+        }
+        appState.attachSession(sid)
+        selectedTab = .terminal
     }
 }
 

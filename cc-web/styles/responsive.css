@@ -216,6 +216,13 @@
     width: calc(100% - 20px);
   }
 
+  .notification-toasts {
+    right: 10px;
+    left: 10px;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    width: auto;
+  }
+
   .admin-stats-grid { grid-template-columns: 1fr 1fr; }
   .admin-tabs { flex-wrap: wrap; }
   .admin-filter-row { flex-direction: column; }

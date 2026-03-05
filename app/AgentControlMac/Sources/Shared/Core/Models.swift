@@ -130,6 +130,33 @@ struct SessionEvent: Identifiable {
     var id: String { eventID }
 }
 
+enum NotificationLevel: String, Codable {
+    case info
+    case success
+    case warning
+    case error
+}
+
+struct NotificationEvent: Identifiable {
+    let notificationID: String
+    let kind: String
+    let tenantID: String?
+    let sessionID: String?
+    let serverID: String?
+    let level: NotificationLevel
+    let title: String?
+    let message: String
+    let source: String?
+    let actor: String?
+    let tsMS: Int64
+
+    var id: String { notificationID }
+    var displayTitle: String {
+        let value = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? "Notification" : value
+    }
+}
+
 // MARK: - REST Response Wrappers
 
 struct ServersResponse: Decodable { let servers: [Server] }
@@ -140,6 +167,7 @@ struct SessionsResponse: Decodable { let sessions: [Session] }
 enum WSMessage {
     case termOut(sessionID: String, data: Data, seq: UInt64)
     case event(SessionEvent)
+    case notification(NotificationEvent)
     case sessionUpdate(SessionUpdatePayload)
     case chatMsg(ChatMessage)
     case attachOK(sessionID: String)
@@ -286,8 +314,16 @@ enum WSMessageParser {
             guard let b64 = dataB64, let bytes = Data(base64Encoded: b64) else { return nil }
             return .termOut(sessionID: sessionID, data: bytes, seq: seq)
         case "event":
-            guard let d = dataDict, let ev = parseSessionEvent(d) else { return nil }
-            return .event(ev)
+            guard let d = dataDict, let kind = d["kind"] as? String else { return nil }
+            if kind == "approval_needed" {
+                guard let ev = parseSessionEvent(d) else { return nil }
+                return .event(ev)
+            }
+            if kind == "notification" {
+                guard let ev = parseNotificationEvent(d) else { return nil }
+                return .notification(ev)
+            }
+            return nil
         case "session_update":
             guard let d = dataDict else { return nil }
             return .sessionUpdate(parseSessionUpdate(d, fallbackID: sessionID))
@@ -319,6 +355,29 @@ enum WSMessageParser {
             kind: kind, promptExcerpt: d["prompt_excerpt"] as? String,
             actor: d["actor"] as? String, tsMS: tsMS,
             resolved: d["resolved"] as? Bool ?? false
+        )
+    }
+
+    private static func parseNotificationEvent(_ d: [String: Any]) -> NotificationEvent? {
+        guard let notificationID = d["notification_id"] as? String,
+              let message = d["message"] as? String,
+              let tsMS = (d["ts_ms"] as? NSNumber)?.int64Value else { return nil }
+        let levelRaw = (d["level"] as? String ?? "info").lowercased()
+        let level = NotificationLevel(rawValue: levelRaw) ?? .info
+        let sessionID = (d["session_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverID = (d["server_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return NotificationEvent(
+            notificationID: notificationID,
+            kind: d["kind"] as? String ?? "notification",
+            tenantID: d["tenant_id"] as? String,
+            sessionID: (sessionID?.isEmpty == false) ? sessionID : nil,
+            serverID: (serverID?.isEmpty == false) ? serverID : nil,
+            level: level,
+            title: d["title"] as? String,
+            message: message,
+            source: d["source"] as? String,
+            actor: d["actor"] as? String,
+            tsMS: tsMS
         )
     }
 

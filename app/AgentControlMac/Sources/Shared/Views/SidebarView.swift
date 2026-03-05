@@ -4,6 +4,7 @@ struct SidebarView: View {
     @EnvironmentObject var appState: AppState
     @State private var showServerGuide = false
     @State private var approvalsExpanded = false
+    @State private var notificationsExpanded = false
     let onOpenSettings: (() -> Void)?
     let onOpenSessionTerminal: (() -> Void)?
 
@@ -31,6 +32,7 @@ struct SidebarView: View {
                     serversPanel
                     sessionsPanel
                     approvalsPanel
+                    notificationsPanel
                 }
                 .padding(.bottom, 6)
             }
@@ -210,6 +212,60 @@ struct SidebarView: View {
         }
     }
 
+    private var notificationsPanel: some View {
+        let notices = Array(appState.recentNotifications.prefix(20))
+        return WorkspacePanel(inset: 8) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    WorkspaceSectionTitle(text: "Notifications")
+                    Spacer()
+                    WorkspaceCountBadge(text: "\(appState.recentNotifications.count)", color: WorkspaceTheme.accent)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            notificationsExpanded.toggle()
+                        }
+                    } label: {
+                        Image(systemName: notificationsExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(WorkspaceTheme.textMuted)
+                            .frame(width: 18, height: 18)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(WorkspaceTheme.surfaceStrong)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .stroke(WorkspaceTheme.border.opacity(0.8), lineWidth: 1)
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(notices.isEmpty)
+                }
+
+                if notices.isEmpty {
+                    Text("No notifications")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(WorkspaceTheme.textSoft)
+                } else if notificationsExpanded {
+                    VStack(spacing: 5) {
+                        ForEach(notices) { notification in
+                            Button {
+                                openNotification(notification)
+                            } label: {
+                                NotificationRow(notification: notification)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                } else {
+                    Text("\(notices.count) recent notification(s). Expand to inspect.")
+                        .font(.system(size: 10))
+                        .foregroundColor(WorkspaceTheme.textSoft)
+                }
+            }
+        }
+    }
+
     private func sessionGroup(title: String, sessions: [Session]) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             WorkspaceSectionTitle(text: title)
@@ -295,6 +351,17 @@ struct SidebarView: View {
         } else {
             appState.selectSessionForChatView(session.sessionID)
         }
+    }
+
+    private func openNotification(_ notification: NotificationEvent) {
+        guard let sid = notification.sessionID, !sid.isEmpty else { return }
+        if let session = appState.sessions.first(where: { $0.sessionID == sid }) {
+            appState.openSession(session)
+            onOpenSessionTerminal?()
+            return
+        }
+        appState.attachSession(sid)
+        onOpenSessionTerminal?()
     }
 
     private func iconButton(_ icon: String, action: @escaping () -> Void) -> some View {
@@ -503,6 +570,74 @@ struct StatusBadge: View {
                     .overlay(Capsule(style: .continuous).stroke(isOnline ? WorkspaceTheme.success.opacity(0.3) : WorkspaceTheme.danger.opacity(0.3), lineWidth: 1))
             )
             .foregroundColor(isOnline ? WorkspaceTheme.success : WorkspaceTheme.danger)
+    }
+}
+
+struct NotificationRow: View {
+    let notification: NotificationEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Image(systemName: iconName)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(levelColor)
+                Text(notification.displayTitle)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(WorkspaceTheme.text)
+                    .lineLimit(1)
+                Spacer()
+                if let sid = notification.sessionID, !sid.isEmpty {
+                    Text(String(sid.prefix(8)))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(WorkspaceTheme.accent)
+                }
+            }
+            Text(notification.message)
+                .font(.system(size: 10))
+                .foregroundColor(WorkspaceTheme.textMuted)
+                .lineLimit(2)
+            HStack(spacing: 6) {
+                if let source = notification.source, !source.isEmpty {
+                    Text(source)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(WorkspaceTheme.textSoft)
+                }
+                if let serverID = notification.serverID, !serverID.isEmpty {
+                    Text("@\(serverID)")
+                        .font(.system(size: 9))
+                        .foregroundColor(WorkspaceTheme.textSoft)
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(levelColor.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(levelColor.opacity(0.28), lineWidth: 1)
+                )
+        )
+    }
+
+    private var levelColor: Color {
+        switch notification.level {
+        case .success: return WorkspaceTheme.success
+        case .warning: return WorkspaceTheme.warning
+        case .error: return WorkspaceTheme.danger
+        case .info: return WorkspaceTheme.accent
+        }
+    }
+
+    private var iconName: String {
+        switch notification.level {
+        case .success: return "checkmark.circle.fill"
+        case .warning: return "exclamationmark.triangle.fill"
+        case .error: return "xmark.octagon.fill"
+        case .info: return "bell.fill"
+        }
     }
 }
 

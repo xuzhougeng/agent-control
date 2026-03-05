@@ -55,6 +55,7 @@ func newSessionHub(ringBytes int) *SessionHub {
 }
 
 const MaxChatHistory = 200
+const MaxNotificationHistory = 100
 const errPTYUnsupportedOnWindows = "PTY is not supported on Windows yet; use session_type=chat"
 
 type ControlPlane struct {
@@ -67,6 +68,7 @@ type ControlPlane struct {
 	instances        map[string]*RuntimeInstance
 	sessionInstances map[string][]string
 	sessionEvents    map[string][]SessionEvent
+	tenantNotices    map[string][]NotificationEvent
 	sessionHubs      map[string]*SessionHub
 	agentConns       map[string]AgentSender
 	subscribers      map[*Subscriber]struct{}
@@ -115,6 +117,7 @@ func NewControlPlane(cfg Config) (*ControlPlane, error) {
 		instances:        make(map[string]*RuntimeInstance),
 		sessionInstances: make(map[string][]string),
 		sessionEvents:    make(map[string][]SessionEvent),
+		tenantNotices:    make(map[string][]NotificationEvent),
 		sessionHubs:      make(map[string]*SessionHub),
 		agentConns:       make(map[string]AgentSender),
 		subscribers:      make(map[*Subscriber]struct{}),
@@ -347,6 +350,105 @@ func (cp *ControlPlane) GetPendingApprovalEvents(tenantID string) []SessionEvent
 		return out[i].TsMS > out[j].TsMS
 	})
 	return out
+}
+
+func (cp *ControlPlane) GetRecentNotificationEvents(tenantID string, limit int) []NotificationEvent {
+	cp.mu.RLock()
+	defer cp.mu.RUnlock()
+	if limit <= 0 || limit > MaxNotificationHistory {
+		limit = MaxNotificationHistory
+	}
+	events := cp.tenantNotices[tenantID]
+	if len(events) == 0 {
+		return nil
+	}
+	if len(events) > limit {
+		events = events[len(events)-limit:]
+	}
+	out := make([]NotificationEvent, len(events))
+	copy(out, events)
+	return out
+}
+
+func (cp *ControlPlane) PublishNotification(actor, tenantID string, req PublishNotificationRequest) (NotificationEvent, error) {
+	if tenantID == "" {
+		return NotificationEvent{}, errors.New("tenant id required")
+	}
+	req.Message = strings.TrimSpace(req.Message)
+	if req.Message == "" {
+		return NotificationEvent{}, errors.New("message is required")
+	}
+	req.Title = strings.TrimSpace(req.Title)
+	req.Source = strings.TrimSpace(req.Source)
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	req.ServerID = strings.TrimSpace(req.ServerID)
+	if req.Source == "" {
+		req.Source = "external"
+	}
+
+	level := req.Level
+	switch level {
+	case NotificationLevelInfo, NotificationLevelSuccess, NotificationLevelWarning, NotificationLevelError:
+	default:
+		level = NotificationLevelInfo
+	}
+
+	ev := NotificationEvent{
+		NotificationID: uuid.NewString(),
+		Kind:           "notification",
+		TenantID:       tenantID,
+		SessionID:      req.SessionID,
+		ServerID:       req.ServerID,
+		Level:          level,
+		Title:          req.Title,
+		Message:        req.Message,
+		Source:         req.Source,
+		Actor:          actor,
+		TsMS:           time.Now().UnixMilli(),
+	}
+
+	cp.mu.Lock()
+	if ev.SessionID != "" {
+		sess, ok := cp.sessions[ev.SessionID]
+		if !ok || sess.TenantID != tenantID {
+			cp.mu.Unlock()
+			return NotificationEvent{}, errors.New("session not found")
+		}
+		if ev.ServerID == "" {
+			ev.ServerID = sess.ServerID
+		}
+	}
+	if ev.ServerID != "" {
+		srv, ok := cp.servers[ev.ServerID]
+		if !ok || srv.TenantID != tenantID {
+			cp.mu.Unlock()
+			return NotificationEvent{}, errors.New("server not found")
+		}
+	}
+	events := append(cp.tenantNotices[tenantID], ev)
+	if len(events) > MaxNotificationHistory {
+		events = events[len(events)-MaxNotificationHistory:]
+	}
+	cp.tenantNotices[tenantID] = events
+	cp.mu.Unlock()
+
+	body, _ := json.Marshal(ev)
+	msg := NewEnvelope("event", ev.ServerID, ev.SessionID)
+	msg.Data = body
+	cp.broadcastToTenant(tenantID, msg)
+
+	cp.audit.Log(AuditEvent{
+		Actor:     actor,
+		ServerID:  ev.ServerID,
+		SessionID: ev.SessionID,
+		Kind:      "notification_publish",
+		Meta: map[string]any{
+			"notification_id": ev.NotificationID,
+			"level":           ev.Level,
+			"source":          ev.Source,
+		},
+	})
+	return ev, nil
 }
 
 func (cp *ControlPlane) RegisterSubscriber(sub *Subscriber) {
@@ -1591,6 +1693,24 @@ func (cp *ControlPlane) broadcastToAll(msg Envelope) {
 	cp.mu.RLock()
 	subs := make([]*Subscriber, 0, len(cp.subscribers))
 	for s := range cp.subscribers {
+		subs = append(subs, s)
+	}
+	cp.mu.RUnlock()
+	for _, sub := range subs {
+		select {
+		case sub.Send <- msg:
+		default:
+		}
+	}
+}
+
+func (cp *ControlPlane) broadcastToTenant(tenantID string, msg Envelope) {
+	cp.mu.RLock()
+	subs := make([]*Subscriber, 0, len(cp.subscribers))
+	for s := range cp.subscribers {
+		if tenantID != "" && s.TenantID != tenantID {
+			continue
+		}
 		subs = append(subs, s)
 	}
 	cp.mu.RUnlock()

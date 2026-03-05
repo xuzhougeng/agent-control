@@ -41,6 +41,8 @@ final class AppState: ObservableObject {
     @Published var servers: [Server] = []
     @Published var sessions: [Session] = []
     @Published var approvals: [String: SessionEvent] = [:]  // keyed by eventID
+    @Published var notifications: [String: NotificationEvent] = [:]  // keyed by notificationID
+    @Published var transientNotification: NotificationEvent?
     @Published var selectedServerID: String?
     @Published var selectedSessionID: String?
     @Published var selectedChatSessionID: String?
@@ -67,12 +69,17 @@ final class AppState: ObservableObject {
     /// Startup race guard: replay resize until PTY is fully ready.
     private var resizeReplayTask: Task<Void, Never>?
     private var chatSlowTask: Task<Void, Never>?
+    private var transientNotificationTask: Task<Void, Never>?
     private var chatPendingTurns = 0
 
     private let slowResponseDelayNS: UInt64 = 12_000_000_000
 
     var pendingApprovals: [SessionEvent] {
         approvals.values.filter { !$0.resolved }.sorted { $0.tsMS > $1.tsMS }
+    }
+
+    var recentNotifications: [NotificationEvent] {
+        notifications.values.sorted { $0.tsMS > $1.tsMS }
     }
 
     var ptySessions: [Session] {
@@ -114,6 +121,8 @@ final class AppState: ObservableObject {
     func pause() {
         wasBackgrounded = true
         resizeReplayTask?.cancel()
+        transientNotificationTask?.cancel()
+        transientNotification = nil
         wsClient.disconnect(reconnect: false)
     }
 
@@ -196,6 +205,10 @@ final class AppState: ObservableObject {
         apiClient.configure(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
         wsClient.configure(baseURL: baseURL, token: token, skipTLSVerify: skipTLSVerify)
         applyConnectionPolicy(baseURL: baseURL)
+        approvals.removeAll()
+        notifications.removeAll()
+        transientNotification = nil
+        transientNotificationTask?.cancel()
         wsClient.disconnect()
         guard shouldAutoConnect else {
             wsConnected = false
@@ -276,6 +289,7 @@ final class AppState: ObservableObject {
                 resetChatSelection()
             }
             approvals = approvals.filter { $0.value.sessionID != sessionID }
+            notifications = notifications.filter { $0.value.sessionID != sessionID }
             await fetchSessions()
         } catch { print("[api] deleteSession: \(error)") }
     }
@@ -564,6 +578,9 @@ final class AppState: ObservableObject {
                 approvals[event.eventID] = event
             }
 
+        case .notification(let notification):
+            handleNotification(notification)
+
         case .sessionUpdate(let update):
             // Update local session state inline to avoid REST round-trip for every WS push
             if let idx = sessions.firstIndex(where: { $0.sessionID == update.sessionID }) {
@@ -609,5 +626,36 @@ final class AppState: ObservableObject {
                 failPendingChatTurns(reason: message)
             }
         }
+    }
+
+    private func handleNotification(_ notification: NotificationEvent) {
+        let existed = notifications[notification.notificationID] != nil
+        notifications[notification.notificationID] = notification
+
+        if notifications.count > 100 {
+            let keep = notifications.values
+                .sorted { $0.tsMS > $1.tsMS }
+                .prefix(100)
+            notifications = Dictionary(uniqueKeysWithValues: keep.map { ($0.notificationID, $0) })
+        }
+
+        guard !existed else { return }
+        guard isFreshNotification(notification) else { return }
+
+        transientNotification = notification
+        transientNotificationTask?.cancel()
+        transientNotificationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            guard !Task.isCancelled else { return }
+            if self.transientNotification?.notificationID == notification.notificationID {
+                self.transientNotification = nil
+            }
+        }
+    }
+
+    private func isFreshNotification(_ notification: NotificationEvent) -> Bool {
+        let nowMS = Int64(Date().timeIntervalSince1970 * 1000)
+        return notification.tsMS >= nowMS - 15_000
     }
 }

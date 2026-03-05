@@ -253,6 +253,17 @@
             </details>
           </section>
 
+          <section class="context-card context-card-notices">
+            <div class="context-card-header">
+              <div>
+                <p class="context-card-kicker">Signals</p>
+                <h2>Notifications</h2>
+              </div>
+              <span id="noticeCount" class="badge">0</span>
+            </div>
+            <ul id="noticeList"></ul>
+          </section>
+
           <section class="context-card context-card-instances">
             <div class="context-card-header">
               <div>
@@ -270,6 +281,7 @@
   </main>
 
   <div id="sidebarBackdrop" class="sidebar-backdrop" hidden></div>
+  <div id="notificationToasts" class="notification-toasts" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Custom confirm dialog -->
   <div id="customConfirmModal" class="cc-modal-backdrop" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="ccModalMessage">

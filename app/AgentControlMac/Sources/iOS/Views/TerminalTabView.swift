@@ -5,6 +5,7 @@ struct TerminalTabView: View {
     @Binding var selectedTab: AppTab
     @State private var showSessionDrawer = false
     @State private var showApprovals = false
+    @State private var showNotifications = false
     @State private var confirmStop = false
 
     private var currentSession: Session? {
@@ -68,6 +69,10 @@ struct TerminalTabView: View {
             ApprovalsSheet()
                 .environmentObject(appState)
         }
+        .sheet(isPresented: $showNotifications) {
+            NotificationsSheet(selectedTab: $selectedTab)
+                .environmentObject(appState)
+        }
         .alert("Stop Session?", isPresented: $confirmStop) {
             Button("Cancel", role: .cancel) {}
             Button("Stop", role: .destructive) {
@@ -100,6 +105,13 @@ struct TerminalTabView: View {
             .accessibilityLabel("Switch Session")
         }
         ToolbarItemGroup(placement: .navigationBarTrailing) {
+            if !appState.recentNotifications.isEmpty {
+                Button { showNotifications = true } label: {
+                    Image(systemName: "bell.badge")
+                        .foregroundColor(WorkspaceTheme.accent)
+                }
+                .accessibilityLabel("\(appState.recentNotifications.count) Notifications")
+            }
             if !appState.pendingApprovals.isEmpty {
                 Button { showApprovals = true } label: {
                     Image(systemName: "bell.badge")
@@ -159,6 +171,7 @@ struct TerminalTabView: View {
     private func dismissKeyboardAndCloseOverlays() {
         showSessionDrawer = false
         showApprovals = false
+        showNotifications = false
         confirmStop = false
         if let terminalView = appState.terminalBridge.terminalView {
             _ = terminalView.resignFirstResponder()
@@ -370,5 +383,62 @@ struct ApprovalsSheet: View {
                 }
             }
         }
+    }
+}
+
+struct NotificationsSheet: View {
+    @EnvironmentObject var appState: AppState
+    @Binding var selectedTab: AppTab
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if appState.recentNotifications.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "bell.slash")
+                            .font(.largeTitle)
+                            .foregroundColor(WorkspaceTheme.textSoft)
+                        Text("No notifications")
+                            .foregroundColor(WorkspaceTheme.textMuted)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            ForEach(appState.recentNotifications) { notification in
+                                Button {
+                                    openNotification(notification)
+                                } label: {
+                                    NotificationRow(notification: notification)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(12)
+                    }
+                }
+            }
+            .navigationTitle("Notifications")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func openNotification(_ notification: NotificationEvent) {
+        guard let sid = notification.sessionID, !sid.isEmpty else { return }
+        if let session = appState.sessions.first(where: { $0.sessionID == sid }) {
+            appState.openSession(session)
+            selectedTab = session.isChat ? .chat : .terminal
+            dismiss()
+            return
+        }
+        appState.attachSession(sid)
+        selectedTab = .terminal
+        dismiss()
     }
 }

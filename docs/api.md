@@ -4,9 +4,9 @@
 
 ## 概览
 
-- **REST API**：用于查询服务器、创建/停止会话、拉取事件。
+- **REST API**：用于查询服务器、创建/停止会话、拉取事件、发送跨端提醒通知。
 - **WebSocket API (`/ws/client`)**：用于附加会话、发送终端输入、审批动作、接收终端输出与事件。
-- 结论：可以完全绕过 UI；但“发送命令/审批”目前是 **WS**，不是纯 REST。
+- 结论：可以完全绕过 UI；“发送终端命令/审批”依然是 **WS**，但提醒通知可通过 REST 主动推送。
 
 ## 鉴权
 
@@ -23,7 +23,7 @@ UI Token 具备角色权限：
 - `owner`：包含 `operator` 权限 + 删除会话
 
 > Admin Token 仅用于管理接口（见下文），不用于 UI/WS。
-> Tenant Token 仅用于租户自助签发接口（见下文），不用于 UI/WS。
+> Tenant Token 可用于租户自助签发接口与租户通知接口（见下文），不用于 UI/WS。
 > 所有请求均按 token 所属 `tenant_id` 隔离，跨租户资源会返回 `not found`。
 
 ---
@@ -237,6 +237,30 @@ Base URL：`http://127.0.0.1:18080`
 
 > 说明：每次调用会撤销该 `tenant_id` 现有的 UI/Agent token，请同步更新浏览器和 agent 的配置。
 
+### 2) 发布/查询通知（Tenant Token）
+
+- `POST /tenant/notifications`
+- `GET /tenant/notifications?limit=20`
+- Header：`Authorization: Bearer <TENANT_TOKEN>`
+- 作用：允许自动化脚本直接发送提醒，不需要 UI Token。
+- 请求体与 `/api/notifications` 基本一致（`message` 必填，支持 `title/level/source/session_id/server_id`）。
+- 返回：
+
+```json
+{
+  "ok": true,
+  "notification": {
+    "notification_id": "uuid",
+    "kind": "notification",
+    "tenant_id": "uuid",
+    "message": "backup done",
+    "level": "info",
+    "source": "external",
+    "ts_ms": 1730000000000
+  }
+}
+```
+
 ---
 
 ## REST API
@@ -397,7 +421,73 @@ Base URL：`http://127.0.0.1:18080`
 - `CC_CLAUDE_PROFILE_FILE`（从文件加载个性化提示词）
 - `CC_CLAUDE_INJECT_RUNTIME_CONTEXT`（是否注入运行时上下文，默认开启）
 
-### 9) 切换会话模式
+### 9) 发布通知（UI Token）
+
+- `POST /api/notifications`
+- 角色要求：`operator` 及以上
+- 请求体：
+
+```json
+{
+  "title": "Deploy Completed",
+  "message": "prod-us-east-1 finished in 8m23s",
+  "level": "info",
+  "source": "ci",
+  "session_id": "optional-session-id",
+  "server_id": "optional-server-id"
+}
+```
+
+字段说明：
+
+- `message` 必填
+- `level` 可选：`info|success|warning|error`（默认 `info`）
+- `session_id` 可选；传入后会校验租户归属，并自动补齐 `server_id`（如果未提供）
+- `source` 可选，建议写任务来源（如 `cron`, `ci`, `backup`）
+
+- 成功：`201`
+
+```json
+{
+  "ok": true,
+  "notification": {
+    "notification_id": "uuid",
+    "kind": "notification",
+    "tenant_id": "uuid",
+    "level": "success",
+    "title": "Deploy Completed",
+    "message": "prod-us-east-1 finished in 8m23s",
+    "source": "ci",
+    "actor": "ui:<token_id>",
+    "ts_ms": 1730000000000
+  }
+}
+```
+
+### 10) 查询通知（UI Token）
+
+- `GET /api/notifications?limit=20`
+- 角色要求：`viewer` 及以上
+- 返回最近通知（默认 20，最多 100）：
+
+```json
+{
+  "notifications": [
+    {
+      "notification_id": "uuid",
+      "kind": "notification",
+      "tenant_id": "uuid",
+      "level": "info",
+      "title": "Build Done",
+      "message": "all tests passed",
+      "source": "ci",
+      "ts_ms": 1730000000000
+    }
+  ]
+}
+```
+
+### 11) 切换会话模式
 
 - `POST /api/sessions/{session_id}/switch`
 - 角色要求：`operator` 及以上
@@ -422,7 +512,7 @@ Base URL：`http://127.0.0.1:18080`
 
 - 成功：`200`，返回更新后的 `session` 对象。
 
-### 10) 删除会话
+### 12) 删除会话
 
 - `DELETE /api/sessions/{session_id}`
 - 角色要求：`owner`
@@ -558,7 +648,9 @@ Base URL：`http://127.0.0.1:18080`
 - `attach_ok`：attach 成功确认。
 - `term_out`：终端输出（`data_b64`）。
 - `chat_msg`：聊天消息（仅 `session_type=chat`），`data` 包含 `{message_id, role, content, meta?, ts_ms}`。
-- `event`：业务事件，重点是 `approval_needed`。
+- `event`：业务事件，包含：
+  - `kind=approval_needed`：审批提示
+  - `kind=notification`：外部主动提醒（来自 `/api/notifications` 或 `/tenant/notifications`）
 - `session_update`：会话状态更新（含 `awaiting_approval`、`pending_event_id`、`session_type`）。
 - `error`：错误消息，`data.message` 为错误文本。
 

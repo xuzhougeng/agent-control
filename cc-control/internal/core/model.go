@@ -87,6 +87,38 @@ type SessionEvent struct {
 	Resolved   bool   `json:"resolved"`
 }
 
+type NotificationLevel string
+
+const (
+	NotificationLevelInfo    NotificationLevel = "info"
+	NotificationLevelSuccess NotificationLevel = "success"
+	NotificationLevelWarning NotificationLevel = "warning"
+	NotificationLevelError   NotificationLevel = "error"
+)
+
+type NotificationEvent struct {
+	NotificationID string            `json:"notification_id"`
+	Kind           string            `json:"kind"`
+	TenantID       string            `json:"tenant_id"`
+	SessionID      string            `json:"session_id,omitempty"`
+	ServerID       string            `json:"server_id,omitempty"`
+	Level          NotificationLevel `json:"level"`
+	Title          string            `json:"title,omitempty"`
+	Message        string            `json:"message"`
+	Source         string            `json:"source,omitempty"`
+	Actor          string            `json:"actor,omitempty"`
+	TsMS           int64             `json:"ts_ms"`
+}
+
+type PublishNotificationRequest struct {
+	SessionID string            `json:"session_id,omitempty"`
+	ServerID  string            `json:"server_id,omitempty"`
+	Level     NotificationLevel `json:"level,omitempty"`
+	Title     string            `json:"title,omitempty"`
+	Message   string            `json:"message"`
+	Source    string            `json:"source,omitempty"`
+}
+
 type StartSessionRequest struct {
 	SessionID   string            `json:"session_id,omitempty"`
 	ServerID    string            `json:"server_id"`
