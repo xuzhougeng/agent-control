@@ -2,12 +2,13 @@
 
 本文描述 Web E2E 的目录结构、覆盖范围与设计要点。运行步骤与调试见 [如何跑 Web E2E 测试](how-to-test-e2e.md)。
 
-Web E2E 当前由四套入口组成：
+Web E2E 当前由五套入口组成：
 
 1. 默认回归：`npm run test:web:e2e`
-2. 移动端样式回归：`npm run test:web:mobile`
-3. 移动端 fake Claude Terminal 回归：`npm run test:web:mobile:terminal`
-4. 真实 Claude 烟测：`npm run test:web:e2e:real-claude`
+2. Notification 专项回归：`npm run test:web:e2e:notification` 或 `bash scripts/test-web-notification-e2e.sh`
+3. 移动端样式回归：`npm run test:web:mobile`
+4. 移动端 fake Claude Terminal 回归：`npm run test:web:mobile:terminal`
+5. 真实 Claude 烟测：`npm run test:web:e2e:real-claude`
 
 ## 目录
 
@@ -17,6 +18,7 @@ Web E2E 当前由四套入口组成：
 - `tests/web-e2e/run-harness.sh`
 - `tests/web-e2e/run-harness-echo.sh`
 - `tests/web-e2e/specs/workspace.spec.js`
+- `tests/web-e2e/specs/notification.spec.js`
 - `tests/web-e2e/specs/mobile-scroll.spec.js`
 - `tests/web-e2e/specs/mobile-terminal-fake.spec.js`
 - `tests/web-e2e/specs/real-claude.spec.js`
@@ -35,6 +37,14 @@ Web E2E 当前由四套入口组成：
 5. 移动端抽屉开合互斥，点击 backdrop 可统一关闭
 6. Terminal `copy` 事件会把选中文本写入 clipboard
 7. `/chat` 兼容路径重定向到统一 workspace（`view=chat`）
+
+### `notification.spec.js`（通知专项）
+
+1. 创建一个 PTY session
+2. 调用 `POST /api/notifications` 主动发送通知
+3. 断言右侧通知列表出现该条通知
+4. 断言页面 toast 出现该条通知
+5. 保存包含通知的截图到 `test-results/`
 
 ### `mobile-scroll.spec.js`（移动端样式回归）
 
@@ -71,7 +81,7 @@ Web E2E 当前由四套入口组成：
 ## 关键环境变量
 
 - `CC_WEB_E2E_PORT`
-  - 默认回归默认 `18110`，移动端样式回归默认 `18112`，移动端 terminal 回归默认 `18113`
+  - 默认回归默认 `18110`，notification 专项脚本默认 `18114`，移动端样式回归默认 `18112`，移动端 terminal 回归默认 `18113`
 - `CC_WEB_E2E_UI_TOKEN` / `CC_WEB_E2E_AGENT_TOKEN`
   - control 与 agent 的测试 token
 - `CC_WEB_E2E_SERVER_ID`

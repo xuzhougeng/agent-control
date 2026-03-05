@@ -20,15 +20,18 @@ sudo npx playwright install-deps chromium
 
 ## 快速入口
 
-仓库根目录下有四条常用命令：
+仓库根目录下有五条常用命令：
 
 1. 默认回归（fake Claude）  
    `npm run test:web:e2e`
-2. 移动端样式回归（echo worker）  
+2. Notification 专项回归（fake Claude）  
+   `npm run test:web:e2e:notification`
+   或 `bash scripts/test-web-notification-e2e.sh`
+3. 移动端样式回归（echo worker）  
    `npm run test:web:mobile`
-3. 移动端 fake Claude Terminal 回归  
+4. 移动端 fake Claude Terminal 回归  
    `npm run test:web:mobile:terminal`
-4. 真实 Claude 烟测  
+5. 真实 Claude 烟测  
    `npm run test:web:e2e:real-claude`
 
 ## 默认回归（fake Claude）
@@ -52,6 +55,25 @@ npm run test:web:e2e
 ```bash
 CC_WEB_E2E_PORT=18120 npm run test:web:e2e
 ```
+
+## Notification 专项回归（fake Claude）
+
+```bash
+npm run test:web:e2e:notification
+```
+
+或使用脚本入口：
+
+```bash
+bash scripts/test-web-notification-e2e.sh
+```
+
+这条用例会：
+
+1. 创建 session
+2. 调用 `POST /api/notifications`
+3. 断言通知 toast 和右侧通知列表都出现
+4. 输出通知可见截图到 `test-results/`
 
 ## 移动端样式回归（echo worker）
 

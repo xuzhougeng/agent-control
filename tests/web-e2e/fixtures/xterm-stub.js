@@ -5,6 +5,7 @@
       this.rows = 30;
       this._dataHandlers = [];
       this._container = null;
+      this.unicode = { activeVersion: "" };
     }
 
     loadAddon(addon) {

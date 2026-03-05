@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "test:web:e2e": "CC_WEB_E2E_CLAUDE_MODE=fake playwright test --config=tests/web-e2e/playwright.config.mjs",
+    "test:web:e2e:notification": "CC_WEB_E2E_CLAUDE_MODE=fake playwright test --config=tests/web-e2e/playwright.config.mjs tests/web-e2e/specs/notification.spec.js",
     "test:web:e2e:real-claude": "CC_WEB_E2E_PORT=18111 CC_WEB_E2E_CLAUDE_MODE=real CC_WEB_E2E_VIDEO=on playwright test --config=tests/web-e2e/playwright.config.mjs tests/web-e2e/specs/real-claude.spec.js",
     "test:web:mobile": "playwright test --config=tests/web-e2e/playwright.mobile.config.mjs",
     "test:web:mobile:terminal": "CC_WEB_E2E_PORT=18113 CC_WEB_E2E_CLAUDE_MODE=fake playwright test --config=tests/web-e2e/playwright.mobile.terminal.config.mjs"
