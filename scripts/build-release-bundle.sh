@@ -83,9 +83,10 @@ build_agent_target() {
   mkdir -p "$out_dir/bin"
 
   echo "==> building agent binaries for $goos/$goarch"
-  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-proxy" build -o "$out_dir/bin/cc-proxy${suffix}" ./cmd/cc-proxy
-  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-proxy" build -o "$out_dir/bin/cc-chat-claude${suffix}" ./cmd/cc-chat-claude
-  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-proxy" build -o "$out_dir/bin/cc-chat-echo${suffix}" ./cmd/cc-chat-echo
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-proxy" build -ldflags="-s -w" -o "$out_dir/bin/cc-proxy${suffix}" ./cmd/cc-proxy
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-proxy" build -ldflags="-s -w" -o "$out_dir/bin/cc-chat-claude${suffix}" ./cmd/cc-chat-claude
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-proxy" build -ldflags="-s -w" -o "$out_dir/bin/cc-chat-echo${suffix}" ./cmd/cc-chat-echo
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-agent" build -ldflags="-s -w" -o "$out_dir/bin/cc-agent${suffix}" ./cmd/cc-agent
 
   cp "$REPO_ROOT/scripts/chat-profile.example.md" "$out_dir/chat-profile.example.md"
   cp "$REPO_ROOT/scripts/chat-profile.example.md" "$out_dir/chat-profile.md"
@@ -120,9 +121,10 @@ server.tar.gz includes:
 - server/cc-web/
 
 client.tar.gz includes:
-- client/<os-arch>/bin/cc-proxy[.exe]
-- client/<os-arch>/bin/cc-chat-claude[.exe]
-- client/<os-arch>/bin/cc-chat-echo[.exe]
+- client/<os-arch>/bin/cc-proxy[.exe]         (legacy PTY wrapper for Claude/Codex/Gemini CLIs)
+- client/<os-arch>/bin/cc-chat-claude[.exe]   (Claude headless chat worker)
+- client/<os-arch>/bin/cc-chat-echo[.exe]     (echo chat worker for testing)
+- client/<os-arch>/bin/cc-agent[.exe]         (standalone server-ops agent, new in v0.7.0)
 - per-platform run/stop scripts and chat profile templates
 
 Build inputs:
