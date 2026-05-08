@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Minimal E2E smoke test for chat sessions.
-# Requires: cc-control, cc-agent, cc-chat-echo binaries built.
+# Requires: cc-control, cc-proxy, cc-chat-echo binaries built.
 # Usage: bash scripts/test-chat-e2e.sh
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -10,8 +10,8 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "==> Building binaries..."
 (cd "$ROOT_DIR" && go build -o /tmp/cc-control ./cc-control/cmd/cc-control)
-(cd "$ROOT_DIR" && go build -o /tmp/cc-agent ./cc-agent/cmd/cc-agent)
-(cd "$ROOT_DIR" && go build -o /tmp/cc-chat-echo ./cc-agent/cmd/cc-chat-echo)
+(cd "$ROOT_DIR" && go build -o /tmp/cc-proxy ./cc-proxy/cmd/cc-proxy)
+(cd "$ROOT_DIR" && go build -o /tmp/cc-chat-echo ./cc-proxy/cmd/cc-chat-echo)
 
 AUDIT_PATH=$(mktemp /tmp/audit-XXXXXX.jsonl)
 CONTROL_PID=""
@@ -32,8 +32,8 @@ echo "==> Starting cc-control..."
 CONTROL_PID=$!
 sleep 1
 
-echo "==> Starting cc-agent with echo chat worker..."
-/tmp/cc-agent \
+echo "==> Starting cc-proxy with echo chat worker..."
+/tmp/cc-proxy \
   -control-url ws://127.0.0.1:18090/ws/agent \
   -server-id srv-test \
   -agent-token agent-dev-token \

@@ -54,7 +54,11 @@ docs/_site/
 node_modules/
 test-results/
 playwright-report/
+.playwright-mcp/
 tests/web-e2e/fixtures/__pycache__/
+
+# Screenshots from local verification runs
+cc-agent-*.png
 
 # Plan files
 plan*.md

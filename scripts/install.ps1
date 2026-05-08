@@ -1,11 +1,11 @@
-# agent-control cc-agent installer (Windows)
+# agent-control cc-proxy installer (Windows)
 # Usage: irm https://cc-remote.app/install.ps1 | iex
 #    or: irm https://raw.githubusercontent.com/xuzhougeng/agent-control/main/scripts/install.ps1 | iex
 $ErrorActionPreference = 'Stop'
 
 $GITHUB_REPO = if ($env:GITHUB_REPO) { $env:GITHUB_REPO } else { "xuzhougeng/agent-control" }
 $VERSION = if ($env:VERSION) { $env:VERSION } else { "latest" }
-$INSTALL_DIR = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "cc-agent\bin" }
+$INSTALL_DIR = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "cc-proxy\bin" }
 
 function Get-Platform {
   $arch = switch -Wildcard ($env:PROCESSOR_ARCHITECTURE) { "ARM64" { "arm64" } default { "amd64" } }
@@ -139,7 +139,7 @@ function Build-RunCommand {
     [Parameter(Mandatory = $true)][string]$AllowRoot,
     [string]$ClaudePath
   )
-  $cmd = "cc-agent.exe -control-url `"$ControlUrl`" -agent-token <YOUR_TOKEN> -server-id `"$ServerId`" -allow-root `"$AllowRoot`""
+  $cmd = "cc-proxy.exe -control-url `"$ControlUrl`" -agent-token <YOUR_TOKEN> -server-id `"$ServerId`" -allow-root `"$AllowRoot`""
   if ($ClaudePath) {
     $cmd += " -claude-path `"$ClaudePath`""
   }
@@ -151,7 +151,7 @@ Write-Host "==> Agent Control installer"
 Write-Host "==> Platform: $platform"
 
 New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
-Install-Binary -Binary "cc-agent" -Platform $platform
+Install-Binary -Binary "cc-proxy" -Platform $platform
 Install-Binary -Binary "cc-chat-claude" -Platform $platform
 
 $controlInput = Read-NonEmptyLine -Prompt "Control URL (e.g. https://cc-remote.app)"
@@ -169,7 +169,7 @@ if ($CLAUDE_PATH) {
 $serverHost = if ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { "windows" }
 $SERVER_ID = if ($env:SERVER_ID) { $env:SERVER_ID } else { ("srv-" + ($serverHost.ToLower() -replace '[^a-z0-9]+', '-')) }
 $ALLOW_ROOT = if ($env:ALLOW_ROOT) { $env:ALLOW_ROOT } else { (Get-Location).Path }
-$agentExe = Join-Path $INSTALL_DIR "cc-agent.exe"
+$agentExe = Join-Path $INSTALL_DIR "cc-proxy.exe"
 $env:Path = "$INSTALL_DIR;$env:Path"
 
 Write-Host ""
@@ -180,7 +180,7 @@ Write-Host "Add to PATH (optional):" -ForegroundColor Yellow
 Write-Host "  [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$INSTALL_DIR', 'User')"
 Write-Host "Docs: https://github.com/$GITHUB_REPO/blob/main/docs/getting-started.md"
 Write-Host ""
-Write-Host "==> Launching cc-agent..."
+Write-Host "==> Launching cc-proxy..."
 
 $args = @(
   "-control-url", $CONTROL_URL,

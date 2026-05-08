@@ -65,9 +65,9 @@ build_one() {
 
   echo "==> building binaries for ${goos}/${ARCH}"
   CGO_ENABLED=0 GOOS="$goos" GOARCH="$ARCH" go -C "$REPO_ROOT/cc-control" build -o "$bin_dir/cc-control${suffix}" ./cmd/cc-control
-  CGO_ENABLED=0 GOOS="$goos" GOARCH="$ARCH" go -C "$REPO_ROOT/cc-agent" build -o "$bin_dir/cc-agent${suffix}" ./cmd/cc-agent
-  CGO_ENABLED=0 GOOS="$goos" GOARCH="$ARCH" go -C "$REPO_ROOT/cc-agent" build -o "$bin_dir/cc-chat-echo${suffix}" ./cmd/cc-chat-echo
-  CGO_ENABLED=0 GOOS="$goos" GOARCH="$ARCH" go -C "$REPO_ROOT/cc-agent" build -o "$bin_dir/cc-chat-claude${suffix}" ./cmd/cc-chat-claude
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$ARCH" go -C "$REPO_ROOT/cc-proxy" build -o "$bin_dir/cc-proxy${suffix}" ./cmd/cc-proxy
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$ARCH" go -C "$REPO_ROOT/cc-proxy" build -o "$bin_dir/cc-chat-echo${suffix}" ./cmd/cc-chat-echo
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$ARCH" go -C "$REPO_ROOT/cc-proxy" build -o "$bin_dir/cc-chat-claude${suffix}" ./cmd/cc-chat-claude
 
   echo "==> copying web assets"
   cp -R "$REPO_ROOT/cc-web/." "$web_dir/"

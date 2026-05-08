@@ -1,150 +1,212 @@
+// cc-agent is the standalone server-ops agent: it owns its own LLM loop,
+// tool registry, and persistence. It can run as a local REPL, a small HTTP
+// service, or (future) attach to a cc-control plane.
 package main
 
 import (
+	"bufio"
+	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"log/slog"
+	"log"
 	"os"
-	"os/exec"
 	"os/signal"
-	"path/filepath"
-	"runtime"
-	"strings"
 	"syscall"
 	"time"
 
 	"cc-agent/internal/agent"
-	"cc-agent/internal/security"
+	"cc-agent/internal/config"
+	"cc-agent/internal/llm"
+	"cc-agent/internal/memory"
+	"cc-agent/internal/skills"
+	"cc-agent/internal/tools"
+	"cc-agent/internal/transport"
+	"cc-agent/internal/transport/control"
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})))
-	hostname, _ := os.Hostname()
 	var (
-		controlURL     = flag.String("control-url", getenv("CONTROL_URL", "ws://127.0.0.1:18080/ws/agent"), "control-plane ws url")
-		serverID       = flag.String("server-id", getenv("SERVER_ID", hostname), "stable server id")
-		serverHost     = flag.String("hostname", hostname, "hostname shown in control plane")
-		tagsCSV        = flag.String("tags", getenv("TAGS", ""), "comma-separated tags")
-		allowRootsCSV  = flag.String("allow-root", getenv("ALLOW_ROOT", ""), "comma-separated allowed repo roots")
-		claudePath     = flag.String("claude-path", getenv("CLAUDE_PATH", "claude-code"), "claude-code executable path")
-		agentToken     = flag.String("agent-token", getenv("AGENT_TOKEN", "agent-dev-token"), "agent bearer token")
-		tlsSkipVerify  = flag.Bool("tls-skip-verify", getenvBool("TLS_SKIP_VERIFY", false), "skip TLS cert verification (e.g. self-signed)")
-		envAllowKeys   = flag.String("env-allow-keys", getenv("ENV_ALLOW_KEYS", ""), "comma-separated allowed env keys")
-		envAllowPrefix = flag.String("env-allow-prefix", getenv("ENV_ALLOW_PREFIX", "CC_"), "allowed env key prefix")
-		chatWorkerCmd  = flag.String("chat-worker", getenv("CHAT_WORKER_CMD", ""), "chat worker executable path")
-		chatWorkerArgs = flag.String("chat-worker-args", getenv("CHAT_WORKER_ARGS", ""), "comma-separated chat worker args")
+		cfgPath    = flag.String("config", "", "JSON config file (optional)")
+		provider   = flag.String("provider", "", "override provider (anthropic|openai|deepseek)")
+		model      = flag.String("model", "", "override model name")
+		cwd        = flag.String("cwd", "", "agent working directory (default $PWD)")
+		memoryPath = flag.String("memory", "", "SQLite path for persistent sessions; empty = in-memory")
+		httpAddr   = flag.String("http", "", "optional HTTP API listen addr (e.g. :19090)")
+		controlURL = flag.String("control-url", "", "optional cc-control WS URL")
+		agentToken = flag.String("agent-token", "", "agent token (with -control-url)")
+		serverID   = flag.String("server-id", "", "agent server id (with -control-url)")
+		sessionID  = flag.String("session", "default", "session id for the CLI REPL")
+		skillsDir  = flag.String("skills-dir", "", "directory of skill JSON files")
+		listTools  = flag.Bool("list-tools", false, "print registered tools as JSON and exit (no API key needed)")
+		showVer    = flag.Bool("version", false, "print version and exit")
+		fullPerm   = flag.Bool("full-permission", false, "skip approval prompts for destructive commands (yolo mode)")
+		denyDanger = flag.Bool("deny-destructive", false, "auto-deny destructive commands (no prompt, safe for non-interactive use)")
 	)
 	flag.Parse()
 
-	resolvedChatWorkerCmd, err := resolveExecutablePath(*chatWorkerCmd)
+	if *showVer {
+		fmt.Println("cc-agent dev")
+		return
+	}
+
+	cfg, err := config.Load(*cfgPath)
 	if err != nil {
-		slog.Error("invalid chat-worker", "path", *chatWorkerCmd, "err", err)
-		os.Exit(1)
+		log.Fatalf("config: %v", err)
+	}
+	if *provider != "" {
+		cfg.Provider = *provider
+	}
+	if *model != "" {
+		cfg.Model = *model
+	}
+	if *cwd != "" {
+		cfg.Cwd = *cwd
+	}
+	if *memoryPath != "" {
+		cfg.MemoryPath = *memoryPath
+	}
+	if *httpAddr != "" {
+		cfg.HTTPListen = *httpAddr
+	}
+	if *controlURL != "" {
+		cfg.ControlURL = *controlURL
+	}
+	if *agentToken != "" {
+		cfg.AgentToken = *agentToken
+	}
+	if *serverID != "" {
+		cfg.ServerID = *serverID
+	}
+	if *skillsDir != "" {
+		cfg.SkillsDir = *skillsDir
 	}
 
-	roots, err := security.NormalizeRoots(security.ParseCSV(*allowRootsCSV))
-	if err != nil {
-		slog.Error("invalid allow-root", "err", err)
-		os.Exit(1)
-	}
-	allowedKeys := make(map[string]struct{})
-	for _, k := range security.ParseCSV(*envAllowKeys) {
-		allowedKeys[k] = struct{}{}
+	if *listTools {
+		toolReg := tools.DefaultRegistry(cfg.Cwd, cfg.AllowedRoots)
+		printTools(toolReg)
+		return
 	}
 
-	var cwArgs []string
-	if *chatWorkerArgs != "" {
-		cwArgs = security.ParseCSV(*chatWorkerArgs)
-	}
-
-	mgr := agent.NewSessionManager(agent.Config{
-		ServerID:       *serverID,
-		Hostname:       *serverHost,
-		Tags:           security.ParseCSV(*tagsCSV),
-		AllowRoots:     roots,
-		ClaudePath:     *claudePath,
-		ChatWorkerCmd:  resolvedChatWorkerCmd,
-		ChatWorkerArgs: cwArgs,
-		EnvAllowKeys:   allowedKeys,
-		EnvAllowPrefix: *envAllowPrefix,
+	provider2, err := llm.New(llm.Config{
+		Provider: cfg.Provider,
+		APIKey:   cfg.APIKey,
+		BaseURL:  cfg.BaseURL,
+		Timeout:  cfg.TimeoutDuration(),
 	})
-
-	url, err := agent.NormalizeWSURL(*controlURL)
 	if err != nil {
-		slog.Error("bad control-url", "err", err)
-		os.Exit(1)
+		log.Fatalf("llm provider: %v", err)
 	}
 
-	client := &agent.Client{
-		URL:            url,
-		Token:          *agentToken,
-		HeartbeatEvery: 5 * time.Second,
-		Manager:        mgr,
-		TLSSkipVerify:  *tlsSkipVerify,
-	}
-
-	stop := make(chan struct{})
-	go func() {
-		if err := client.Run(stop); err != nil {
-			slog.Error("agent stopped with error", "err", err)
-		}
-	}()
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
-	close(stop)
-	time.Sleep(500 * time.Millisecond)
-}
-
-func getenv(k, fallback string) string {
-	v := os.Getenv(k)
-	if v == "" {
-		return fallback
-	}
-	return v
-}
-
-func getenvBool(k string, fallback bool) bool {
-	v := os.Getenv(k)
-	if v == "" {
-		return fallback
-	}
-	return v == "1" || strings.EqualFold(v, "true") || v == "yes"
-}
-
-func resolveExecutablePath(cmd string) (string, error) {
-	cmd = strings.TrimSpace(cmd)
-	if cmd == "" {
-		return "", nil
-	}
-
-	// Command name only: must be discoverable from PATH.
-	if !strings.Contains(cmd, "/") && !strings.Contains(cmd, `\`) {
-		resolved, err := exec.LookPath(cmd)
-		if err != nil {
-			return "", fmt.Errorf("not found in PATH")
-		}
-		return resolved, nil
-	}
-
-	resolved := cmd
-	if !filepath.IsAbs(resolved) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return "", fmt.Errorf("cannot resolve relative path: %w", err)
-		}
-		resolved = filepath.Join(cwd, resolved)
-	}
-	info, err := os.Stat(resolved)
+	mem, err := openMemory(cfg.MemoryPath)
 	if err != nil {
-		return "", fmt.Errorf("cannot access path %q: %w", resolved, err)
+		log.Fatalf("memory: %v", err)
 	}
-	if info.IsDir() {
-		return "", fmt.Errorf("path %q is a directory", resolved)
+	defer mem.Close()
+
+	skillReg := skills.NewRegistry()
+	if err := skillReg.LoadDir(cfg.SkillsDir); err != nil {
+		log.Printf("skills: %v (continuing without)", err)
 	}
-	if runtime.GOOS != "windows" && info.Mode()&0o111 == 0 {
-		return "", fmt.Errorf("path %q is not executable", resolved)
+
+	toolReg := tools.DefaultRegistry(cfg.Cwd, cfg.AllowedRoots)
+	stdinReader := bufio.NewReader(os.Stdin)
+	bashTool, _ := toolReg.Get("bash")
+	if b, ok := bashTool.(*tools.Bash); ok {
+		switch {
+		case *fullPerm:
+			b.Approver = tools.AlwaysApprove{}
+			fmt.Fprintln(os.Stderr, "\033[31m[!] full-permission mode: destructive commands run without prompt\033[0m")
+		case *denyDanger:
+			b.Approver = tools.AlwaysDeny{}
+		default:
+			b.Approver = transport.NewCLIApprover(stdinReader, os.Stderr)
+		}
 	}
-	return resolved, nil
+	ag := agent.New(provider2, toolReg, mem, agent.Options{
+		Model:         cfg.Model,
+		MaxIterations: cfg.MaxIterations,
+		MaxTokens:     cfg.MaxTokens,
+		SystemPrompt:  cfg.SystemPrompt,
+	})
+	if cfg.SkillsDir != "" {
+		ag.SetSkills(skillReg, cfg.SkillsDir, &skills.LLMReflector{Provider: provider2, Model: cfg.Model})
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() { <-sigCh; cancel() }()
+
+	if cfg.ControlURL != "" {
+		client, err := control.New(control.Options{
+			URL:          cfg.ControlURL,
+			Token:        cfg.AgentToken,
+			ServerID:     cfg.ServerID,
+			AllowedRoots: cfg.AllowedRoots,
+			Tags:         []string{"cc-agent"},
+			Agent:        ag,
+		})
+		if err != nil {
+			log.Fatalf("control: %v", err)
+		}
+		go func() {
+			if err := client.Run(ctx); err != nil {
+				log.Printf("control: %v", err)
+			}
+		}()
+		fmt.Printf("[control] registering with %s as %s\n", cfg.ControlURL, cfg.ServerID)
+	}
+	if cfg.HTTPListen != "" {
+		go func() {
+			h := transport.NewHTTPServer(cfg.HTTPListen, ag)
+			fmt.Printf("[http] listening on %s\n", cfg.HTTPListen)
+			if err := h.ListenAndServe(ctx); err != nil {
+				log.Printf("[http] %v", err)
+			}
+		}()
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	fmt.Printf("provider=%s model=%s cwd=%s tools=%d skills=%d\n",
+		cfg.Provider, cfg.Model, cfg.Cwd, len(toolReg.All()), len(skillReg.Names()))
+
+	// Skip the REPL when running as a remote bridge or daemon. The process
+	// stays up driven by the control-url / http server until ctx is canceled.
+	if cfg.ControlURL != "" || cfg.HTTPListen != "" {
+		fmt.Println("running as daemon (no REPL); send SIGINT/SIGTERM to stop.")
+		<-ctx.Done()
+		fmt.Println("shutting down.")
+		return
+	}
+
+	if err := transport.RunCLI(ctx, ag, *sessionID, stdinReader); err != nil {
+		log.Fatalf("cli: %v", err)
+	}
+	fmt.Println("bye.")
+}
+
+func openMemory(path string) (memory.Store, error) {
+	if path == "" {
+		return memory.NewInMemory(), nil
+	}
+	return memory.OpenSQLite(path)
+}
+
+func printTools(reg *tools.Registry) {
+	type toolView struct {
+		Name        string         `json:"name"`
+		Description string         `json:"description"`
+		InputSchema map[string]any `json:"input_schema"`
+	}
+	out := make([]toolView, 0)
+	for _, t := range reg.All() {
+		out = append(out, toolView{
+			Name: t.Name(), Description: t.Description(), InputSchema: t.InputSchema(),
+		})
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(out)
 }

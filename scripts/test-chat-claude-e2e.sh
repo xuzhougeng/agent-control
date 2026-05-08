@@ -20,8 +20,8 @@ fi
 
 echo "==> Building binaries..."
 (cd "$ROOT_DIR" && go build -o /tmp/cc-control ./cc-control/cmd/cc-control)
-(cd "$ROOT_DIR" && go build -o /tmp/cc-agent ./cc-agent/cmd/cc-agent)
-(cd "$ROOT_DIR" && go build -o /tmp/cc-chat-claude ./cc-agent/cmd/cc-chat-claude)
+(cd "$ROOT_DIR" && go build -o /tmp/cc-proxy ./cc-proxy/cmd/cc-proxy)
+(cd "$ROOT_DIR" && go build -o /tmp/cc-chat-claude ./cc-proxy/cmd/cc-chat-claude)
 
 AUDIT_PATH=$(mktemp /tmp/audit-XXXXXX.jsonl)
 CONTROL_PID=""
@@ -42,8 +42,8 @@ echo "==> Starting cc-control..."
 CONTROL_PID=$!
 sleep 1
 
-echo "==> Starting cc-agent with Claude chat worker..."
-/tmp/cc-agent \
+echo "==> Starting cc-proxy with Claude chat worker..."
+/tmp/cc-proxy \
   -control-url ws://127.0.0.1:18090/ws/agent \
   -server-id srv-test \
   -agent-token agent-dev-token \

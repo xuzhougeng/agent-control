@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT_PATH="$ROOT_DIR/scripts/cc-agent/test-e2e-approve-click-fix-case.sh"
+SCRIPT_PATH="$ROOT_DIR/scripts/cc-proxy/test-e2e-approve-click-fix-case.sh"
 PORT_ARG=""
 SERVER_ID_ARG=""
 UI_TOKEN_ARG=""
@@ -146,8 +146,8 @@ UI_TOKEN="${UI_TOKEN_ARG:-${UI_TOKEN_ENV_RAW:-$DISCOVERED_UI_TOKEN}}"
 AGENT_TOKEN="${AGENT_TOKEN_ARG:-${AGENT_TOKEN_ENV_RAW:-$DISCOVERED_AGENT_TOKEN}}"
 
 if [[ -z "$PORT_ARG" && -z "$PORT_ENV_RAW" && -n "$DISCOVERED_PORT" ]]; then
-  echo "[cc-agent][auto] PORT not explicitly provided; using discovered port: ${DISCOVERED_PORT}"
-  echo "[cc-agent][auto] tip: pass --port 18080 to avoid targeting the wrong control"
+  echo "[cc-proxy][auto] PORT not explicitly provided; using discovered port: ${DISCOVERED_PORT}"
+  echo "[cc-proxy][auto] tip: pass --port 18080 to avoid targeting the wrong control"
 fi
 
 if [[ -z "$UI_TOKEN" ]]; then
@@ -234,9 +234,9 @@ fi
 if [[ -n "$SELECTED_SERVER_ID" ]]; then
   if [[ -z "$ALLOW_ROOT_ENV_RAW" && -n "$SELECTED_ALLOW_ROOT" ]]; then
     ALLOW_ROOT_ENV_RAW="$SELECTED_ALLOW_ROOT"
-    echo "[cc-agent][auto] using allow_root as cwd: ${ALLOW_ROOT_ENV_RAW}"
+    echo "[cc-proxy][auto] using allow_root as cwd: ${ALLOW_ROOT_ENV_RAW}"
   fi
-  echo "[cc-agent][auto] using existing online server: ${SELECTED_SERVER_ID}"
+  echo "[cc-proxy][auto] using existing online server: ${SELECTED_SERVER_ID}"
   PORT="$PORT" UI_TOKEN="$UI_TOKEN" SERVER_ID="$SELECTED_SERVER_ID" ALLOW_ROOT="$ALLOW_ROOT_ENV_RAW" \
   USE_EXISTING_CONTROL=1 USE_EXISTING_AGENT=1 \
   bash "$SCRIPT_PATH"
@@ -250,11 +250,11 @@ fi
 
 if [[ -z "$ALLOW_ROOT_ENV_RAW" ]]; then
   ALLOW_ROOT_ENV_RAW="$ROOT_DIR"
-  echo "[cc-agent][auto] ALLOW_ROOT not set; using repo root: ${ALLOW_ROOT_ENV_RAW}"
+  echo "[cc-proxy][auto] ALLOW_ROOT not set; using repo root: ${ALLOW_ROOT_ENV_RAW}"
 fi
 
 SERVER_ID_AUTO="${SERVER_ID_INPUT:-srv-e2e-auto-$(date +%s)}"
-echo "[cc-agent][auto] no online server, starting temporary agent: ${SERVER_ID_AUTO}"
+echo "[cc-proxy][auto] no online server, starting temporary agent: ${SERVER_ID_AUTO}"
 
 PORT="$PORT" UI_TOKEN="$UI_TOKEN" AGENT_TOKEN="$AGENT_TOKEN" SERVER_ID="$SERVER_ID_AUTO" ALLOW_ROOT="$ALLOW_ROOT_ENV_RAW" \
 USE_EXISTING_CONTROL=1 USE_EXISTING_AGENT=0 \

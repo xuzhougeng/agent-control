@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"cc-agent/internal/claudecli"
+	"cc-proxy/internal/claudecli"
 )
 
 type Message struct {

@@ -8,6 +8,6 @@ if ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "[cc-agent][unit] running go test ..."
-go -C "$ROOT_DIR/cc-agent" test ./... -count=1 -v
-echo "[cc-agent][unit] PASS"
+echo "[cc-proxy][unit] running go test ..."
+go -C "$ROOT_DIR/cc-proxy" test ./... -count=1 -v
+echo "[cc-proxy][unit] PASS"

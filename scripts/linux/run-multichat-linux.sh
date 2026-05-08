@@ -25,7 +25,7 @@ RUN_DIR="$BUNDLE_ROOT/run"
 mkdir -p "$RUN_DIR"
 
 CONTROL_BIN="$BIN_DIR/cc-control"
-AGENT_BIN="$BIN_DIR/cc-agent"
+AGENT_BIN="$BIN_DIR/cc-proxy"
 CHAT_ECHO_WORKER_BIN="$BIN_DIR/cc-chat-echo"
 CHAT_CLAUDE_WORKER_BIN="$BIN_DIR/cc-chat-claude"
 
@@ -33,12 +33,12 @@ CONTROL_STDOUT="$RUN_DIR/cc-control.stdout.log"
 CONTROL_STDERR="$RUN_DIR/cc-control.stderr.log"
 RESULT_JSON="$RUN_DIR/tokens-and-process.json"
 
-PTY_AGENT_STDOUT="$RUN_DIR/cc-agent-pty.stdout.log"
-PTY_AGENT_STDERR="$RUN_DIR/cc-agent-pty.stderr.log"
-CLAUDE_AGENT_STDOUT="$RUN_DIR/cc-agent-chat-claude.stdout.log"
-CLAUDE_AGENT_STDERR="$RUN_DIR/cc-agent-chat-claude.stderr.log"
-ECHO_AGENT_STDOUT="$RUN_DIR/cc-agent-chat-echo.stdout.log"
-ECHO_AGENT_STDERR="$RUN_DIR/cc-agent-chat-echo.stderr.log"
+PTY_AGENT_STDOUT="$RUN_DIR/cc-proxy-pty.stdout.log"
+PTY_AGENT_STDERR="$RUN_DIR/cc-proxy-pty.stderr.log"
+CLAUDE_AGENT_STDOUT="$RUN_DIR/cc-proxy-chat-claude.stdout.log"
+CLAUDE_AGENT_STDERR="$RUN_DIR/cc-proxy-chat-claude.stderr.log"
+ECHO_AGENT_STDOUT="$RUN_DIR/cc-proxy-chat-echo.stdout.log"
+ECHO_AGENT_STDERR="$RUN_DIR/cc-proxy-chat-echo.stderr.log"
 
 BASE_URL="http://127.0.0.1:${CONTROL_PORT}"
 CONTROL_PID=""
@@ -182,7 +182,7 @@ if [[ "$START_AGENT" == "1" ]]; then
     echo "Chat profile file: $CHAT_PROFILE_FILE"
   fi
 
-  echo "Starting cc-agent #1 PTY (${PTY_SERVER_ID})..."
+  echo "Starting cc-proxy #1 PTY (${PTY_SERVER_ID})..."
   nohup "$AGENT_BIN" \
     -control-url "ws://127.0.0.1:${CONTROL_PORT}/ws/agent" \
     -agent-token "$AGENT_TOKEN" \
@@ -192,7 +192,7 @@ if [[ "$START_AGENT" == "1" ]]; then
     >"$PTY_AGENT_STDOUT" 2>"$PTY_AGENT_STDERR" &
   PTY_AGENT_PID=$!
 
-  echo "Starting cc-agent #2 chat-claude (${CHAT_CLAUDE_SERVER_ID})..."
+  echo "Starting cc-proxy #2 chat-claude (${CHAT_CLAUDE_SERVER_ID})..."
   env \
     CC_CLAUDE_CMD="$RESOLVED_CLAUDE_PATH" \
     CC_CLAUDE_PROFILE_FILE="$CHAT_PROFILE_FILE" \
@@ -206,7 +206,7 @@ if [[ "$START_AGENT" == "1" ]]; then
       >"$CLAUDE_AGENT_STDOUT" 2>"$CLAUDE_AGENT_STDERR" &
   CLAUDE_AGENT_PID=$!
 
-  echo "Starting cc-agent #3 chat-echo (${CHAT_ECHO_SERVER_ID})..."
+  echo "Starting cc-proxy #3 chat-echo (${CHAT_ECHO_SERVER_ID})..."
   nohup "$AGENT_BIN" \
     -control-url "ws://127.0.0.1:${CONTROL_PORT}/ws/agent" \
     -agent-token "$AGENT_TOKEN" \

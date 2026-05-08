@@ -1,8 +1,8 @@
-module cc-agent
+module cc-proxy
 
 go 1.25
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/gorilla/websocket v1.5.3
-	modernc.org/sqlite v1.29.0
 )

@@ -22,9 +22,9 @@ ALLOW_ROOT="${ALLOW_ROOT:-$ROOT_DIR}"
 CLAUDE_PATH="${CLAUDE_PATH:-/bin/sh}"
 HEARTBEAT_WAIT_SEC="${HEARTBEAT_WAIT_SEC:-45}"
 
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cc-agent-it.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cc-proxy-it.XXXXXX")"
 CONTROL_LOG="${TMP_DIR}/cc-control.log"
-AGENT_LOG="${TMP_DIR}/cc-agent.log"
+AGENT_LOG="${TMP_DIR}/cc-proxy.log"
 AUDIT_PATH="${TMP_DIR}/audit.jsonl"
 
 CONTROL_PID=""
@@ -37,7 +37,7 @@ print_logs_and_exit() {
   if [[ -f "$CONTROL_LOG" ]]; then
     tail -n 200 "$CONTROL_LOG" || true
   fi
-  echo "========== cc-agent log =========="
+  echo "========== cc-proxy log =========="
   if [[ -f "$AGENT_LOG" ]]; then
     tail -n 200 "$AGENT_LOG" || true
   fi
@@ -62,8 +62,8 @@ if command -v lsof >/dev/null 2>&1; then
   fi
 fi
 
-echo "[cc-agent][integration] logs: ${TMP_DIR}"
-echo "[cc-agent][integration] starting cc-control on :${PORT}"
+echo "[cc-proxy][integration] logs: ${TMP_DIR}"
+echo "[cc-proxy][integration] starting cc-control on :${PORT}"
 go -C "$ROOT_DIR/cc-control" run ./cmd/cc-control \
   -addr ":${PORT}" \
   -ui-dir ../cc-web \
@@ -74,12 +74,12 @@ go -C "$ROOT_DIR/cc-control" run ./cmd/cc-control \
 CONTROL_PID="$!"
 sleep 0.5
 if ! kill -0 "$CONTROL_PID" 2>/dev/null; then
-  echo "[cc-agent][integration] cc-control exited during startup"
+  echo "[cc-proxy][integration] cc-control exited during startup"
   print_logs_and_exit 1
 fi
 
-echo "[cc-agent][integration] starting cc-agent (server_id=${SERVER_ID})"
-go -C "$ROOT_DIR/cc-agent" run ./cmd/cc-agent \
+echo "[cc-proxy][integration] starting cc-proxy (server_id=${SERVER_ID})"
+go -C "$ROOT_DIR/cc-proxy" run ./cmd/cc-proxy \
   -control-url "$CONTROL_WS_URL" \
   -agent-token "$AGENT_TOKEN" \
   -server-id "$SERVER_ID" \
@@ -89,7 +89,7 @@ go -C "$ROOT_DIR/cc-agent" run ./cmd/cc-agent \
 AGENT_PID="$!"
 sleep 0.5
 if ! kill -0 "$AGENT_PID" 2>/dev/null; then
-  echo "[cc-agent][integration] cc-agent exited during startup"
+  echo "[cc-proxy][integration] cc-proxy exited during startup"
   print_logs_and_exit 1
 fi
 
@@ -196,8 +196,8 @@ if s_stopped.get("status") != "exited":
     raise RuntimeError(f"stopped session expected exited, got {s_stopped}")
 print(f"[python] stop flow ok: {sid_ok}")
 
-# Case 2: disallowed cwd should be rejected by cc-agent path policy.
-bad_cwd = tempfile.mkdtemp(prefix="cc-agent-badcwd-")
+# Case 2: disallowed cwd should be rejected by cc-proxy path policy.
+bad_cwd = tempfile.mkdtemp(prefix="cc-proxy-badcwd-")
 sid_bad = create_session(bad_cwd)
 print(f"[python] created disallowed session: {sid_bad} cwd={bad_cwd}")
 s_bad = wait_session_status(sid_bad, {"error", "running"}, 30)
@@ -217,5 +217,5 @@ if [[ $status -ne 0 ]]; then
   print_logs_and_exit "$status"
 fi
 
-echo "[cc-agent][integration] PASS"
-echo "[cc-agent][integration] logs: ${TMP_DIR}"
+echo "[cc-proxy][integration] PASS"
+echo "[cc-proxy][integration] logs: ${TMP_DIR}"

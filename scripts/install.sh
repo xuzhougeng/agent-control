@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# agent-control cc-agent installer
+# agent-control cc-proxy installer
 # Usage: curl -fsSL https://cc-remote.app/install.sh | bash
 #    or: curl -fsSL https://raw.githubusercontent.com/xuzhougeng/agent-control/main/scripts/install.sh | bash
 set -euo pipefail
@@ -274,7 +274,7 @@ prompt_agent_token() {
 
 print_run_command() {
   local cmd
-  cmd="cc-agent -control-url \"$CONTROL_URL\" -agent-token <YOUR_TOKEN> -server-id \"$SERVER_ID\" -allow-root \"$ALLOW_ROOT\""
+  cmd="cc-proxy -control-url \"$CONTROL_URL\" -agent-token <YOUR_TOKEN> -server-id \"$SERVER_ID\" -allow-root \"$ALLOW_ROOT\""
   if [[ -n "${CLAUDE_PATH:-}" ]]; then
     cmd="$cmd -claude-path \"$CLAUDE_PATH\""
   fi
@@ -293,7 +293,7 @@ main() {
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
 
-  install_binary "cc-agent" "$platform"
+  install_binary "cc-proxy" "$platform"
   install_binary "cc-chat-claude" "$platform"
 
   prompt_control_url
@@ -326,11 +326,11 @@ main() {
   echo ""
   echo "Docs: https://github.com/${GITHUB_REPO}/blob/main/docs/getting-started.md"
   echo ""
-  echo "==> Launching cc-agent..."
+  echo "==> Launching cc-proxy..."
 
   if [[ -n "$CLAUDE_PATH" ]]; then
     if [[ "${USE_TLS_SKIP_VERIFY:-0}" -eq 1 ]]; then
-      exec "${INSTALL_DIR}/cc-agent" \
+      exec "${INSTALL_DIR}/cc-proxy" \
         -control-url "$CONTROL_URL" \
         -agent-token "$AGENT_TOKEN" \
         -server-id "$SERVER_ID" \
@@ -338,7 +338,7 @@ main() {
         -claude-path "$CLAUDE_PATH" \
         -tls-skip-verify
     else
-      exec "${INSTALL_DIR}/cc-agent" \
+      exec "${INSTALL_DIR}/cc-proxy" \
         -control-url "$CONTROL_URL" \
         -agent-token "$AGENT_TOKEN" \
         -server-id "$SERVER_ID" \
@@ -347,14 +347,14 @@ main() {
     fi
   else
     if [[ "${USE_TLS_SKIP_VERIFY:-0}" -eq 1 ]]; then
-      exec "${INSTALL_DIR}/cc-agent" \
+      exec "${INSTALL_DIR}/cc-proxy" \
         -control-url "$CONTROL_URL" \
         -agent-token "$AGENT_TOKEN" \
         -server-id "$SERVER_ID" \
         -allow-root "$ALLOW_ROOT" \
         -tls-skip-verify
     else
-      exec "${INSTALL_DIR}/cc-agent" \
+      exec "${INSTALL_DIR}/cc-proxy" \
         -control-url "$CONTROL_URL" \
         -agent-token "$AGENT_TOKEN" \
         -server-id "$SERVER_ID" \

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"cc-agent/internal/claudecli"
+	"cc-proxy/internal/claudecli"
 )
 
 func TestShouldRetryWithContinueFlag_AlreadyInUse(t *testing.T) {

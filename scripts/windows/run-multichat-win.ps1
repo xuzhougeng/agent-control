@@ -33,18 +33,18 @@ $runDir = Join-Path $bundleRoot "run"
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 
 $controlExe = Join-Path $binDir "cc-control.exe"
-$agentExe = Join-Path $binDir "cc-agent.exe"
+$agentExe = Join-Path $binDir "cc-proxy.exe"
 $chatEchoWorkerExe = Join-Path $binDir "cc-chat-echo.exe"
 $chatClaudeWorkerExe = Join-Path $binDir "cc-chat-claude.exe"
 
 $controlLogOut = Join-Path $runDir "cc-control.stdout.log"
 $controlLogErr = Join-Path $runDir "cc-control.stderr.log"
-$ptyAgentLogOut = Join-Path $runDir "cc-agent-pty.stdout.log"
-$ptyAgentLogErr = Join-Path $runDir "cc-agent-pty.stderr.log"
-$chatClaudeAgentLogOut = Join-Path $runDir "cc-agent-chat-claude.stdout.log"
-$chatClaudeAgentLogErr = Join-Path $runDir "cc-agent-chat-claude.stderr.log"
-$chatEchoAgentLogOut = Join-Path $runDir "cc-agent-chat-echo.stdout.log"
-$chatEchoAgentLogErr = Join-Path $runDir "cc-agent-chat-echo.stderr.log"
+$ptyAgentLogOut = Join-Path $runDir "cc-proxy-pty.stdout.log"
+$ptyAgentLogErr = Join-Path $runDir "cc-proxy-pty.stderr.log"
+$chatClaudeAgentLogOut = Join-Path $runDir "cc-proxy-chat-claude.stdout.log"
+$chatClaudeAgentLogErr = Join-Path $runDir "cc-proxy-chat-claude.stderr.log"
+$chatEchoAgentLogOut = Join-Path $runDir "cc-proxy-chat-echo.stdout.log"
+$chatEchoAgentLogErr = Join-Path $runDir "cc-proxy-chat-echo.stderr.log"
 $resultPath = Join-Path $runDir "tokens-and-process.json"
 
 $controlProc = $null
@@ -311,11 +311,11 @@ try {
       "-claude-path", $resolvedClaudePath
     )
 
-    Write-Host "Starting cc-agent #1 PTY ($ptyServerID)..."
+    Write-Host "Starting cc-proxy #1 PTY ($ptyServerID)..."
     $ptyArgs = @($commonArgs + @("-server-id", $ptyServerID))
     $ptyAgentProc = Start-AgentProcess -StdoutPath $ptyAgentLogOut -StderrPath $ptyAgentLogErr -Args $ptyArgs
 
-    Write-Host "Starting cc-agent #2 chat-claude ($chatClaudeServerID)..."
+    Write-Host "Starting cc-proxy #2 chat-claude ($chatClaudeServerID)..."
     $chatClaudeArgs = @($commonArgs + @("-server-id", $chatClaudeServerID, "-chat-worker", $chatClaudeWorkerExe))
     $chatClaudeAgentProc = Start-AgentProcess `
       -StdoutPath $chatClaudeAgentLogOut `
@@ -326,7 +326,7 @@ try {
         "CC_CLAUDE_PROFILE_FILE" = $ChatProfileFile
       }
 
-    Write-Host "Starting cc-agent #3 chat-echo ($chatEchoServerID)..."
+    Write-Host "Starting cc-proxy #3 chat-echo ($chatEchoServerID)..."
     $chatEchoArgs = @($commonArgs + @("-server-id", $chatEchoServerID, "-chat-worker", $chatEchoWorkerExe))
     $chatEchoAgentProc = Start-AgentProcess -StdoutPath $chatEchoAgentLogOut -StderrPath $chatEchoAgentLogErr -Args $chatEchoArgs
   }

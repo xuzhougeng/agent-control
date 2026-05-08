@@ -11,10 +11,10 @@ import (
 	"strings"
 	"sync"
 
-	"cc-agent/internal/claudecli"
-	"cc-agent/internal/echocli"
-	"cc-agent/internal/pty"
-	"cc-agent/internal/security"
+	"cc-proxy/internal/claudecli"
+	"cc-proxy/internal/echocli"
+	"cc-proxy/internal/pty"
+	"cc-proxy/internal/security"
 )
 
 const ptyUnsupportedOnWindowsMessage = "PTY is not supported on Windows yet; use session_type=chat"

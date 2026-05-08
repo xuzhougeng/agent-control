@@ -34,9 +34,9 @@ ACTION_TIMEOUT_SEC="${ACTION_TIMEOUT_SEC:-45}"
 STARTUP_TIMEOUT_SEC="${STARTUP_TIMEOUT_SEC:-60}"
 ENTER_FALLBACK_SEC="${ENTER_FALLBACK_SEC:-3}"
 
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cc-agent-e2e-approve.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cc-proxy-e2e-approve.XXXXXX")"
 CONTROL_LOG="${TMP_DIR}/cc-control.log"
-AGENT_LOG="${TMP_DIR}/cc-agent.log"
+AGENT_LOG="${TMP_DIR}/cc-proxy.log"
 AUDIT_PATH="${TMP_DIR}/audit.jsonl"
 
 CONTROL_PID=""
@@ -49,7 +49,7 @@ print_logs_and_exit() {
   if [[ -f "$CONTROL_LOG" ]]; then
     tail -n 200 "$CONTROL_LOG" || true
   fi
-  echo "========== cc-agent log =========="
+  echo "========== cc-proxy log =========="
   if [[ -f "$AGENT_LOG" ]]; then
     tail -n 200 "$AGENT_LOG" || true
   fi
@@ -67,15 +67,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "[cc-agent][e2e] logs: ${TMP_DIR}"
+echo "[cc-proxy][e2e] logs: ${TMP_DIR}"
 if [[ "$USE_EXISTING_CONTROL" == "1" ]]; then
-  echo "[cc-agent][e2e] using existing cc-control on :${PORT}"
+  echo "[cc-proxy][e2e] using existing cc-control on :${PORT}"
 else
   if lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
     echo "port ${PORT} already in use; set PORT to another value or USE_EXISTING_CONTROL=1" >&2
     exit 1
   fi
-  echo "[cc-agent][e2e] starting cc-control on :${PORT}"
+  echo "[cc-proxy][e2e] starting cc-control on :${PORT}"
   go -C "$ROOT_DIR/cc-control" run ./cmd/cc-control \
     -addr ":${PORT}" \
     -ui-dir ../cc-web \
@@ -87,24 +87,24 @@ else
   CONTROL_PID="$!"
   sleep 0.5
   if ! kill -0 "$CONTROL_PID" 2>/dev/null; then
-    echo "[cc-agent][e2e] cc-control exited during startup"
+    echo "[cc-proxy][e2e] cc-control exited during startup"
     print_logs_and_exit 1
   fi
 fi
 
 if [[ "$USE_EXISTING_AGENT" == "1" ]]; then
   if [[ -n "$SERVER_ID" ]]; then
-    echo "[cc-agent][e2e] using existing online agent (server_id=${SERVER_ID})"
+    echo "[cc-proxy][e2e] using existing online agent (server_id=${SERVER_ID})"
   else
-    echo "[cc-agent][e2e] using existing online agent (server_id=auto)"
+    echo "[cc-proxy][e2e] using existing online agent (server_id=auto)"
   fi
 else
   if [[ -z "$SERVER_ID" ]]; then
     echo "SERVER_ID is required when USE_EXISTING_AGENT=0" >&2
     exit 1
   fi
-  echo "[cc-agent][e2e] starting cc-agent (server_id=${SERVER_ID})"
-  go -C "$ROOT_DIR/cc-agent" run ./cmd/cc-agent \
+  echo "[cc-proxy][e2e] starting cc-proxy (server_id=${SERVER_ID})"
+  go -C "$ROOT_DIR/cc-proxy" run ./cmd/cc-proxy \
     -control-url "$CONTROL_WS_AGENT_URL" \
     -agent-token "$AGENT_TOKEN" \
     -server-id "$SERVER_ID" \
@@ -114,7 +114,7 @@ else
   AGENT_PID="$!"
   sleep 0.5
   if ! kill -0 "$AGENT_PID" 2>/dev/null; then
-    echo "[cc-agent][e2e] cc-agent exited during startup"
+    echo "[cc-proxy][e2e] cc-proxy exited during startup"
     print_logs_and_exit 1
   fi
 fi
@@ -384,5 +384,5 @@ if [[ $status -ne 0 ]]; then
   print_logs_and_exit "$status"
 fi
 
-echo "[cc-agent][e2e] PASS"
-echo "[cc-agent][e2e] logs: ${TMP_DIR}"
+echo "[cc-proxy][e2e] PASS"
+echo "[cc-proxy][e2e] logs: ${TMP_DIR}"

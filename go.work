@@ -3,4 +3,5 @@ go 1.25
 use (
 	./cc-agent
 	./cc-control
+	./cc-proxy
 )

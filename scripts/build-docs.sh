@@ -142,6 +142,6 @@ echo
 echo "Deploy to Cloudflare Pages:"
 echo "  npx wrangler pages deploy docs/_site --project-name=agent-control"
 echo ""
-echo "After deploy, install cc-agent one-liners:"
+echo "After deploy, install cc-proxy one-liners:"
 echo "  Linux/macOS: curl -fsSL https://cc-remote.app/install.sh | bash"
 echo "  Windows:    irm https://cc-remote.app/install.ps1 | iex"

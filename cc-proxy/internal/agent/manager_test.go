@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"cc-agent/internal/security"
+	"cc-proxy/internal/security"
 )
 
 func TestRegisterPayloadReturnsDefensiveCopies(t *testing.T) {
