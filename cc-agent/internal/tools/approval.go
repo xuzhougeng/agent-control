@@ -38,6 +38,11 @@ var dangerousMatchers = []struct {
 	{regexp.MustCompile(`(?i)\brm\s+(-[rRfFiv]*[rR][rRfFiv]*|--recursive)`), "recursive rm"},
 	{regexp.MustCompile(`(?i)\brm\s+(-[rRfFiv]*[fF][rRfFiv]*|--force)\s+/`), "rm -f /"},
 	{regexp.MustCompile(`(?i)\brm\s+/[^/\s]`), "rm of an absolute path"},
+	// Plain `rm <something>`: matches the bare delete form (no -i / -I) which
+	// silently removes files. Approval is requested even for a single file —
+	// the operator can still approve in the UI; this just ensures the agent
+	// can't delete files behind the operator's back.
+	{regexp.MustCompile(`(?i)\brm\s+(?:-[fFiv]+\s+)?[^\s\-]`), "rm (file deletion)"},
 	{regexp.MustCompile(`(?i)\bmkfs\b`), "mkfs (filesystem create)"},
 	{regexp.MustCompile(`(?i)\bdd\s+.*of=/dev/(sd|nvme|hd|vd|mmcblk)`), "dd to a block device"},
 	{regexp.MustCompile(`(?i)>\s*/dev/(sd|nvme|hd|vd|mmcblk)`), "redirect to a block device"},

@@ -203,6 +203,17 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.CP.HandleChatOut(reg.ServerID, msg.SessionID, msg.InstanceID, msg.Data)
 		case "chat_exit":
 			h.CP.HandleChatExit(reg.ServerID, msg.SessionID, msg.InstanceID, msg.Data)
+		case "approval_request":
+			var req struct {
+				RequestID string `json:"request_id"`
+				Command   string `json:"command"`
+				Reason    string `json:"reason"`
+			}
+			if err := json.Unmarshal(msg.Data, &req); err != nil {
+				slog.Warn("approval_request decode", "err", err, "server_id", reg.ServerID)
+				continue
+			}
+			h.CP.HandleAgentApprovalRequest(reg.ServerID, msg.SessionID, msg.InstanceID, req.RequestID, req.Command, req.Reason)
 		case "error":
 			var payload struct {
 				Message string `json:"message"`

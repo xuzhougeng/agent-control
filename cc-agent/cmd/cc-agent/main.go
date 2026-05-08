@@ -151,6 +151,19 @@ func main() {
 		if err != nil {
 			log.Fatalf("control: %v", err)
 		}
+		// In control-bridge mode, replace the bash tool's approver with one
+		// that routes through cc-control to the operator's UI. The CLI / deny
+		// approvers chosen earlier by -full-permission / -deny-destructive
+		// remain the *fallback* default; -full-permission still wins because
+		// remote approval is unnecessary when the operator has opted into
+		// yolo mode.
+		if !*fullPerm && !*denyDanger {
+			if b, ok := bashTool.(*tools.Bash); ok {
+				approver := control.NewRemoteApprover(client)
+				client.SetApprover(approver)
+				b.Approver = approver
+			}
+		}
 		go func() {
 			if err := client.Run(ctx); err != nil {
 				log.Printf("control: %v", err)

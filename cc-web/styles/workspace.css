@@ -334,6 +334,50 @@
   font-size: 11px;
 }
 
+.approval-item-prompt {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text);
+}
+.approval-item-prompt code {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--border-light);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.approval-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.approval-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: filter 0.1s;
+}
+.approval-btn:hover { filter: brightness(0.95); }
+.approval-btn-approve {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: var(--success);
+}
+.approval-btn-reject {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 .notice-item {
   cursor: default;
   margin-bottom: 5px;

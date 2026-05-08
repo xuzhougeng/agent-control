@@ -38,12 +38,25 @@ type Options struct {
 
 // Client owns the WS connection to cc-control and dispatches inbound chat
 // envelopes to the local agent. One Client per cc-agent process.
+//
+// When an Approver is attached the client also routes inbound
+// approval_decision envelopes back to the awaiting tool call.
 type Client struct {
 	opts Options
 
 	mu        sync.Mutex
 	instances map[string]*chatInstance
 	send      chan Envelope
+	approver  *RemoteApprover
+}
+
+// SetApprover attaches a RemoteApprover so this client can route
+// approval_decision envelopes back into pending bash approvals. Call before
+// Run.
+func (c *Client) SetApprover(a *RemoteApprover) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.approver = a
 }
 
 // chatInstance tracks one logical chat session lifetime. session_id and
@@ -244,6 +257,26 @@ func (c *Client) handle(ctx context.Context, msg Envelope) error {
 		return c.chatIn(msg.SessionID, msg.InstanceID, p)
 	case "stop_session":
 		return c.stopChat(msg.SessionID, msg.InstanceID, "operator stopped")
+	case "approval_decision":
+		var p ApprovalDecisionPayload
+		if err := json.Unmarshal(msg.Data, &p); err != nil {
+			return fmt.Errorf("approval_decision decode: %w", err)
+		}
+		c.mu.Lock()
+		approver := c.approver
+		c.mu.Unlock()
+		hasApprover := approver != nil
+		var pendingFound bool
+		if approver != nil {
+			approver.mu.Lock()
+			_, pendingFound = approver.pending[p.RequestID]
+			approver.mu.Unlock()
+			approver.dispatch(p)
+		}
+		slog.Info("approval_decision received",
+			"request_id", p.RequestID, "approved", p.Approved, "actor", p.Actor,
+			"approver_attached", hasApprover, "pending_found", pendingFound)
+		return nil
 	case "start_session":
 		// Terminal sessions are cc-proxy's job; explicitly reject so the
 		// operator gets a clear message instead of a silent drop.
@@ -308,6 +341,10 @@ func (c *Client) chatIn(sessionID, instanceID string, p ChatInPayload) error {
 func (c *Client) runAgentTurn(inst *chatInstance, p ChatInPayload) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// Stamp the session+instance into the ctx so RemoteApprover (called by
+	// the bash tool deep inside the agent loop) can address its
+	// approval_request to the right session in cc-control.
+	ctx = WithSession(ctx, inst.sessionID, inst.instanceID)
 
 	// Each tool_use / tool_result emits a progress chat_out so the UI shows a
 	// transient bubble immediately instead of waiting 30s-2min for the final

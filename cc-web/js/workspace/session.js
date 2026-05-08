@@ -181,18 +181,51 @@ export function createSessionController(ctx) {
       li.setAttribute("role", "button");
       li.setAttribute("aria-label", `Open approval for session ${ev.session_id.slice(0, 8)} on ${ev.server_id}`);
       const instanceText = ev.instance_id ? `instance ${escapeHtml(ev.instance_id.slice(0, 8))}` : "instance -";
+      // cc-agent (chat-mode) approvals carry an agent_request_id and a
+      // pre-formatted prompt_excerpt like "[recursive rm] rm -rf /tmp/x".
+      // For these we surface inline Approve/Reject buttons so the operator
+      // can decide without having to type into a terminal.
+      const isAgentApproval = !!ev.agent_request_id;
+      const promptText = ev.prompt_excerpt ? escapeHtml(ev.prompt_excerpt) : "";
+      const promptHtml = promptText ? `<div class="approval-item-prompt"><code>${promptText}</code></div>` : "";
+      const buttonsHtml = isAgentApproval
+        ? `<div class="approval-item-actions">
+             <button type="button" data-action="approve" class="approval-btn approval-btn-approve">Approve</button>
+             <button type="button" data-action="reject" class="approval-btn approval-btn-reject">Reject</button>
+           </div>`
+        : "";
       li.innerHTML = `
         <div><strong>${escapeHtml(ev.session_id.slice(0, 8))}</strong> @ ${escapeHtml(ev.server_id)}</div>
         <div class="approval-item-subtle">${instanceText}</div>
+        ${promptHtml}
+        ${buttonsHtml}
       `;
       const open = () => attachSession(ev.session_id);
-      li.addEventListener("click", open);
+      li.addEventListener("click", (e) => {
+        if (e.target.closest("button")) return;
+        open();
+      });
       li.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           open();
         }
       });
+      const approveBtn = li.querySelector('[data-action="approve"]');
+      const rejectBtn = li.querySelector('[data-action="reject"]');
+      const decide = (kind) => {
+        // Make sure the UI is attached to this session so server-side
+        // sub.AttachedSession is populated; cc-control falls back to it
+        // for actions that omit session_id.
+        attachSession(ev.session_id);
+        ctx.wsClient.send({
+          type: "action",
+          session_id: ev.session_id,
+          data: { kind, event_id: ev.event_id },
+        });
+      };
+      if (approveBtn) approveBtn.addEventListener("click", () => decide("approve"));
+      if (rejectBtn) rejectBtn.addEventListener("click", () => decide("reject"));
       ctx.approvalList.appendChild(li);
     }
     ctx.approvalCount.textContent = String(pendingCount);

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -989,10 +990,55 @@ func (cp *ControlPlane) HandlePTYOut(serverID, sessionID, instanceID string, seq
 }
 
 func (cp *ControlPlane) createApprovalEvent(sessionID, instanceID, serverID, excerpt string) {
+	cp.createApprovalEventInner(sessionID, instanceID, serverID, excerpt, "")
+}
+
+// HandleAgentApprovalRequest is the entry point for cc-agent's RemoteApprover.
+// It records the agent request id alongside a normal approval_needed
+// SessionEvent so the existing UI Pending Approval card surfaces it. The
+// user's approve/reject is routed back to the agent via SendApprovalDecision
+// instead of `y\n` / `n\n` term_in.
+func (cp *ControlPlane) HandleAgentApprovalRequest(serverID, sessionID, instanceID, requestID, command, reason string) {
+	if requestID == "" {
+		slog.Warn("agent approval request ignored: empty request_id", "server_id", serverID, "session_id", sessionID)
+		return
+	}
+	cp.mu.Lock()
+	sess, sessOK := cp.sessions[sessionID]
+	var awaiting bool
+	var activeIID string
+	if sessOK {
+		awaiting = sess.AwaitingApproval
+		activeIID = sess.ActiveInstanceID
+	}
+	cp.mu.Unlock()
+	slog.Info("agent approval request received",
+		"server_id", serverID, "session_id", sessionID, "instance_id", instanceID,
+		"request_id", requestID, "session_known", sessOK,
+		"awaiting", awaiting, "active_instance_id", activeIID,
+		"reason", reason)
+	excerpt := command
+	if reason != "" {
+		excerpt = "[" + reason + "] " + command
+	}
+	cp.createApprovalEventInner(sessionID, instanceID, serverID, excerpt, requestID)
+}
+
+func (cp *ControlPlane) createApprovalEventInner(sessionID, instanceID, serverID, excerpt, agentRequestID string) {
 	cp.mu.Lock()
 	sess, ok := cp.sessions[sessionID]
 	if !ok || sess.AwaitingApproval || sess.ActiveInstanceID != instanceID {
+		var awaiting bool
+		var activeIID string
+		if sess != nil {
+			awaiting = sess.AwaitingApproval
+			activeIID = sess.ActiveInstanceID
+		}
 		cp.mu.Unlock()
+		slog.Warn("approval event suppressed",
+			"session_id", sessionID, "session_found", ok,
+			"awaiting", awaiting, "active_instance", activeIID, "got_instance", instanceID,
+			"agent_request_id", agentRequestID)
 		return
 	}
 	inst := cp.instances[instanceID]
@@ -1006,14 +1052,15 @@ func (cp *ControlPlane) createApprovalEvent(sessionID, instanceID, serverID, exc
 	inst.AwaitingApproval = true
 	inst.PendingEventID = eventID
 	ev := SessionEvent{
-		EventID:    eventID,
-		SessionID:  sessionID,
-		InstanceID: instanceID,
-		ServerID:   serverID,
-		TenantID:   sess.TenantID,
-		Kind:       "approval_needed",
-		PromptText: excerpt,
-		TsMS:       time.Now().UnixMilli(),
+		EventID:        eventID,
+		SessionID:      sessionID,
+		InstanceID:     instanceID,
+		ServerID:       serverID,
+		TenantID:       sess.TenantID,
+		Kind:           "approval_needed",
+		PromptText:     excerpt,
+		TsMS:           time.Now().UnixMilli(),
+		AgentRequestID: agentRequestID,
 	}
 	cp.sessionEvents[sessionID] = append(cp.sessionEvents[sessionID], ev)
 	cp.mu.Unlock()
@@ -1092,6 +1139,30 @@ func (cp *ControlPlane) HandlePTYExit(serverID, sessionID, instanceID string, ex
 			"exit_code":   exit.ExitCode,
 		},
 	})
+}
+
+// SendApprovalDecision relays the operator's approve/reject choice back to a
+// cc-agent that opened a destructive-command approval. Routed by request_id;
+// the agent's RemoteApprover unblocks the matching tool call.
+func (cp *ControlPlane) SendApprovalDecision(serverID, sessionID, instanceID, requestID string, approved bool, actor string) error {
+	if requestID == "" {
+		return errors.New("send approval decision: empty request id")
+	}
+	cp.mu.Lock()
+	conn := cp.agentConns[serverID]
+	cp.mu.Unlock()
+	if conn == nil {
+		return errors.New("agent offline")
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"request_id": requestID,
+		"approved":   approved,
+		"actor":      actor,
+	})
+	env := NewEnvelope("approval_decision", serverID, sessionID)
+	env.InstanceID = instanceID
+	env.Data = payload
+	return conn.Send(env)
 }
 
 func (cp *ControlPlane) HandleAgentError(serverID, sessionID, instanceID, message string) {
@@ -1263,6 +1334,7 @@ func (cp *ControlPlane) HandleClientAction(actor, tenantID, sessionID string, re
 		requestedEventID := req.EventID
 		eventID := sess.PendingEventID
 		var promptExcerpt string
+		var agentRequestID string
 		sess.AwaitingApproval = false
 		sess.PendingEventID = ""
 		if inst := cp.activeInstanceBySessionLocked(sessionID); inst != nil {
@@ -1272,12 +1344,35 @@ func (cp *ControlPlane) HandleClientAction(actor, tenantID, sessionID string, re
 		for i := len(cp.sessionEvents[sessionID]) - 1; i >= 0; i-- {
 			if cp.sessionEvents[sessionID][i].EventID == eventID {
 				promptExcerpt = cp.sessionEvents[sessionID][i].PromptText
+				agentRequestID = cp.sessionEvents[sessionID][i].AgentRequestID
 				cp.sessionEvents[sessionID][i].Resolved = true
 				cp.sessionEvents[sessionID][i].Actor = actor
 				break
 			}
 		}
+		serverIDForAction := sess.ServerID
+		instanceForAction := sess.ActiveInstanceID
 		cp.mu.Unlock()
+
+		// cc-agent flow: send a structured decision back to the agent.
+		if agentRequestID != "" {
+			if err := cp.SendApprovalDecision(serverIDForAction, sessionID, instanceForAction, agentRequestID, req.Kind == "approve", actor); err != nil {
+				return err
+			}
+			cp.broadcastSessionUpdate(sessionID)
+			cp.audit.Log(AuditEvent{
+				Actor:     actor,
+				ServerID:  serverIDForAction,
+				SessionID: sessionID,
+				Kind:      "action_" + req.Kind,
+				Meta: map[string]any{
+					"event_id":           eventID,
+					"requested_event_id": requestedEventID,
+					"agent_request_id":   agentRequestID,
+				},
+			})
+			return nil
+		}
 
 		input := "y\n"
 		if req.Kind == "reject" {

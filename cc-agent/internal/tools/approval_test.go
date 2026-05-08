@@ -18,6 +18,8 @@ func TestDangerousReason(t *testing.T) {
 		{"rm -rf /tmp/foo", "recursive"},
 		{"rm -rf /", "recursive"},
 		{"rm /etc/passwd", "absolute path"},
+		{"rm a.tmp b.tmp c.tmp", "rm (file deletion)"},
+		{"rm somefile", "rm (file deletion)"},
 		{"sudo rm -fr /var", "recursive"},
 		{"mkfs.ext4 /dev/sdb1", "mkfs"},
 		{"dd if=/dev/zero of=/dev/sda bs=1M", "dd to a block device"},

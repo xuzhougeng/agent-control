@@ -85,6 +85,12 @@ type SessionEvent struct {
 	Actor      string `json:"actor,omitempty"`
 	TsMS       int64  `json:"ts_ms"`
 	Resolved   bool   `json:"resolved"`
+	// AgentRequestID, when non-empty, indicates this approval came from a
+	// cc-agent's RemoteApprover (a destructive shell command awaiting
+	// human approval) instead of the legacy PTY prompt detector. The user's
+	// approve/reject decision is routed back as an approval_decision
+	// envelope keyed by this id rather than as `y\n` / `n\n` term_in.
+	AgentRequestID string `json:"agent_request_id,omitempty"`
 }
 
 type NotificationLevel string

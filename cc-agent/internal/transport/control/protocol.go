@@ -107,3 +107,23 @@ type StopSessionPayload struct {
 	KillAfterMS int    `json:"kill_after_ms"`
 	Signal      string `json:"signal"`
 }
+
+// ApprovalRequestPayload is sent agent → control when a destructive shell
+// command is awaiting human approval. The control plane creates a normal
+// approval_needed SessionEvent (so existing UI Pending Approval cards work)
+// and remembers the request_id so the user's approve/reject decision can be
+// routed back via ApprovalDecisionPayload.
+type ApprovalRequestPayload struct {
+	RequestID string `json:"request_id"`
+	Command   string `json:"command"`
+	Reason    string `json:"reason"`
+	TtlMS     int64  `json:"ttl_ms,omitempty"`
+}
+
+// ApprovalDecisionPayload travels control → agent in response to a user
+// clicking Approve/Reject in the UI. Approved=false also covers timeouts.
+type ApprovalDecisionPayload struct {
+	RequestID string `json:"request_id"`
+	Approved  bool   `json:"approved"`
+	Actor     string `json:"actor,omitempty"`
+}
