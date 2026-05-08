@@ -22,6 +22,14 @@ struct Server: Codable, Identifiable {
     var id: String { serverID }
     var isOnline: Bool { status == "online" }
 
+    /// True when the server is running the new in-process cc-agent runtime
+    /// (vs the legacy cc-proxy PTY wrapper). Detected via the registered
+    /// "cc-agent" tag or the synthetic claude_path="cc-agent-builtin".
+    var isCCAgent: Bool {
+        if let tags = tags, tags.contains("cc-agent") { return true }
+        return claudePath == "cc-agent-builtin"
+    }
+
     enum CodingKeys: String, CodingKey {
         case serverID = "server_id"
         case hostname, tags, os, arch

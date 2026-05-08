@@ -35,6 +35,14 @@ public class Server
     [JsonPropertyName("claude_path")] public string? ClaudePath { get; set; }
 
     public bool IsOnline => Status == "online";
+
+    /// <summary>
+    /// True when the server is running the new in-process cc-agent runtime
+    /// (vs the legacy cc-proxy PTY wrapper). Detected via the registered
+    /// "cc-agent" tag or the synthetic claude_path="cc-agent-builtin".
+    /// </summary>
+    public bool IsCCAgent =>
+        (Tags?.Contains("cc-agent") ?? false) || ClaudePath == "cc-agent-builtin";
 }
 
 public class Session

@@ -39,3 +39,12 @@
   border-color: var(--border-light);
   background: var(--bg-hover);
 }
+
+/* Runtime tag: distinguishes which agent runtime a server is running.
+   Used for cc-agent (purple) vs legacy cc-proxy (no badge) on the server card. */
+.badge-runtime-agent {
+  color: #6c4ab6;
+  border-color: rgba(108, 74, 182, 0.55);
+  background: rgba(108, 74, 182, 0.10);
+  letter-spacing: 0.02em;
+}

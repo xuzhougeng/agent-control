@@ -62,11 +62,22 @@
                                                  Fill="{x:Bind IsOnline, Converter={StaticResource OnlineToBrush}}"
                                                  VerticalAlignment="Center"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{x:Bind ServerId}"
-                                                       FontFamily="Cascadia Code, Consolas, Courier New"
-                                                       FontSize="11" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource TextBrush}"
-                                                       TextTrimming="CharacterEllipsis"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="{x:Bind ServerId}"
+                                                           FontFamily="Cascadia Code, Consolas, Courier New"
+                                                           FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextBrush}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <Border CornerRadius="6" Padding="4,1"
+                                                        BorderThickness="1"
+                                                        BorderBrush="#806C4AB6"
+                                                        Background="#1A6C4AB6"
+                                                        ToolTipService.ToolTip="cc-agent runtime (native Go agent, not cc-proxy PTY wrapper)"
+                                                        Visibility="{x:Bind IsCCAgent, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="cc-agent" FontSize="9" FontWeight="SemiBold"
+                                                               Foreground="#6C4AB6"/>
+                                                </Border>
+                                            </StackPanel>
                                             <TextBlock Text="{x:Bind Hostname}"
                                                        FontSize="10"
                                                        Foreground="{StaticResource TextMutedBrush}"

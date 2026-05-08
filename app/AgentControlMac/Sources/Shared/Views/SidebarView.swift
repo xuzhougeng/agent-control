@@ -451,22 +451,31 @@ struct ServerRow: View {
     let server: Server
     let isSelected: Bool
 
+    private var visibleTags: [String] {
+        (server.tags ?? []).filter { $0 != "cc-agent" }
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Circle()
                 .fill(server.isOnline ? WorkspaceTheme.success : WorkspaceTheme.textSoft.opacity(0.65))
                 .frame(width: 7, height: 7)
             VStack(alignment: .leading, spacing: 3) {
-                Text(server.serverID)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(WorkspaceTheme.text)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(server.serverID)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(WorkspaceTheme.text)
+                        .lineLimit(1)
+                    if server.isCCAgent {
+                        SessionTag(text: "cc-agent", tint: WorkspaceTheme.accent)
+                    }
+                }
                 HStack(spacing: 6) {
                     if !server.hostname.isEmpty {
                         Text(server.hostname)
                     }
-                    if let tags = server.tags, !tags.isEmpty {
-                        Text(tags.joined(separator: ", "))
+                    if !visibleTags.isEmpty {
+                        Text(visibleTags.joined(separator: ", "))
                     }
                 }
                 .font(.system(size: 11))

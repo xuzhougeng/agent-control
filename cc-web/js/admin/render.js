@@ -181,9 +181,15 @@ export function renderAdminServers(list, rows, query) {
     li.className = "server-item";
     const statusClass = s.status === "online" ? "badge-online" : "badge-offline";
     const lastSeen = s.last_seen_ms ? formatTime(s.last_seen_ms) : "-";
+    const tags = Array.isArray(s.tags) ? s.tags : [];
+    const isAgent = tags.includes("cc-agent") || s.claude_path === "cc-agent-builtin";
+    const runtimeBadge = isAgent
+      ? `<span class="badge badge-runtime-agent" title="cc-agent runtime">cc-agent</span>`
+      : "";
     li.innerHTML = `
       <div class="server-main">
         <strong class="server-id">${escapeHtml(s.server_id)}</strong>
+        ${runtimeBadge}
         <span class="badge ${statusClass}">${escapeHtml(s.status)}</span>
       </div>
       <div class="server-sub">
