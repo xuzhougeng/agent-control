@@ -2,6 +2,10 @@
 
 本目录为 Agent Control 项目文档中心。按用途分类如下。写作约定见 [文档写作规范](doc-style-guide.md)。
 
+## 版本说明
+
+- [v0.7.0：自研 cc-agent 上线](v0.7.0-release-notes.md) — 新模块、cc-agent 与 cc-proxy 区分、升级指南
+
 ## 入门
 
 - [快速上手](getting-started.md) — 基于现有系统的接入测试（非本地部署）
