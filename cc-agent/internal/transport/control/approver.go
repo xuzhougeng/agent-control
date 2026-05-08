@@ -24,13 +24,22 @@ type RemoteApprover struct {
 	pending  map[string]chan ApprovalDecisionPayload
 }
 
-// NewRemoteApprover constructs an approver. Default timeout 5 minutes (lights
-// up the UI long enough for a human to react; kills the request when the
-// operator is asleep).
+// NewRemoteApprover constructs an approver with the default 5 minute
+// timeout. Use NewRemoteApproverWithTimeout to pick a different deadline
+// (e.g. 30s for real-time ops, 30min for overnight runs).
 func NewRemoteApprover(c *Client) *RemoteApprover {
+	return NewRemoteApproverWithTimeout(c, 5*time.Minute)
+}
+
+// NewRemoteApproverWithTimeout constructs an approver with a caller-chosen
+// per-request deadline. Values <= 0 fall back to 5 minutes.
+func NewRemoteApproverWithTimeout(c *Client, timeout time.Duration) *RemoteApprover {
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
 	return &RemoteApprover{
 		client:  c,
-		timeout: 5 * time.Minute,
+		timeout: timeout,
 		pending: map[string]chan ApprovalDecisionPayload{},
 	}
 }

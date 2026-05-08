@@ -50,6 +50,11 @@ type Config struct {
 	AgentToken  string `json:"agent_token"`
 	ServerID    string `json:"server_id"`
 	HTTPListen  string `json:"http_listen"` // e.g. ":19090"
+
+	// ApprovalTimeout is how long RemoteApprover (cc-control bridge mode) waits
+	// for a human to click Approve/Reject before auto-denying. Empty/invalid
+	// → 5 minutes. Format is a Go duration string ("30s", "10m", "1h").
+	ApprovalTimeout string `json:"approval_timeout"`
 }
 
 // Load reads cfg from path (may be empty), applies env overrides, then sets
@@ -89,6 +94,23 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("CC_AGENT_SKILLS_DIR"); v != "" {
 		c.SkillsDir = v
 	}
+	if v := os.Getenv("CC_AGENT_APPROVAL_TIMEOUT"); v != "" {
+		c.ApprovalTimeout = v
+	}
+}
+
+// ApprovalTimeoutDuration parses ApprovalTimeout into a time.Duration; falls
+// back to 5 minutes when empty or malformed. Negative or zero durations are
+// treated as the default.
+func (c *Config) ApprovalTimeoutDuration() time.Duration {
+	if c.ApprovalTimeout == "" {
+		return 5 * time.Minute
+	}
+	d, err := time.ParseDuration(c.ApprovalTimeout)
+	if err != nil || d <= 0 {
+		return 5 * time.Minute
+	}
+	return d
 }
 
 func (c *Config) applyDefaults() {

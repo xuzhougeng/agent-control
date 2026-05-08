@@ -40,8 +40,9 @@ func main() {
 		skillsDir  = flag.String("skills-dir", "", "directory of skill JSON files")
 		listTools  = flag.Bool("list-tools", false, "print registered tools as JSON and exit (no API key needed)")
 		showVer    = flag.Bool("version", false, "print version and exit")
-		fullPerm   = flag.Bool("full-permission", false, "skip approval prompts for destructive commands (yolo mode)")
-		denyDanger = flag.Bool("deny-destructive", false, "auto-deny destructive commands (no prompt, safe for non-interactive use)")
+		fullPerm    = flag.Bool("full-permission", false, "skip approval prompts for destructive commands (yolo mode)")
+		denyDanger  = flag.Bool("deny-destructive", false, "auto-deny destructive commands (no prompt, safe for non-interactive use)")
+		approvalTO  = flag.String("approval-timeout", "", "how long to wait for an operator approval in -control-url mode (e.g. 30s, 5m, 1h). Default 5m.")
 	)
 	flag.Parse()
 
@@ -80,6 +81,9 @@ func main() {
 	}
 	if *skillsDir != "" {
 		cfg.SkillsDir = *skillsDir
+	}
+	if *approvalTO != "" {
+		cfg.ApprovalTimeout = *approvalTO
 	}
 
 	if *listTools {
@@ -159,9 +163,10 @@ func main() {
 		// yolo mode.
 		if !*fullPerm && !*denyDanger {
 			if b, ok := bashTool.(*tools.Bash); ok {
-				approver := control.NewRemoteApprover(client)
+				approver := control.NewRemoteApproverWithTimeout(client, cfg.ApprovalTimeoutDuration())
 				client.SetApprover(approver)
 				b.Approver = approver
+				fmt.Fprintf(os.Stderr, "[approval] UI-routed approver: timeout=%s\n", cfg.ApprovalTimeoutDuration())
 			}
 		}
 		go func() {

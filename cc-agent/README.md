@@ -49,6 +49,7 @@ Env vars (highest precedence):
 | `CC_AGENT_BASE_URL`     | OpenAI-compat base URL                         |
 | `CC_AGENT_MEMORY_PATH`  | SQLite session DB path                         |
 | `CC_AGENT_SKILLS_DIR`   | directory of skill JSON files                  |
+| `CC_AGENT_APPROVAL_TIMEOUT` | how long the cc-control-routed approver waits before auto-deny (e.g. `30s`, `5m`, `1h`; default `5m`) |
 
 ## Permission modes
 
@@ -69,6 +70,12 @@ both are set.
 When denied (timeout, operator rejected, or `-deny-destructive`), the model
 sees a `DENIED by operator (reason: …)` string as the tool result and is
 free to retry with a safer alternative.
+
+The cc-control-routed timeout defaults to **5 minutes**. Override per
+deployment via `-approval-timeout` flag, `CC_AGENT_APPROVAL_TIMEOUT` env,
+or `approval_timeout` config field. Use `30s` for tight ops loops where a
+human is actively watching the chat; use `30m` or `1h` for overnight runs
+where the operator may need time to context-switch.
 
 The destructive-command list is in `internal/tools/approval.go`; extend it
 by appending to `dangerousMatchers` with a regex + reason.
@@ -220,6 +227,8 @@ without any frontend change.
 - [ ] **Approval webhook (Slack / email)**: extend the existing UI-routed
   approval to also notify operators via webhook when they're not in the UI.
   The protocol is in place; just need an outgoing pusher.
+- [x] ~~Configurable approval timeout~~ — `-approval-timeout` /
+  `CC_AGENT_APPROVAL_TIMEOUT` (v0.7.3+).
 - [ ] **Multi-agent coordination**: a coordinator agent decomposes a
   request, dispatches subtasks to specialist sub-agents (each scoped to a
   skill), then merges their results — EvoMaster-style.
