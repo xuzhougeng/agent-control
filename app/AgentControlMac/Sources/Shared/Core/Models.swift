@@ -134,8 +134,14 @@ struct SessionEvent: Identifiable {
     let actor: String?
     let tsMS: Int64
     var resolved: Bool
+    /// Non-empty when the approval came from a cc-agent's RemoteApprover
+    /// (a destructive shell command). Empty for legacy cc-proxy PTY prompts.
+    /// Useful for distinguishing the source visually; both flows use the
+    /// same approve/reject action API.
+    let agentRequestID: String?
 
     var id: String { eventID }
+    var isFromCCAgent: Bool { (agentRequestID ?? "").isEmpty == false }
 }
 
 enum NotificationLevel: String, Codable {
@@ -362,7 +368,8 @@ enum WSMessageParser {
             eventID: eventID, sessionID: sessionID, serverID: serverID,
             kind: kind, promptExcerpt: d["prompt_excerpt"] as? String,
             actor: d["actor"] as? String, tsMS: tsMS,
-            resolved: d["resolved"] as? Bool ?? false
+            resolved: d["resolved"] as? Bool ?? false,
+            agentRequestID: d["agent_request_id"] as? String
         )
     }
 

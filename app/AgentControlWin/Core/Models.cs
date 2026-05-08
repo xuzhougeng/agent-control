@@ -70,14 +70,20 @@ public class Session
 
 public class SessionEvent
 {
-    public string EventId { get; set; } = "";
-    public string SessionId { get; set; } = "";
-    public string ServerId { get; set; } = "";
-    public string Kind { get; set; } = "";
-    public string? PromptExcerpt { get; set; }
-    public string? Actor { get; set; }
-    public long TsMs { get; set; }
-    public bool Resolved { get; set; }
+    [JsonPropertyName("event_id")] public string EventId { get; set; } = "";
+    [JsonPropertyName("session_id")] public string SessionId { get; set; } = "";
+    [JsonPropertyName("server_id")] public string ServerId { get; set; } = "";
+    [JsonPropertyName("kind")] public string Kind { get; set; } = "";
+    [JsonPropertyName("prompt_excerpt")] public string? PromptExcerpt { get; set; }
+    [JsonPropertyName("actor")] public string? Actor { get; set; }
+    [JsonPropertyName("ts_ms")] public long TsMs { get; set; }
+    [JsonPropertyName("resolved")] public bool Resolved { get; set; }
+    /// <summary>
+    /// Non-empty when the approval came from a cc-agent's RemoteApprover (a
+    /// destructive shell command). Empty for legacy cc-proxy PTY prompts.
+    /// </summary>
+    [JsonPropertyName("agent_request_id")] public string? AgentRequestId { get; set; }
+    public bool IsFromCCAgent => !string.IsNullOrEmpty(AgentRequestId);
 }
 
 // MARK: - REST Response Wrappers
@@ -244,6 +250,7 @@ public static class WsMessageParser
             Actor = d.TryGetProperty("actor", out var ac) ? ac.GetString() : null,
             TsMs = tsMs.GetInt64(),
             Resolved = d.TryGetProperty("resolved", out var res) && res.GetBoolean(),
+            AgentRequestId = d.TryGetProperty("agent_request_id", out var ari) ? ari.GetString() : null,
         };
     }
 

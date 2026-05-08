@@ -55,6 +55,9 @@ struct ApprovalRow: View {
                     .font(.system(size: 11))
                     .foregroundColor(WorkspaceTheme.textMuted)
                 Spacer()
+                if event.isFromCCAgent {
+                    SessionTag(text: "cc-agent", tint: WorkspaceTheme.accent)
+                }
                 SessionTag(text: "pending", tint: WorkspaceTheme.warning)
             }
 

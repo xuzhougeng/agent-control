@@ -218,11 +218,22 @@
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{x:Bind SessionId}"
-                                                       FontFamily="Cascadia Code, Consolas"
-                                                       FontSize="10" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource TextBrush}"
-                                                       TextTrimming="CharacterEllipsis"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Text="{x:Bind SessionId}"
+                                                           FontFamily="Cascadia Code, Consolas"
+                                                           FontSize="10" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextBrush}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <Border CornerRadius="6" Padding="4,1"
+                                                        BorderThickness="1"
+                                                        BorderBrush="#806C4AB6"
+                                                        Background="#1A6C4AB6"
+                                                        ToolTipService.ToolTip="cc-agent destructive command awaiting approval"
+                                                        Visibility="{x:Bind IsFromCCAgent, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="cc-agent" FontSize="9" FontWeight="SemiBold"
+                                                               Foreground="#6C4AB6"/>
+                                                </Border>
+                                            </StackPanel>
                                             <Button Grid.Column="1" Tag="{x:Bind EventId}"
                                                     Click="ApproveButton_Click"
                                                     Background="{StaticResource SuccessBrush}"
