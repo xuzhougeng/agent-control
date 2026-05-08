@@ -4,6 +4,7 @@
 
 ## 版本说明
 
+- [v0.7.1：UI 路由审批闸](v0.7.1-release-notes.md) — destructive 命令在 Web/iOS UI 上等待审批
 - [v0.7.0：自研 cc-agent 上线](v0.7.0-release-notes.md) — 新模块、cc-agent 与 cc-proxy 区分、升级指南
 
 ## 入门

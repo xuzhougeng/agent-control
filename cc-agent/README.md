@@ -52,18 +52,23 @@ Env vars (highest precedence):
 
 ## Permission modes
 
-For destructive shell commands (`rm -rf`, `mkfs`, `dd of=/dev/sd*`, `shutdown`,
-`systemctl stop|disable|mask`, fork bombs, …) the bash tool consults an
-`Approver` before exec.
+For destructive shell commands (`rm -rf`, `rm <files>`, `mkfs`, `dd of=/dev/sd*`,
+`shutdown`, `systemctl stop|disable|mask`, fork bombs, `git push --force`, …)
+the bash tool consults an `Approver` before exec.
 
-| Flag                  | Behavior                                                              |
-|-----------------------|-----------------------------------------------------------------------|
-| (default in CLI mode) | Interactive: print command + reason on stderr, prompt `[y/N]`         |
-| `-full-permission`    | Skip all prompts (yolo mode for trusted scripted runs)                |
-| `-deny-destructive`   | Auto-deny without prompt (safe default for non-interactive HTTP/cron) |
+| Mode                          | Approver                          | Behavior                                                              |
+|-------------------------------|-----------------------------------|-----------------------------------------------------------------------|
+| CLI REPL (default)            | `transport.CLIApprover`           | Print command + reason on stderr, prompt `[y/N]`                      |
+| `-control-url` (default)      | `transport/control.RemoteApprover`| Send `approval_request` to cc-control → operator clicks Approve/Reject in UI Pending Approval card |
+| `-full-permission`            | `tools.AlwaysApprove`             | Skip all prompts (yolo mode for trusted scripted runs)                |
+| `-deny-destructive`           | `tools.AlwaysDeny`                | Auto-deny without prompt (safe for non-interactive HTTP/cron)         |
 
-When denied, the model sees a `DENIED by operator` string as the tool result
-and is free to retry with a safer alternative.
+`-full-permission` and `-deny-destructive` win over the cc-control bridge if
+both are set.
+
+When denied (timeout, operator rejected, or `-deny-destructive`), the model
+sees a `DENIED by operator (reason: …)` string as the tool result and is
+free to retry with a safer alternative.
 
 The destructive-command list is in `internal/tools/approval.go`; extend it
 by appending to `dangerousMatchers` with a regex + reason.
@@ -202,7 +207,7 @@ without any frontend change.
 - [x] Session persistence (in-memory + SQLite)
 - [x] Skills loader + self-evolution (`:reflect`)
 - [x] CLI REPL + HTTP API
-- [x] Approval gate for destructive bash commands (`-full-permission` / `-deny-destructive`)
+- [x] Approval gate for destructive bash commands — CLI prompt, UI-routed via cc-control, or `-full-permission` / `-deny-destructive`
 - [x] `reasoning_content` round-trip for thinking-mode providers
 - [x] cc-control WS chat bridge (chat-mode only)
 - [x] Step-level streaming to UI (one progress bubble per tool step)
@@ -212,9 +217,9 @@ without any frontend change.
 - [ ] **True token streaming (SSE)**: provider-side `stream:true` with
   delta accumulation. Requires UI dedup by `message_id` so partial deltas
   update one bubble in place instead of appending new ones.
-- [ ] **Approval webhook**: in non-interactive HTTP / cc-control mode, push
-  destructive-command requests to Slack/email and wait for human approval
-  instead of auto-deny.
+- [ ] **Approval webhook (Slack / email)**: extend the existing UI-routed
+  approval to also notify operators via webhook when they're not in the UI.
+  The protocol is in place; just need an outgoing pusher.
 - [ ] **Multi-agent coordination**: a coordinator agent decomposes a
   request, dispatches subtasks to specialist sub-agents (each scoped to a
   skill), then merges their results — EvoMaster-style.
