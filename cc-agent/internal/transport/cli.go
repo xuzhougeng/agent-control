@@ -98,6 +98,7 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
   :skills                          list loaded skills
   :reflect <name> [description]    distill current session into a skill
   :registry [search]               list team skills
+  :publish <name>                  push a local skill to the team registry
   exit | quit                      leave`)
 		return nil
 	case ":skills":
@@ -160,6 +161,36 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
 		for _, s := range rows {
 			fmt.Printf("  %-30s v%-3d %-12s %s\n", s.Name, s.Version, s.AuthorServerID, s.Description)
 		}
+		return nil
+	case ":publish":
+		if rc == nil {
+			fmt.Println("(registry not configured)")
+			return nil
+		}
+		if len(parts) < 2 {
+			return fmt.Errorf("usage: :publish <name>")
+		}
+		name := parts[1]
+		reg := ag.Skills()
+		if reg == nil {
+			return fmt.Errorf("no local skills registry")
+		}
+		sk, ok := reg.Get(name)
+		if !ok {
+			return fmt.Errorf("no local skill %q (try :skills to list)", name)
+		}
+		wire := &skills.Skill{
+			Name:        sk.Name,
+			Description: sk.Description,
+			Prompt:      sk.Prompt,
+			Tools:       sk.Tools,
+			Examples:    sk.Examples,
+		}
+		v, err := rc.Publish(wire)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("\033[32m✓ published\033[0m %s@%d\n", name, v)
 		return nil
 	default:
 		return fmt.Errorf("unknown command %q (try :help)", cmd)
