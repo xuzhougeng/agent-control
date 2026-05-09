@@ -78,6 +78,7 @@ func (s *Server) Router() http.Handler {
 	adminPath := filepath.Join(filepath.Clean(uiDir), "admin.html")
 	tenantPath := filepath.Join(filepath.Clean(uiDir), "tenant.html")
 	chatPath := filepath.Join(filepath.Clean(uiDir), "chat.html")
+	skillsPath := filepath.Join(filepath.Clean(uiDir), "skills.html")
 	fileServer := http.FileServer(http.Dir(filepath.Clean(uiDir)))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
@@ -93,6 +94,9 @@ func (s *Server) Router() http.Handler {
 				return
 			case "/chat", "/chat/":
 				http.ServeFile(w, r, chatPath)
+				return
+			case "/skills", "/skills/":
+				http.ServeFile(w, r, skillsPath)
 				return
 			}
 		}
