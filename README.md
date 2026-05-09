@@ -1,6 +1,8 @@
 # Agent Control (AI Agent Control Plane MVP)
 
-Multi-server control plane for AI coding runtimes (Claude Code, Codex, Gemini CLI, OpenCode).
+A control plane for your **Coding Crew** — orchestrate Claude Code, Codex, Gemini CLI, OpenCode, and the agents you build yourself, all under one helm.
+
+> **CC** = **Coding Crew.** The `cc-` prefix throughout this repo (`cc-control`, `cc-agent`, `cc-web`, `cc-proxy`, `cc-console`) reflects this: a fleet of coding agents you command, rather than any single vendor's CLI. See [`docs/coding-crew.md`](docs/coding-crew.md) for the naming rationale and shared vocabulary.
 
 ## Layout
 
