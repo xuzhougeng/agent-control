@@ -2,6 +2,8 @@
 
 本目录为 Agent Control 项目文档中心。按用途分类如下。写作约定见 [文档写作规范](doc-style-guide.md)。
 
+> 关于仓库里 `cc-*` 前缀的含义（**CC = Coding Crew**）以及统一的命名词表，见 [CC = Coding Crew](coding-crew.md)。
+
 ## 版本说明
 
 - [v0.7.3：审批超时可配置](v0.7.3-release-notes.md) — `-approval-timeout` flag / `CC_AGENT_APPROVAL_TIMEOUT` env，原 5min 写死取消

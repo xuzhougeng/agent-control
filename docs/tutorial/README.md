@@ -16,6 +16,8 @@
 
 ## 项目术语
 
+> **`cc-*` 前缀来自 "Coding Crew"** —— 这是这个项目对一组协同工作的编码 agent（Claude Code、Codex、Gemini CLI、OpenCode，以及你自己写的 agent）的统称。详细解释见 [CC = Coding Crew](../coding-crew.md)。
+
 - **cc-control** — 控制平面，HTTP + WebSocket 服务，统一管 token / session / 审计。**只跑一份，所有 server 共享。**
 - **cc-agent** — *自研* server-ops agent。自己跑 LLM 主循环 + 调工具（bash/read/grep/sysinfo/...）。每台服务器跑一个。**v0.7.0 起的新模块。**
 - **cc-proxy** — *旧* PTY 代理。包外部 Claude Code / Codex / Gemini CLI。**v0.7.0 之前叫 cc-agent，改名了。**
