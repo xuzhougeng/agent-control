@@ -55,7 +55,10 @@ func TestPublishHandler_Success(t *testing.T) {
 func TestPublishHandler_ValidationError(t *testing.T) {
 	srv, _ := newTestServer(t, Actor{Kind: "agent", ID: "ops-01"})
 	body, _ := json.Marshal(Skill{Name: "BAD UPPER", Prompt: "p"})
-	resp, _ := http.Post(srv.URL+"/api/registry/skills", "application/json", bytes.NewReader(body))
+	resp, err := http.Post(srv.URL+"/api/registry/skills", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 400 {
 		t.Fatalf("status=%d, want 400", resp.StatusCode)
@@ -80,7 +83,10 @@ func TestPublishHandler_RequiresAuth(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	body := strings.NewReader(`{"name":"x","prompt":"p"}`)
-	resp, _ := http.Post(srv.URL+"/api/registry/skills", "application/json", body)
+	resp, err := http.Post(srv.URL+"/api/registry/skills", "application/json", body)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 401 {
 		t.Fatalf("status=%d, want 401", resp.StatusCode)
