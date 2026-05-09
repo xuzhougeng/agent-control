@@ -127,15 +127,19 @@ func main() {
 		}
 	}
 
+	// teamDir is the on-disk location for team-scope (registry-delivered)
+	// skills. Shared by the registry HTTP client (CLI-driven installs) and
+	// the WS install_skill_request handler (UI-driven installs).
+	teamDir := ""
+	if cfg.SkillsDir != "" {
+		teamDir = filepath.Join(cfg.SkillsDir, "team")
+	}
+
 	// RegistryClient talks to cc-control's /api/registry/* endpoints for
 	// publish/install/list/history. Built only when both ControlHTTPURL and
 	// AgentToken are set.
 	var registryClient *skills.RegistryClient
 	if cfg.ControlHTTPURL != "" && cfg.AgentToken != "" {
-		teamDir := ""
-		if cfg.SkillsDir != "" {
-			teamDir = filepath.Join(cfg.SkillsDir, "team")
-		}
 		registryClient = &skills.RegistryClient{
 			BaseURL:    cfg.ControlHTTPURL,
 			AgentToken: cfg.AgentToken,
@@ -181,6 +185,7 @@ func main() {
 			ServerID:     cfg.ServerID,
 			AllowedRoots: cfg.AllowedRoots,
 			Tags:         []string{"cc-agent"},
+			TeamDir:      teamDir,
 			Agent:        ag,
 		})
 		if err != nil {
