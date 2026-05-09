@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"cc-agent/internal/agent"
+	"cc-agent/internal/skills"
 )
 
 // CLIApprover prompts the operator on stderr/stdin for destructive commands.
@@ -37,7 +38,7 @@ func (a *CLIApprover) Approve(_ context.Context, cmd, reason string) (bool, erro
 // RunCLI runs a simple stdin REPL. Each line of input is one user turn; agent
 // events stream to stdout while the model thinks. The shared bufio.Reader is
 // reused by CLIApprover so destructive-command prompts don't fight stdin.
-func RunCLI(ctx context.Context, ag *agent.Agent, sessionID string, r *bufio.Reader) error {
+func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID string, r *bufio.Reader) error {
 	ag.SetListener(func(e agent.Event) {
 		switch e.Kind {
 		case agent.EventAssistant:
@@ -72,7 +73,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, sessionID string, r *bufio.Rea
 			return nil
 		}
 		if strings.HasPrefix(line, ":") {
-			if err := handleSlashCommand(ctx, ag, sessionID, line); err != nil {
+			if err := handleSlashCommand(ctx, ag, rc, sessionID, line); err != nil {
 				fmt.Fprintf(os.Stderr, "command error: %v\n", err)
 			}
 			continue
@@ -87,7 +88,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, sessionID string, r *bufio.Rea
 //   :help                         show commands
 //   :skills                       list loaded skills
 //   :reflect <name> [description] distill the current session into a skill
-func handleSlashCommand(ctx context.Context, ag *agent.Agent, sessionID, line string) error {
+func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID, line string) error {
 	parts := strings.Fields(line)
 	cmd := parts[0]
 	switch cmd {
@@ -96,6 +97,7 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, sessionID, line st
   :help                            show this help
   :skills                          list loaded skills
   :reflect <name> [description]    distill current session into a skill
+  :registry [search]               list team skills
   exit | quit                      leave`)
 		return nil
 	case ":skills":
@@ -136,6 +138,27 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, sessionID, line st
 			for _, e := range skill.Examples {
 				fmt.Printf("    - %s\n", e)
 			}
+		}
+		return nil
+	case ":registry":
+		if rc == nil {
+			fmt.Println("(registry not configured: set control_http_url + agent_token)")
+			return nil
+		}
+		q := ""
+		if len(parts) > 1 {
+			q = strings.Join(parts[1:], " ")
+		}
+		rows, err := rc.List(q)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			fmt.Println("(no skills in registry)")
+			return nil
+		}
+		for _, s := range rows {
+			fmt.Printf("  %-30s v%-3d %-12s %s\n", s.Name, s.Version, s.AuthorServerID, s.Description)
 		}
 		return nil
 	default:

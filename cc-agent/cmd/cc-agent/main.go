@@ -130,9 +130,6 @@ func main() {
 	// RegistryClient talks to cc-control's /api/registry/* endpoints for
 	// publish/install/list/history. Built only when both ControlHTTPURL and
 	// AgentToken are set.
-	// TODO(T16): replace `_ = registryClient` below — wire this into
-	// transport.RunCLI so the REPL slash-dispatch (/skill publish, /skill
-	// install, etc.) can reach the registry.
 	var registryClient *skills.RegistryClient
 	if cfg.ControlHTTPURL != "" && cfg.AgentToken != "" {
 		teamDir := ""
@@ -146,7 +143,6 @@ func main() {
 			TeamDir:    teamDir,
 		}
 	}
-	_ = registryClient // will be wired into REPL slash dispatch in T16-T19
 
 	toolReg := tools.DefaultRegistry(cfg.Cwd, cfg.AllowedRoots)
 	stdinReader := bufio.NewReader(os.Stdin)
@@ -234,7 +230,7 @@ func main() {
 		return
 	}
 
-	if err := transport.RunCLI(ctx, ag, *sessionID, stdinReader); err != nil {
+	if err := transport.RunCLI(ctx, ag, registryClient, *sessionID, stdinReader); err != nil {
 		log.Fatalf("cli: %v", err)
 	}
 	fmt.Println("bye.")
