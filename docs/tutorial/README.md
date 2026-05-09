@@ -2,15 +2,14 @@
 
 > 适用版本：v0.7.3+
 
-本目录是按场景写的上手教程。如果你是第一次接触本项目，按顺序读完
-[01-quickstart](01-quickstart.md) 就能跑起来。
+本目录按场景写。第一次接触本项目，先读 [01-quickstart](01-quickstart.md)（单机 cc-agent + DeepSeek，5 分钟跑通），再按需深入。
 
 ## 我应该读哪一篇？
 
 | 你的目标 | 看这里 |
 |---|---|
-| 本地 5 分钟搭一套体验一下 | [01-快速开始](01-quickstart.md) |
-| 把 cc-agent 部署到一台 Linux 服务器做运维 | [02-生产部署](02-deploy.md) |
+| 本机跑起 cc-agent 单机版，用 DeepSeek 体验一下 | [01-快速开始](01-quickstart.md) |
+| 加上 cc-control + 浏览器 UI，把 agent 部署到服务器供团队使用 | [02-生产部署](02-deploy.md) |
 | 学会浏览器 / iOS / Windows UI 怎么用 | [03-使用指南](03-using-ui.md) |
 | 切换或配置 LLM provider（DeepSeek / Anthropic / Ollama / Qwen） | [04-Provider 配置](04-providers.md) |
 | 报错了，排查 | [troubleshooting](troubleshooting.md) |

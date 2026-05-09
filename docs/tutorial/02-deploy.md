@@ -11,7 +11,7 @@
 
 ### 1. 在 cc-control 签一个 agent token
 
-跟 quickstart 一样的流程，但用**生产 cc-control 的 admin token**：
+使用**生产 cc-control 的 admin token** 走两步签发（先 tenant，再 agent/UI）：
 
 ```bash
 TENANT=$(curl -s -X POST https://your-control.example.com/admin/tokens \

@@ -14,7 +14,7 @@ SITE_DIR="${DOCS_DIR}/_site"
 
 # --- Clean & create output dirs -------------------------------------------
 rm -rf "${SITE_DIR}"
-mkdir -p "${SITE_DIR}/deploy-public-server" "${SITE_DIR}/assets/css" "${SITE_DIR}/assets/images"
+mkdir -p "${SITE_DIR}/deploy-public-server" "${SITE_DIR}/tutorial" "${SITE_DIR}/assets/css" "${SITE_DIR}/assets/images"
 
 # ---------------------------------------------------------------------------
 # Build
@@ -49,13 +49,15 @@ generate_doc_page() {
     local back_text="$6"
 
     # Read markdown and convert cross-references:
-    #   `02-tls.md`  →  [02-tls.md](02-tls.html)   (backtick refs → links)
-    #   (file.md)    →  (file.html)                  (existing link targets)
+    #   `02-tls.md`               →  [02-tls.md](02-tls.html)   (backtick refs → links)
+    #   (file.md) / (file.md#a)   →  (file.html) / (file.html#a)
+    #   (../../cc-agent/README.md…) → GitHub blob URL (file lives outside the site)
     local md_content
     md_content=$(sed \
         -e 's|`\(deploy-public-server/[0-9a-z-]*\.md\)`|[\1](\1)|g' \
         -e 's|`\([0-9][0-9a-z]*-[a-z_-]*\.md\)`|[\1](\1)|g' \
-        -e 's|\.md)|.html)|g' \
+        -e 's|\.md\([)#]\)|.html\1|g' \
+        -e 's|\.\./\.\./cc-agent/README\.html|https://github.com/xuzhougeng/agent-control/blob/main/cc-agent/README.md|g' \
         "$md_file")
 
     # Read template and inject variables + markdown content
@@ -110,6 +112,12 @@ generate_doc_page \
     "${SITE_DIR}/privacy-policy.html" \
     "Privacy Policy" "" "index.html" "Back to Home"
 
+# Docs index (docs/README.md) — supports `../README.html#xxx` deep-links from sub-pages
+generate_doc_page \
+    "${DOCS_DIR}/README.md" \
+    "${SITE_DIR}/README.html" \
+    "文档索引 · Agent Control" "" "index.html" "返回首页"
+
 # Sub-directory docs (deploy-public-server/)
 generate_doc_page \
     "${DOCS_DIR}/deploy-public-server/01-direct-http.md" \
@@ -130,6 +138,37 @@ generate_doc_page \
     "${DOCS_DIR}/deploy-public-server/03-operations.md" \
     "${SITE_DIR}/deploy-public-server/03-operations.html" \
     "Part 3: Operations" "../" "../deploy-public-server.html" "Back to Deployment Guide"
+
+# Tutorial (Chinese onboarding) — README.md 渲染为 tutorial/index.html
+generate_doc_page \
+    "${DOCS_DIR}/tutorial/README.md" \
+    "${SITE_DIR}/tutorial/index.html" \
+    "教程 · Agent Control" "../" "../index.html" "返回首页"
+
+generate_doc_page \
+    "${DOCS_DIR}/tutorial/01-quickstart.md" \
+    "${SITE_DIR}/tutorial/01-quickstart.html" \
+    "01 · 快速开始" "../" "index.html" "返回教程首页"
+
+generate_doc_page \
+    "${DOCS_DIR}/tutorial/02-deploy.md" \
+    "${SITE_DIR}/tutorial/02-deploy.html" \
+    "02 · 生产部署" "../" "index.html" "返回教程首页"
+
+generate_doc_page \
+    "${DOCS_DIR}/tutorial/03-using-ui.md" \
+    "${SITE_DIR}/tutorial/03-using-ui.html" \
+    "03 · UI 使用指南" "../" "index.html" "返回教程首页"
+
+generate_doc_page \
+    "${DOCS_DIR}/tutorial/04-providers.md" \
+    "${SITE_DIR}/tutorial/04-providers.html" \
+    "04 · Provider 配置" "../" "index.html" "返回教程首页"
+
+generate_doc_page \
+    "${DOCS_DIR}/tutorial/troubleshooting.md" \
+    "${SITE_DIR}/tutorial/troubleshooting.html" \
+    "Troubleshooting" "../" "index.html" "返回教程首页"
 
 # ---------------------------------------------------------------------------
 # Summary

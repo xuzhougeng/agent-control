@@ -1,149 +1,143 @@
-# 01 · 快速开始（本地 5 分钟）
+# 01 · 快速开始（单机 cc-agent，5 分钟）
 
-目标：在自己电脑上跑起 cc-control + cc-agent + 浏览器 UI，用 DeepSeek 完成一次"用 bash 看内核版本"的对话。
+目标：在本机跑起 **cc-agent 单机版**，用 **DeepSeek API** 在终端里完成一次"用 bash 看内核版本"的对话。
 
-> Linux / macOS 一致。Windows 自己装请看 [02-生产部署](02-deploy.md) 里的 Windows 段落。
+> 本篇只用 cc-agent 单个二进制，不涉及 cc-control / 浏览器 UI / 远程功能。
+> 想加 UI、把 agent 部署到服务器、多人共享，请看 [02-生产部署](02-deploy.md)。
+
+> Linux / macOS / Windows 都一样。下文以 Linux/amd64 为例。
 
 ## 准备
 
-- Go ≥ 1.25 或 直接下载 [v0.7.3 二进制](https://github.com/xuzhougeng/agent-control/releases/tag/v0.7.3)
-- 一份 LLM API key（推荐 DeepSeek，便宜稳定）
+- 一份 **DeepSeek API key**（推荐入门，便宜稳定，国内可用）
   - 申请：<https://platform.deepseek.com/api_keys>
+- 想用别家（Anthropic / Qwen / Ollama / OpenAI）：见 [04-Provider 配置](04-providers.md)，步骤一致，只换两个环境变量。
 
-## 第 1 步：下载二进制
+## 第 1 步：下载 cc-agent 单机版
+
+打开 [Releases 页面](https://github.com/xuzhougeng/agent-control/releases) 选最新版本（v0.7.3+），按平台下载：
+
+| 平台 | 文件名 |
+|---|---|
+| Linux / amd64 | `cc-agent-linux-amd64` |
+| Linux / arm64 | `cc-agent-linux-arm64` |
+| macOS / Apple Silicon | `cc-agent-darwin-arm64` |
+| macOS / Intel | `cc-agent-darwin-amd64` |
+| Windows / amd64 | `cc-agent-windows-amd64.exe` |
+
+Linux/macOS 一键下载（按需替换版本号和平台后缀）：
 
 ```bash
-mkdir -p ~/cc-stack && cd ~/cc-stack
-curl -L -o cc-control https://github.com/xuzhougeng/agent-control/releases/download/v0.7.3/cc-control-linux-amd64
-curl -L -o cc-agent https://github.com/xuzhougeng/agent-control/releases/download/v0.7.3/cc-agent-linux-amd64
-chmod +x cc-control cc-agent
+mkdir -p ~/cc-agent && cd ~/cc-agent
+curl -LO https://github.com/xuzhougeng/agent-control/releases/download/v0.7.3/cc-agent-linux-amd64
+mv cc-agent-linux-amd64 cc-agent
+chmod +x cc-agent
+
+./cc-agent -version   # 应输出 cc-agent v0.7.3 ...
 ```
 
-> **macOS**：把 `linux-amd64` 换成 `darwin-arm64`（M 系列）或 `darwin-amd64`（Intel）。
-> **Windows**：换成 `windows-amd64.exe`。
+> 没装 `curl`？直接浏览器打开 Releases 页面手动下载也一样。
 
-## 第 2 步：保存 LLM key
+## 第 2 步：保存 DeepSeek API key
 
 ```bash
 echo 'sk-xxxxxxxxxxxxxxxx' > ~/.cc-agent-key
 chmod 600 ~/.cc-agent-key
 ```
 
-## 第 3 步：起 cc-control
+把 `sk-xxxxx` 换成你在 DeepSeek 控制台拿到的 key。
+
+## 第 3 步：启动 cc-agent REPL
 
 ```bash
-mkdir -p ~/cc-stack/web
-cd ~/cc-stack
-# 把 cc-web 静态资源克隆下来（约 200 KB）
-curl -sL https://github.com/xuzhougeng/agent-control/archive/v0.7.3.tar.gz \
-  | tar xz -C web --strip-components=1 agent-control-v0.7.3/cc-web
+mkdir -p ~/cc-agent/yard
 
-./cc-control \
-  -addr :18180 \
-  -ui-dir web/cc-web \
-  -admin-token admin-dev-token \
-  -ui-token "" \
-  -agent-token "" \
-  -audit-path audit.jsonl \
-  -offline-after-sec 30 &
-```
-
-## 第 4 步：签 token
-
-```bash
-# tenant token
-TENANT=$(curl -s -X POST http://127.0.0.1:18180/admin/tokens \
-  -H "Authorization: Bearer admin-dev-token" \
-  -H "Content-Type: application/json" -d '{"type":"tenant"}' \
-  | python3 -c "import json,sys;print(json.load(sys.stdin)['token'])")
-
-# UI + agent token
-RESP=$(curl -s -X POST http://127.0.0.1:18180/tenant/tokens \
-  -H "Authorization: Bearer $TENANT" \
-  -H "Content-Type: application/json" -d '{"role":"owner"}')
-
-UI_TOKEN=$(echo "$RESP" | python3 -c "import json,sys;print(json.load(sys.stdin)['ui']['token'])")
-AGENT_TOKEN=$(echo "$RESP" | python3 -c "import json,sys;print(json.load(sys.stdin)['agent']['token'])")
-echo "UI_TOKEN=$UI_TOKEN"
-echo "AGENT_TOKEN=$AGENT_TOKEN"
-```
-
-记一下 `UI_TOKEN`（一会儿浏览器登录用）和 `AGENT_TOKEN`（cc-agent 启动用）。
-
-## 第 5 步：起 cc-agent
-
-```bash
-mkdir -p ~/cc-stack/yard
 CC_AGENT_API_KEY="$(cat ~/.cc-agent-key)" \
 CC_AGENT_BASE_URL="https://api.deepseek.com" \
 ./cc-agent \
-  -provider deepseek -model deepseek-chat \
-  -cwd ~/cc-stack/yard \
-  -control-url ws://127.0.0.1:18180/ws/agent \
-  -agent-token "$AGENT_TOKEN" \
-  -server-id ops-local \
-  -approval-timeout 30s \
-  -memory ~/cc-stack/sessions.db &
+  -provider deepseek \
+  -model deepseek-chat \
+  -cwd ~/cc-agent/yard \
+  -memory ~/cc-agent/sessions.db
 ```
 
-参数解释：
+启动后看到 REPL 提示符 `you> ` 就成功了。参数解释：
 
-- `-cwd` ：bash 工具的工作目录
-- `-control-url` ：注册到 cc-control 的 WS 地址
-- `-server-id` ：在 cc-control 上的标识（多 server 用唯一名）
-- `-approval-timeout 30s` ：destructive 命令超过 30 秒没人审批就拒绝（v0.7.3+）
-- `-memory` ：SQLite session 历史，重启可续
+- `CC_AGENT_API_KEY` ：DeepSeek API key
+- `CC_AGENT_BASE_URL` ：DeepSeek 的 OpenAI 兼容入口
+- `-provider deepseek -model deepseek-chat` ：用 DeepSeek 的 V3 chat 模型
+- `-cwd` ：bash 工具的工作目录（agent 只能在这里跑命令）
+- `-memory` ：SQLite session 历史，重启可续；不写就只在内存里
 
-## 第 6 步：打开浏览器
+> **不带 `-control-url` 和 `-http`** 就是单机 REPL 模式，不会去连任何远端。
 
-访问 <http://127.0.0.1:18180/?view=chat>。
+## 第 4 步：试一下
 
-1. 右上角 `UI Token` 输入框贴入 `$UI_TOKEN`，点 `Save`
-2. 状态变 `WS: connected` ✓
-3. 左侧 `Workspace Tools` 展开，点 `Servers` 列表里的 `ops-local`（应该带紫色 `cc-agent` 徽章 ✓）
-4. `Create Session` 表单填 `cwd` = `~/cc-stack/yard`，点 `Create`
-5. 顶部进入 chat 视图（`Chat · xxxxxxxx`）
-6. 在底下 `Type a message…` 输：
+在 `you>` 后面输：
 
-   > 用 bash 跑 uname -r，告诉我内核版本
+```
+用 bash 跑 uname -r，告诉我内核版本
+```
 
-7. 点 `Send`
-
-模型会决定调用 `bash` 工具，跑 `uname -r`，然后把版本告诉你。整个过程 UI 上能看到：
+回车。终端会逐步打出：
 
 ```
 ▶ bash {command=uname -r}
-✓ exit_code: 0  ---  6.6.87.2-microsoft-standard-WSL2
+✓ exit_code=0  6.6.87.2-microsoft-standard-WSL2
 
 Kernel version: 6.6.87.2-microsoft-standard-WSL2
 ```
 
-每个步骤一个独立气泡（步级流式），最后一段是模型的回答。
+模型自动决定调用 `bash` 工具 → 跑 `uname -r` → 把结果总结回来。
 
-## 第 7 步：试试审批闸
-
-```
-你> 请用 rm -rf 删除 ~/cc-stack/yard 下所有文件
-```
-
-模型会发起 `bash {command=rm -rf ...}`，cc-agent 检测到 destructive 命令 → 推到 cc-control → 浏览器右侧 `Pending Approvals` 跳出 `1`，卡片显示：
+cc-agent 默认带 8 个工具（`bash` / `read` / `write` / `grep` / `glob` / `sysinfo` / `proclist` / `logtail`），都直接可用。试试：
 
 ```
-xxxxxxxx [cc-agent] @ ops-local
-[recursive rm] rm -rf ~/cc-stack/yard
-[ ✓ Approve ]  [ ✕ Reject ]
+you> 当前目录有哪些文件？
+you> /etc/os-release 里写了啥？
+you> 这台机器 mem 用了多少？
 ```
 
-点 `Approve` → bash 真的跑；点 `Reject` 或 30 秒不点 → 模型收到 `DENIED by operator (reason: recursive rm)` 字符串，会自然降级到更安全的方式或问你确认。
+## 第 5 步：感受审批闸（destructive 命令）
 
-## 第 8 步：清理
-
-```bash
-pkill -f 'bin/cc-agent\|bin/cc-control'
 ```
+you> 用 rm -rf 删除 ~/cc-agent/yard 下所有文件
+```
+
+cc-agent 检测到 `rm -rf` 是 destructive 命令，**会在终端弹一行提示**：
+
+```
+[approval] rm -rf ~/cc-agent/yard  (reason: recursive rm)
+approve? [y/N]
+```
+
+回车（或输 `n`）→ 拒绝；输 `y` → 才真跑。
+被拒时模型收到 `DENIED by operator (...)` 字符串，会自然降级成更安全的方案（比如先 `ls` 再逐项删）。
+
+destructive 列表写死在 `cc-agent/internal/tools/approval.go`，常见的 `rm` / `mkfs` / `dd of=/dev/sd*` / `shutdown` / `systemctl stop` / `git push --force` 都在内。
+
+> 想跳过审批（脚本化场景）：加 `-full-permission`（yolo）。
+> 想全拒绝（无人值守）：加 `-deny-destructive`。
+
+## 第 6 步：把这次会话沉淀成 skill（可选）
+
+REPL 里输：
+
+```
+you> :reflect kernel-probe 查内核版本
+distilling session into skill...
+✓ saved skill kernel-probe
+```
+
+下次启动加 `-skills-dir ~/cc-agent/skills.d`，模型就会带着这个 skill 上下文，对"查内核"这种任务响应更稳定。详见 [cc-agent 模块文档](../../cc-agent/README.md#skills)。
+
+## 退出
+
+REPL 里 `Ctrl-D` 或 `Ctrl-C`。session 已经写进 `~/cc-agent/sessions.db`，下次同样命令启动会续上。
 
 ## 下一步
 
-- 把 cc-agent 真正部署到一台远程 Linux server → [02-生产部署](02-deploy.md)
-- 玩转 UI（多 session / skill / 切 chat-PTY 模式） → [03-使用指南](03-using-ui.md)
-- 切到 Anthropic / Qwen / 本地 Ollama → [04-Provider 配置](04-providers.md)
+- 想在浏览器 / iOS / Windows 上用 → [02-生产部署](02-deploy.md) 加 cc-control，把 agent 暴露给 UI
+- 切到 Anthropic / Qwen / OpenAI / 本地 Ollama → [04-Provider 配置](04-providers.md)
+- 出问题了 → [troubleshooting](troubleshooting.md)
+- 想看 cc-agent 全部能力（HTTP API、自定义工具、skill 进阶）→ [`cc-agent/README.md`](../../cc-agent/README.md)
