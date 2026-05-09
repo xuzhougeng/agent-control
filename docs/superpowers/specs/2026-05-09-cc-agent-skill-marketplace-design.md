@@ -124,6 +124,7 @@ REST surface:
 | GET    | `/api/registry/skills/:name`              | agent or operator | Returns latest. `?version=N` for pin. |
 | GET    | `/api/registry/skills/:name/history`      | agent or operator | All versions for that name.          |
 | DELETE | `/api/registry/skills/:name/:version`     | operator + admin  | Soft-delete only.                    |
+| POST   | `/api/registry/install_request`           | operator      | Body `{ name, version, target_agent_id }`; cc-control forwards an `install_skill_request` over the existing chat WS to the named agent. Used by the cc-web "Install on host…" button. |
 
 **`identity.go`** — `ResolveActor(r *http.Request) (Actor, error)`:
 
@@ -176,8 +177,11 @@ registry reload.
 
 - `skills_dir/team/<name>.json` — installed from registry.
 - `skills_dir/local/<name>.json` — locally authored via `:reflect`.
-- On load, both subtrees scan; same-name collision = team wins. Operator
-  removes the team file to override locally.
+- Load order is two-phase and explicit: scan `local/` first into the
+  registry map, then scan `team/`. Because the skill loader's map insert
+  is last-write-wins, `team/` overrides `local/` deterministically — not
+  reliant on `filepath.WalkDir` ordering. Operator removes the team file
+  to fall back to the local version.
 
 ### 5.3 `cc-agent/cmd/cc-agent/repl.go` (extend existing REPL)
 
@@ -232,7 +236,7 @@ Defaults to deriving `http://` from `control_url`'s `ws://` (same host,
 same port, swap scheme). Explicit override needed only when control plane
 splits HTTP and WS endpoints.
 
-Total new surface: 1 sqlite table, 5 REST endpoints, 5 REPL commands, 1
+Total new surface: 1 sqlite table, 6 REST endpoints, 5 REPL commands, 1
 React page, 2 config fields. ~1000 LOC.
 
 ## 6. Data flow
