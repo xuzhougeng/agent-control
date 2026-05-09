@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"cc-agent/internal/agent"
 	"cc-agent/internal/skills"
@@ -99,6 +101,7 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
   :reflect <name> [description]    distill current session into a skill
   :registry [search]               list team skills
   :publish <name>                  push a local skill to the team registry
+  :install <name>[@version]        fetch + install a team skill (with preview)
   exit | quit                      leave`)
 		return nil
 	case ":skills":
@@ -192,6 +195,51 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
 		}
 		fmt.Printf("\033[32m✓ published\033[0m %s@%d\n", name, v)
 		return nil
+	case ":install":
+		if rc == nil {
+			fmt.Println("(registry not configured)")
+			return nil
+		}
+		if len(parts) < 2 {
+			return fmt.Errorf("usage: :install <name>[@version]")
+		}
+		name, version := parseNameVersion(parts[1])
+		// Fetch without writing first to render the preview.
+		preview := *rc       // shallow copy
+		preview.TeamDir = "" // disables file write
+		got, err := preview.Install(name, version)
+		if err != nil {
+			return err
+		}
+		fmt.Println("\033[36m── skill preview ──\033[0m")
+		fmt.Printf("  name:    %s @ v%d\n", got.Name, got.Version)
+		fmt.Printf("  author:  %s\n", got.AuthorServerID)
+		fmt.Printf("  updated: %s\n", time.Unix(got.CreatedAtUnix, 0).Format(time.RFC3339))
+		fmt.Printf("  tools:   %s\n", strings.Join(got.Tools, ", "))
+		fmt.Printf("  prompt:  %s\n", clip(got.Prompt, 200))
+		if len(got.Examples) > 0 {
+			fmt.Println("  examples:")
+			for _, e := range got.Examples {
+				fmt.Printf("    - %s\n", clip(e, 80))
+			}
+		}
+		fmt.Print("install? [y/N]: ")
+		reader := bufio.NewReader(os.Stdin)
+		line, _ := reader.ReadString('\n')
+		line = strings.TrimSpace(strings.ToLower(line))
+		if line != "y" && line != "yes" {
+			fmt.Println("aborted.")
+			return nil
+		}
+		if _, err := rc.Install(name, version); err != nil {
+			return err
+		}
+		teamDir := rc.TeamDir
+		fmt.Printf("\033[32m✓ installed\033[0m %s@%d → %s/%s.json\n", got.Name, got.Version, teamDir, got.Name)
+		if reg := ag.Skills(); reg != nil {
+			_ = reg.LoadDir(teamDir)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unknown command %q (try :help)", cmd)
 	}
@@ -214,4 +262,14 @@ func clip(s string, n int) string {
 		return s
 	}
 	return s[:n] + "...(+" + fmt.Sprint(len(s)-n) + ")"
+}
+
+func parseNameVersion(s string) (string, int) {
+	if i := strings.LastIndex(s, "@"); i > 0 {
+		v, err := strconv.Atoi(s[i+1:])
+		if err == nil {
+			return s[:i], v
+		}
+	}
+	return s, 0
 }
