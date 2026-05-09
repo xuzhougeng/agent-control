@@ -102,6 +102,8 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
   :registry [search]               list team skills
   :publish <name>                  push a local skill to the team registry
   :install <name>[@version]        fetch + install a team skill (with preview)
+  :history <name>                  show all versions of a team skill
+  :rollback <name> <version>       install a specific older version
   exit | quit                      leave`)
 		return nil
 	case ":skills":
@@ -238,6 +240,47 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
 		fmt.Printf("\033[32m✓ installed\033[0m %s@%d → %s/%s.json\n", got.Name, got.Version, teamDir, got.Name)
 		if reg := ag.Skills(); reg != nil {
 			_ = reg.LoadDir(teamDir)
+		}
+		return nil
+	case ":history":
+		if rc == nil {
+			fmt.Println("(registry not configured)")
+			return nil
+		}
+		if len(parts) < 2 {
+			return fmt.Errorf("usage: :history <name>")
+		}
+		hist, err := rc.History(parts[1])
+		if err != nil {
+			return err
+		}
+		if len(hist) == 0 {
+			fmt.Println("(no history)")
+			return nil
+		}
+		for _, h := range hist {
+			fmt.Printf("  v%-3d %-12s %s  %s\n", h.Version, h.AuthorServerID,
+				time.Unix(h.CreatedAtUnix, 0).Format(time.RFC3339), h.Description)
+		}
+		return nil
+	case ":rollback":
+		if rc == nil {
+			fmt.Println("(registry not configured)")
+			return nil
+		}
+		if len(parts) < 3 {
+			return fmt.Errorf("usage: :rollback <name> <version>")
+		}
+		v, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return err
+		}
+		if _, err := rc.Install(parts[1], v); err != nil {
+			return err
+		}
+		fmt.Printf("\033[32m✓ rolled back\033[0m %s to v%d\n", parts[1], v)
+		if reg := ag.Skills(); reg != nil {
+			_ = reg.LoadDir(rc.TeamDir)
 		}
 		return nil
 	default:
