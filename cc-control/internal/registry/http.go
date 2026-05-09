@@ -2,8 +2,8 @@ package registry
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"strconv"
 )
 
 type IdentityProvider interface {
@@ -141,12 +141,16 @@ func (d *RouteDeps) getOne(w http.ResponseWriter, r *http.Request, name string) 
 	versionStr := r.URL.Query().Get("version")
 	version := 0
 	if versionStr != "" {
-		var err error
-		version, err = parseInt(versionStr)
+		v, err := strconv.Atoi(versionStr)
 		if err != nil {
 			writeJSON(w, 400, errBody{Code: "bad_version", Reason: err.Error()})
 			return
 		}
+		if v <= 0 {
+			writeJSON(w, 400, errBody{Code: "bad_version", Reason: "version must be a positive integer"})
+			return
+		}
+		version = v
 	}
 	got, err := d.Store.Get(name, version)
 	if err == ErrNotFound {
@@ -170,17 +174,6 @@ func (d *RouteDeps) getHistory(w http.ResponseWriter, _ *http.Request, name stri
 		hist = []Summary{}
 	}
 	writeJSON(w, 200, hist)
-}
-
-func parseInt(s string) (int, error) {
-	n := 0
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, fmt.Errorf("not a number: %q", s)
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n, nil
 }
 
 func (d *RouteDeps) deleteVersion(w http.ResponseWriter, _ *http.Request, _ string, _ string, _ Actor) {
