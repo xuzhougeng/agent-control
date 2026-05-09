@@ -102,3 +102,98 @@ func (stubIdentityErr) ResolveActor(*http.Request) (Actor, error) {
 type errAuth string
 
 func (e errAuth) Error() string { return string(e) }
+
+func TestList_Empty(t *testing.T) {
+	srv, _ := newTestServer(t, Actor{Kind: "operator", ID: "alice"})
+	resp, err := http.Get(srv.URL + "/api/registry/skills")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	var got []Summary
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if len(got) != 0 {
+		t.Fatalf("got %d, want 0", len(got))
+	}
+}
+
+func TestList_AfterPublish(t *testing.T) {
+	srv, st := newTestServer(t, Actor{Kind: "agent", ID: "ops-01"})
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p", Description: "demo"}, "ops-01")
+	resp, err := http.Get(srv.URL + "/api/registry/skills")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got []Summary
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if len(got) != 1 || got[0].Name != "x" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestGetOne_Latest(t *testing.T) {
+	srv, st := newTestServer(t, Actor{Kind: "agent", ID: "ops-01"})
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p1"}, "ops-01")
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p2"}, "ops-01")
+	resp, err := http.Get(srv.URL + "/api/registry/skills/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	var got StoredSkill
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if got.Version != 2 || got.Prompt != "p2" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestGetOne_PinnedVersion(t *testing.T) {
+	srv, st := newTestServer(t, Actor{Kind: "agent", ID: "ops-01"})
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p1"}, "ops-01")
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p2"}, "ops-01")
+	resp, err := http.Get(srv.URL + "/api/registry/skills/x?version=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got StoredSkill
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if got.Prompt != "p1" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestGetOne_NotFound(t *testing.T) {
+	srv, _ := newTestServer(t, Actor{Kind: "agent", ID: "ops-01"})
+	resp, err := http.Get(srv.URL + "/api/registry/skills/missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 404 {
+		t.Fatalf("status=%d, want 404", resp.StatusCode)
+	}
+}
+
+func TestHistory(t *testing.T) {
+	srv, st := newTestServer(t, Actor{Kind: "agent", ID: "ops-01"})
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p1"}, "ops-01")
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p2"}, "ops-01")
+	resp, err := http.Get(srv.URL + "/api/registry/skills/x/history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var hist []Summary
+	_ = json.NewDecoder(resp.Body).Decode(&hist)
+	if len(hist) != 2 {
+		t.Fatalf("got %d, want 2", len(hist))
+	}
+}
