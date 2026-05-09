@@ -17,60 +17,91 @@ import (
 	"syscall"
 	"time"
 
-	prompt "github.com/c-bata/go-prompt"
+	"github.com/chzyer/readline"
 
 	"cc-agent/internal/agent"
 	"cc-agent/internal/skills"
 )
 
-// CLIApprover prompts the operator on stderr/stdin for destructive commands.
-// While inside go-prompt's Executor the terminal is in cooked mode, so a fresh
-// bufio.Reader on stdin is enough — no fight with the prompt loop.
+// CLIApprover prompts the operator for destructive-command approval. The REPL
+// is built on chzyer/readline whose IoLoop goroutine owns stdin while the
+// instance is alive; reading via a fresh bufio.Reader would race the IoLoop
+// and hang. So when wired in REPL mode we route reads through the readline
+// instance itself. The Reader/Writer fields remain for tests and headless
+// callers.
 type CLIApprover struct {
+	mu     sync.Mutex
+	rl     *readline.Instance
 	Reader *bufio.Reader
 	Writer io.Writer
 }
 
-func NewCLIApprover(r *bufio.Reader, w io.Writer) *CLIApprover {
-	if r == nil {
-		r = bufio.NewReader(os.Stdin)
+func NewCLIApprover(rl *readline.Instance, w io.Writer) *CLIApprover {
+	a := &CLIApprover{rl: rl, Writer: w}
+	if a.Writer == nil {
+		if rl != nil {
+			a.Writer = rl.Stderr()
+		} else {
+			a.Writer = os.Stderr
+		}
 	}
-	return &CLIApprover{Reader: r, Writer: w}
+	return a
+}
+
+// SetReadline wires (or replaces) the readline instance after construction.
+// main.go builds the approver before RunCLI has the instance, so this lets
+// RunCLI plumb it in once readline is up.
+func (a *CLIApprover) SetReadline(rl *readline.Instance) {
+	a.mu.Lock()
+	a.rl = rl
+	if rl != nil {
+		a.Writer = rl.Stderr()
+	}
+	a.mu.Unlock()
 }
 
 func (a *CLIApprover) Approve(_ context.Context, cmd, reason string) (bool, error) {
-	fmt.Fprintf(a.Writer, "\n\033[31m⚠ destructive command\033[0m  reason: %s\n  command: %s\n  approve? [y/N]: ", reason, cmd)
-	line, err := a.Reader.ReadString('\n')
+	fmt.Fprintf(a.Writer, "\n\033[31m⚠ destructive command\033[0m  reason: %s\n  command: %s\n", reason, cmd)
+	line, err := a.AskLine("approve? [y/N]: ")
 	if err != nil {
+		if errors.Is(err, readline.ErrInterrupt) || errors.Is(err, io.EOF) {
+			return false, nil
+		}
 		return false, err
 	}
 	ans := strings.ToLower(strings.TrimSpace(line))
 	return ans == "y" || ans == "yes", nil
 }
 
-// slashCmds is the list shown in the autocomplete dropdown when the user types `:`.
-var slashCmds = []prompt.Suggest{
-	{Text: ":help", Description: "show commands"},
-	{Text: ":tools", Description: "list registered tools"},
-	{Text: ":skills", Description: "list loaded skills"},
-	{Text: ":reflect", Description: "distill current session into a skill"},
-	{Text: ":registry", Description: "list team-registry skills"},
-	{Text: ":publish", Description: "push a local skill to the team registry"},
-	{Text: ":install", Description: "fetch + install a team skill"},
-	{Text: ":history", Description: "show all versions of a team skill"},
-	{Text: ":rollback", Description: "install a specific older version"},
-	{Text: "exit", Description: "leave the REPL"},
-	{Text: "quit", Description: "leave the REPL"},
+// AskLine prompts the operator for one line of input. Used both for
+// destructive-command approval and the :install y/N confirm so all interactive
+// reads share the readline pipeline.
+func (a *CLIApprover) AskLine(prompt string) (string, error) {
+	a.mu.Lock()
+	rl := a.rl
+	a.mu.Unlock()
+	if rl != nil {
+		prev := rl.Config.Prompt
+		rl.SetPrompt(prompt)
+		defer rl.SetPrompt(prev)
+		return rl.Readline()
+	}
+	r := a.Reader
+	if r == nil {
+		r = bufio.NewReader(os.Stdin)
+	}
+	fmt.Fprint(a.Writer, prompt)
+	return r.ReadString('\n')
 }
 
 // registryCache lazily memoizes the team-registry skill listing so the
 // completer doesn't hit HTTP on every keystroke.
 type registryCache struct {
 	once sync.Once
-	rows []prompt.Suggest
+	rows []string
 }
 
-func (c *registryCache) Names(rc *skills.RegistryClient) []prompt.Suggest {
+func (c *registryCache) Names(rc *skills.RegistryClient) []string {
 	if rc == nil {
 		return nil
 	}
@@ -80,126 +111,107 @@ func (c *registryCache) Names(rc *skills.RegistryClient) []prompt.Suggest {
 			return
 		}
 		for _, s := range rows {
-			c.rows = append(c.rows, prompt.Suggest{Text: s.Name, Description: s.Description})
+			c.rows = append(c.rows, s.Name)
 		}
 	})
 	return c.rows
 }
 
-// makeCompleter returns a prompt.Completer that suggests slash commands and
-// then context-sensitive arguments based on which sub-command is being typed.
-//
-// Behavior summary:
-//
-//	(empty)             → no suggestions (typing prose is the common case)
-//	:                   → all slash commands
-//	:install <prefix>   → registry skill names
-//	:rollback <prefix>  → registry skill names (version arg is free-form)
-//	:history  <prefix>  → registry skill names
-//	:publish  <prefix>  → local skill names
-//	:reflect  <prefix>  → local skill names (existing names → overwrite)
-func makeCompleter(ag *agent.Agent, rc *skills.RegistryClient) prompt.Completer {
+// makeCompleter wires tab-completion: bare slash commands, plus dynamic
+// arg-completion for sub-commands that take a skill name (local vs registry).
+func makeCompleter(ag *agent.Agent, rc *skills.RegistryClient) readline.AutoCompleter {
 	cache := &registryCache{}
-	localNames := func() []prompt.Suggest {
+	localNames := func(string) []string {
 		reg := ag.Skills()
 		if reg == nil {
 			return nil
 		}
-		var out []prompt.Suggest
-		for _, n := range reg.Names() {
-			s, _ := reg.Get(n)
-			out = append(out, prompt.Suggest{Text: s.Name, Description: s.Description})
-		}
-		return out
+		return append([]string(nil), reg.Names()...)
 	}
-	return func(d prompt.Document) []prompt.Suggest {
-		text := d.TextBeforeCursor()
-		trimmed := strings.TrimLeft(text, " \t")
-		if trimmed == "" {
-			return nil
-		}
-		// First word: still typing the command itself.
-		if !strings.ContainsAny(trimmed, " \t") {
-			if !strings.HasPrefix(trimmed, ":") && !strings.HasPrefix(trimmed, "e") && !strings.HasPrefix(trimmed, "q") {
-				return nil
-			}
-			return prompt.FilterHasPrefix(slashCmds, trimmed, true)
-		}
-		// Past the command — pick suggestions based on the verb.
-		fields := strings.Fields(trimmed)
-		word := d.GetWordBeforeCursor()
-		switch fields[0] {
-		case ":install", ":rollback", ":history":
-			// Only the first arg is a skill name.
-			if argIndex(trimmed, fields) > 1 {
-				return nil
-			}
-			return prompt.FilterHasPrefix(cache.Names(rc), word, true)
-		case ":publish", ":reflect":
-			if argIndex(trimmed, fields) > 1 {
-				return nil
-			}
-			return prompt.FilterHasPrefix(localNames(), word, true)
-		}
-		return nil
+	teamNames := func(string) []string {
+		return append([]string(nil), cache.Names(rc)...)
 	}
+	return readline.NewPrefixCompleter(
+		readline.PcItem(":help"),
+		readline.PcItem(":tools"),
+		readline.PcItem(":skills"),
+		readline.PcItem(":reflect", readline.PcItemDynamic(localNames)),
+		readline.PcItem(":registry"),
+		readline.PcItem(":publish", readline.PcItemDynamic(localNames)),
+		readline.PcItem(":install", readline.PcItemDynamic(teamNames)),
+		readline.PcItem(":history", readline.PcItemDynamic(teamNames)),
+		readline.PcItem(":rollback", readline.PcItemDynamic(teamNames)),
+		readline.PcItem("exit"),
+		readline.PcItem("quit"),
+	)
 }
 
-// argIndex returns 0 if the cursor is on the verb, 1 if on the first arg, etc.
-// Uses trailing-space detection because strings.Fields collapses whitespace.
-func argIndex(text string, fields []string) int {
-	idx := len(fields) - 1
-	if strings.HasSuffix(text, " ") || strings.HasSuffix(text, "\t") {
-		idx++
-	}
-	return idx
-}
-
-// RunCLI runs the stdin REPL with autocomplete dropdown (arrow-key selectable),
-// persistent history, and Ctrl+C semantics scoped to the current turn.
+// RunCLI runs the stdin REPL backed by chzyer/readline. Tab cycles through
+// slash commands (and registry skill names where applicable), history
+// persists to $HOME/.cc-agent/history, Ctrl+C at the prompt drops the
+// partially-typed line, and Ctrl+D quits.
 //
-// approver is optional: when non-nil it gets a bufio.Reader bound to stdin so
-// destructive-command prompts work cleanly inside the Executor (terminal is
-// cooked while the executor runs).
+// approver, when non-nil, has its readline instance wired in so destructive-
+// command prompts share the same input pipeline. A fresh bufio.Reader on
+// os.Stdin would race the readline IoLoop goroutine and hang.
 func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID string, approver *CLIApprover) error {
-	if approver != nil && approver.Reader == nil {
-		approver.Reader = bufio.NewReader(os.Stdin)
+	cfg := &readline.Config{
+		Prompt:            "you> ",
+		HistoryFile:       historyFilePath(),
+		HistoryLimit:      1000,
+		AutoComplete:      makeCompleter(ag, rc),
+		InterruptPrompt:   "^C",
+		EOFPrompt:         "exit",
+		HistorySearchFold: true,
 	}
+	rl, err := readline.NewEx(cfg)
+	if err != nil {
+		return err
+	}
+	defer rl.Close()
 
-	historyPath := historyFilePath()
-	history := loadHistory(historyPath, 1000)
+	if approver != nil {
+		approver.SetReadline(rl)
+	}
 
 	ag.SetListener(func(e agent.Event) {
 		switch e.Kind {
 		case agent.EventAssistant:
-			fmt.Printf("\n\033[36massistant>\033[0m %s\n", e.Text)
+			fmt.Fprintf(rl.Stdout(), "\n\033[36massistant>\033[0m %s\n", e.Text)
 		case agent.EventToolCall:
-			fmt.Printf("\033[33mtool>\033[0m %s %s\n", e.ToolName, summarizeInput(e.ToolInput))
+			fmt.Fprintf(rl.Stdout(), "\033[33mtool>\033[0m %s %s\n", e.ToolName, summarizeInput(e.ToolInput))
 		case agent.EventToolResult:
-			fmt.Printf("\033[90m%s\033[0m\n", clip(e.Text, 800))
+			fmt.Fprintf(rl.Stdout(), "\033[90m%s\033[0m\n", clip(e.Text, 800))
 		case agent.EventError:
-			fmt.Fprintf(os.Stderr, "\033[31merror>\033[0m %s\n", e.Text)
+			fmt.Fprintf(rl.Stderr(), "\033[31merror>\033[0m %s\n", e.Text)
 		}
 	})
 
-	fmt.Printf("cc-agent ready. session=%s. type ':' for commands (↑/↓ to pick), 'exit' or Ctrl+D to quit.\n", sessionID)
+	fmt.Fprintf(rl.Stdout(), "cc-agent ready. session=%s. type ':' + Tab for commands, 'exit' or Ctrl+D to quit.\n", sessionID)
 
-	executor := func(line string) {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			appendHistory(historyPath, line)
+	for {
+		line, err := rl.Readline()
+		switch {
+		case errors.Is(err, readline.ErrInterrupt):
+			// Ctrl+C at the prompt: drop the partially-typed line, reprompt.
+			continue
+		case errors.Is(err, io.EOF):
+			return nil
+		case err != nil:
+			return err
 		}
+		line = strings.TrimSpace(line)
 		if line == "" {
-			return
+			continue
 		}
 		if line == "exit" || line == "quit" {
-			os.Exit(0)
+			return nil
 		}
 		if strings.HasPrefix(line, ":") {
 			if err := handleSlashCommand(ctx, ag, rc, sessionID, line, approver); err != nil {
-				fmt.Fprintf(os.Stderr, "command error: %v\n", err)
+				fmt.Fprintf(rl.Stderr(), "command error: %v\n", err)
 			}
-			return
+			continue
 		}
 		runCtx, cancelRun := context.WithCancel(ctx)
 		stop := installRunInterrupt(cancelRun)
@@ -209,45 +221,19 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 		switch {
 		case runErr == nil:
 		case errors.Is(runErr, context.Canceled):
-			fmt.Fprintln(os.Stderr, "\n\033[33m^C interrupted current turn\033[0m")
+			fmt.Fprintln(rl.Stderr(), "\n\033[33minterrupted current turn\033[0m")
 		default:
-			fmt.Fprintf(os.Stderr, "run error: %v\n", runErr)
+			fmt.Fprintf(rl.Stderr(), "run error: %v\n", runErr)
 		}
 	}
-
-	completer := makeCompleter(ag, rc)
-
-	p := prompt.New(
-		executor,
-		completer,
-		prompt.OptionPrefix("you> "),
-		prompt.OptionTitle("cc-agent"),
-		prompt.OptionHistory(history),
-		prompt.OptionInputTextColor(prompt.DefaultColor),
-		prompt.OptionSuggestionBGColor(prompt.DarkGray),
-		prompt.OptionSuggestionTextColor(prompt.White),
-		prompt.OptionDescriptionBGColor(prompt.DarkGray),
-		prompt.OptionDescriptionTextColor(prompt.LightGray),
-		prompt.OptionSelectedSuggestionBGColor(prompt.Cyan),
-		prompt.OptionSelectedSuggestionTextColor(prompt.Black),
-		prompt.OptionSelectedDescriptionBGColor(prompt.Cyan),
-		prompt.OptionSelectedDescriptionTextColor(prompt.Black),
-		prompt.OptionAddKeyBind(prompt.KeyBind{
-			Key: prompt.ControlD,
-			Fn:  func(buf *prompt.Buffer) { fmt.Println("bye."); os.Exit(0) },
-		}),
-		prompt.OptionSetExitCheckerOnInput(func(in string, breakline bool) bool {
-			s := strings.TrimSpace(in)
-			return breakline && (s == "exit" || s == "quit")
-		}),
-	)
-	p.Run()
-	return nil
 }
 
-// installRunInterrupt makes Ctrl+C cancel the current agent turn instead of
-// the whole process. The returned stop() must be called once the turn ends so
-// subsequent SIGINTs flow back to go-prompt's input handler at the next prompt.
+// installRunInterrupt routes SIGINT (e.g. `kill -INT pid`) to the per-turn
+// cancel during agent.Run. Note: while readline owns the terminal in raw mode
+// the kernel does NOT generate SIGINT from Ctrl+C — that byte goes into the
+// readline buffer instead. So this only fires when the user signals the
+// process directly. When the loop returns, stop() is called so subsequent
+// signals fall through to the default handler again.
 func installRunInterrupt(cancel context.CancelFunc) func() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT)
@@ -272,43 +258,6 @@ func historyFilePath() string {
 	return filepath.Join(dir, "history")
 }
 
-func loadHistory(path string, max int) []string {
-	if path == "" {
-		return nil
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil
-	}
-	defer f.Close()
-	var lines []string
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for sc.Scan() {
-		t := strings.TrimRight(sc.Text(), "\r\n")
-		if t == "" {
-			continue
-		}
-		lines = append(lines, t)
-	}
-	if len(lines) > max {
-		lines = lines[len(lines)-max:]
-	}
-	return lines
-}
-
-func appendHistory(path, line string) {
-	if path == "" || line == "" {
-		return
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	_, _ = f.WriteString(line + "\n")
-}
-
 // handleSlashCommand dispatches REPL meta commands. Currently:
 //
 //	:help                         show commands
@@ -330,7 +279,7 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
   :install <name>[@version]        fetch + install a team skill (with preview)
   :history <name>                  show all versions of a team skill
   :rollback <name> <version>       install a specific older version
-  exit | quit | Ctrl+D             leave (Ctrl+C cancels current turn)`)
+  exit | quit | Ctrl+D             leave the REPL`)
 		return nil
 	case ":tools":
 		reg := ag.Tools()
@@ -466,9 +415,12 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
 				fmt.Printf("    - %s\n", clip(e, 80))
 			}
 		}
-		fmt.Print("install? [y/N]: ")
-		ans, err := readApproverLine(approver)
+		ans, err := readApproverLine(approver, "install? [y/N]: ")
 		if err != nil {
+			if errors.Is(err, readline.ErrInterrupt) || errors.Is(err, io.EOF) {
+				fmt.Println("aborted.")
+				return nil
+			}
 			return err
 		}
 		ans = strings.TrimSpace(strings.ToLower(ans))
@@ -531,14 +483,13 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
 	}
 }
 
-// readApproverLine reads one stdin line using the approver's bufio.Reader if
-// one exists, otherwise falls back to a fresh reader on os.Stdin. Used by the
-// :install y/N prompt so it shares a buffer with the destructive-command prompt
-// (avoids two readers fighting over half-buffered input).
-func readApproverLine(a *CLIApprover) (string, error) {
-	if a != nil && a.Reader != nil {
-		return a.Reader.ReadString('\n')
+// readApproverLine asks the approver for one line. Falls back to a fresh
+// stdin reader when no approver is wired (headless tests, daemon mode).
+func readApproverLine(a *CLIApprover, prompt string) (string, error) {
+	if a != nil {
+		return a.AskLine(prompt)
 	}
+	fmt.Print(prompt)
 	return bufio.NewReader(os.Stdin).ReadString('\n')
 }
 

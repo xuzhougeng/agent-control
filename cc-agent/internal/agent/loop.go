@@ -204,6 +204,32 @@ func (a *Agent) RunWithListener(ctx context.Context, sessionID, userInput string
 		if resp.StopReason != llm.StopToolUse || len(resp.Message.ToolCalls) == 0 {
 			return final, nil
 		}
+		// Once an assistant message with tool_calls is in memory, every call
+		// MUST get a tool result message before we exit this iteration —
+		// otherwise the next provider request sees malformed history and
+		// OpenAI rejects with "tool_calls must be followed by tool messages".
+		// Track outstanding ones; flush synthetic results for any left over.
+		pending := make(map[string]bool, len(resp.Message.ToolCalls))
+		for _, tc := range resp.Message.ToolCalls {
+			pending[tc.ID] = true
+		}
+		flushPending := func(reason string) {
+			for id := range pending {
+				result := memory.Message{
+					Role:       string(llm.RoleTool),
+					ToolUseID:  id,
+					ToolResult: reason,
+					ToolError:  true,
+					At:         time.Now().UnixMilli(),
+				}
+				// Detached context so a canceled run still records the
+				// result. The assistant message is already persisted; this
+				// keeps the pair intact.
+				_ = a.mem.AppendMessage(context.Background(), sessionID, result)
+				emit(Event{Kind: EventToolResult, ToolID: id, Text: reason, IsError: true})
+				delete(pending, id)
+			}
+		}
 		for _, tc := range resp.Message.ToolCalls {
 			emit(Event{Kind: EventToolCall, ToolName: tc.Name, ToolInput: tc.Input, ToolID: tc.ID})
 			out, isErr := a.runTool(ctx, tc)
@@ -214,10 +240,19 @@ func (a *Agent) RunWithListener(ctx context.Context, sessionID, userInput string
 				ToolError:  isErr,
 				At:         time.Now().UnixMilli(),
 			}
-			if err := a.mem.AppendMessage(ctx, sessionID, result); err != nil {
-				return "", err
+			// Detached context: ctx may be canceled, but the tool already
+			// produced its result and we owe it to the assistant turn to
+			// record one.
+			if err := a.mem.AppendMessage(context.Background(), sessionID, result); err != nil {
+				flushPending(fmt.Sprintf("memory write failed: %v", err))
+				return final, err
 			}
+			delete(pending, tc.ID)
 			emit(Event{Kind: EventToolResult, ToolID: tc.ID, Text: out, IsError: isErr})
+			if ctx.Err() != nil {
+				flushPending(fmt.Sprintf("canceled by operator: %v", ctx.Err()))
+				return final, ctx.Err()
+			}
 		}
 	}
 	return final, fmt.Errorf("max iterations reached (%d)", a.opts.MaxIterations)
@@ -257,6 +292,59 @@ func toLLM(hist []memory.Message) []llm.Message {
 	out := make([]llm.Message, 0, len(hist))
 	for _, m := range hist {
 		out = append(out, m.ToLLM())
+	}
+	return repairToolCallPairs(out)
+}
+
+// repairToolCallPairs guarantees every assistant tool_call is followed by a
+// matching tool result message. If a prior run was hard-killed between
+// recording the assistant turn and executing the tool, the persisted history
+// is missing the tool result; OpenAI rejects such requests with "An assistant
+// message with 'tool_calls' must be followed by tool messages". We splice in
+// a synthetic "(canceled)" result so the conversation is replay-safe.
+func repairToolCallPairs(in []llm.Message) []llm.Message {
+	have := make(map[string]bool)
+	for _, m := range in {
+		if m.Role == llm.RoleTool && m.ToolUseID != "" {
+			have[m.ToolUseID] = true
+		}
+	}
+	missing := false
+	for _, m := range in {
+		if m.Role != llm.RoleAssistant {
+			continue
+		}
+		for _, tc := range m.ToolCalls {
+			if !have[tc.ID] {
+				missing = true
+				break
+			}
+		}
+		if missing {
+			break
+		}
+	}
+	if !missing {
+		return in
+	}
+	out := make([]llm.Message, 0, len(in)+2)
+	for _, m := range in {
+		out = append(out, m)
+		if m.Role != llm.RoleAssistant || len(m.ToolCalls) == 0 {
+			continue
+		}
+		for _, tc := range m.ToolCalls {
+			if have[tc.ID] {
+				continue
+			}
+			out = append(out, llm.Message{
+				Role:       llm.RoleTool,
+				ToolUseID:  tc.ID,
+				ToolResult: "(canceled — no result recorded for prior run)",
+				ToolError:  true,
+			})
+			have[tc.ID] = true
+		}
 	}
 	return out
 }

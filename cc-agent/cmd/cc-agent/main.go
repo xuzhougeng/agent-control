@@ -150,9 +150,9 @@ func main() {
 
 	toolReg := tools.DefaultRegistry(cfg.Cwd, cfg.AllowedRoots)
 	bashTool, _ := toolReg.Get("bash")
-	// cliApprover is plumbed into the REPL later (RunCLI gives it a real
-	// Asker backed by the readline instance). Stays nil for the
-	// full-permission / deny-destructive / daemon paths.
+	// cliApprover is plumbed into the REPL later (RunCLI calls SetReadline
+	// once the readline.Instance is built). Stays nil for the full-permission
+	// / deny-destructive / daemon paths.
 	var cliApprover *transport.CLIApprover
 	if b, ok := bashTool.(*tools.Bash); ok {
 		switch {
