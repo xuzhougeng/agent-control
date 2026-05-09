@@ -4,325 +4,94 @@ A control plane for your **Coding Crew** — orchestrate Claude Code, Codex, Gem
 
 > **CC** = **Coding Crew.** The `cc-` prefix throughout this repo (`cc-control`, `cc-agent`, `cc-web`, `cc-proxy`, `cc-console`) reflects this: a fleet of coding agents you command, rather than any single vendor's CLI. See [`docs/coding-crew.md`](docs/coding-crew.md) for the naming rationale and shared vocabulary.
 
-## Layout
+## Highlights
+
+- **Single binary, REPL-first** — start `cc-agent` standalone with one LLM key. No control plane, no UI required.
+- **Bring any coding CLI** — `cc-proxy` wraps Claude Code, Codex, Gemini CLI, or OpenCode and surfaces it as a regular session.
+- **Web / iOS / macOS / Windows clients** — all share one WebSocket protocol against `cc-control`.
+- **Skill marketplace (v0.8.0)** — `:reflect` a skill on one host, `:publish` to `cc-control`, `:install` on the rest of the fleet.
+- **Approval gate for destructive commands** — `rm -rf`, `mkfs`, `shutdown`, etc. wait for an Approve in the UI; auto-deny after timeout.
+- **Multi-tenant by design** — token-scoped isolation, JSONL audit log, per-token rate limiting.
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    Browser["Browser UI"] --> CC["cc-control"]
-    App["macOS/iOS App"] --> CC
-    CC <--> A1["cc-agent"]
-    CC <--> A2["cc-agent"]
+    subgraph Clients["Clients"]
+        Web["Browser (cc-web)"]
+        Native["macOS / iOS / Windows"]
+    end
+    Helm["cc-control<br/>(the helm)"]
+    subgraph Crew["Coding Crew"]
+        Agent["cc-agent<br/>own LLM loop + tools"]
+        Proxy["cc-proxy<br/>wraps Claude Code / Codex /<br/>Gemini CLI / OpenCode"]
+        Custom["your own worker<br/>(NDJSON over stdio)"]
+    end
+    Web --> Helm
+    Native --> Helm
+    Helm <--> Agent
+    Helm <--> Proxy
+    Helm <--> Custom
 ```
 
-- `cc-control/`: control plane (`REST + WS + audit + token management + optional prompt detection`)
-- `cc-agent/`: per-server agent (`WS outbound + PTY spawn/stream/input + chat worker`)
-- `cc-web/`: static browser UI (`xterm.js` terminal + chat bubble UI)
-- `app/AgentControlMac/`: native macOS/iOS client
+| Module | Role |
+|---|---|
+| [`cc-control/`](cc-control/) | Control plane (helm): REST + WS + token / session / audit / skill registry |
+| [`cc-agent/`](cc-agent/) | Self-driving agent: own LLM loop + 8 built-in tools (`bash`, `read`, `write`, `grep`, `glob`, `sysinfo`, `proclist`, `logtail`) with destructive-command approval |
+| [`cc-proxy/`](cc-proxy/) | PTY proxy that wraps Claude Code, Codex, Gemini CLI, or OpenCode as a session |
+| [`cc-web/`](cc-web/) | Static browser UI (xterm.js terminal + chat bubble UI), served by `cc-control` |
+| [`cc-console/`](cc-console/) | Self-service signup site for the hosted offering at `console.cc-remote.app` |
+| [`app/AgentControlMac/`](app/AgentControlMac/) | Native macOS / iOS client (same WS protocol as `cc-web`) |
 
 ## Quick Start
 
-For production deployment (including TLS), use `docs/deploy-public-server.md`.
-
-1. Start `cc-control` with an admin token.
+The fastest way to see Agent Control work is to run **`cc-agent` standalone** — one binary, one LLM key, REPL prompt. No control plane, no UI, no remote.
 
 ```bash
-cd cc-control
-go run ./cmd/cc-control \
-  -addr :18080 \
-  -ui-dir ../cc-web \
-  -admin-token admin-dev-token \
-  -ui-token "" \
-  -agent-token "" \
-  -audit-path ./audit.jsonl \
-  -offline-after-sec 30
+mkdir -p ~/cc-agent && cd ~/cc-agent
+curl -LO https://github.com/xuzhougeng/agent-control/releases/download/v0.8.0/cc-agent-linux-amd64
+chmod +x cc-agent-linux-amd64 && mv cc-agent-linux-amd64 cc-agent
+
+# DeepSeek key — cheapest to start; swap providers later
+echo 'sk-xxxxxxxxxxxx' > ~/.cc-agent-key && chmod 600 ~/.cc-agent-key
+mkdir -p ~/cc-agent/yard
+
+CC_AGENT_API_KEY="$(cat ~/.cc-agent-key)" \
+CC_AGENT_BASE_URL="https://api.deepseek.com" \
+./cc-agent -provider deepseek -model deepseek-chat \
+           -cwd ~/cc-agent/yard \
+           -memory ~/cc-agent/sessions.db
 ```
 
-2. Create tokens via web
+You get a REPL prompt — ask it to do something:
 
-Open `http://127.0.0.1:18080/admin` to manage tokens.
-
-2.1 Create Tenant token (admin)
-
-- Fill `admin token` (for example `admin-dev-token`).
-- Set `token type = tenant`.
-- Leave `tenant id` empty to auto-create a new tenant.
-- Click `Generate Token`.
-- Save the generated `token` (tenant token) and `tenant` (tenant id).
-
-2.2 Tenant generates UI + Agent tokens
-
-- In `Tenant Tokens`, paste the tenant token from 2.1.
-- Set `ui role = owner` (or `viewer/operator` as needed).
-- Optional: fill `tenant id` (must match the tenant token).
-- Click `Generate UI + Agent`.
-- Save the generated UI token and agent token.
-
-2.3 Optional management
-
-- Click `List Tokens` to view issued tokens (supports tenant filter).
-- Click `Revoke` to revoke a token by `token_id`.
-
-
-3. Create token via CLI.
-
-3.1 Tenant token (admin)
-
-```bash
-# Admin: create tenant token
-curl -X POST http://127.0.0.1:18080/admin/tokens \
-  -H "Authorization: Bearer admin-dev-token" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"tenant"}'
+```
+you> what's the kernel version on this box?
+▶ bash {command=uname -r}
+✓ exit_code=0  6.6.87.2-microsoft-standard-WSL2
+Kernel version: 6.6.87.2-microsoft-standard-WSL2
 ```
 
-Example Tenant token response:
+That's the whole standalone story. Linux / macOS / Windows × amd64 / arm64 binaries are on the [Releases page](https://github.com/xuzhougeng/agent-control/releases).
 
-```json
-{
-  "created_at_ms": 1770964695390,
-  "role": "",
-  "tenant_id": "<tenant-a-id>",
-  "token": "<tenant-a-tenant-token>",
-  "token_id": "<tenant-a-tenant-token-id>",
-  "type": "tenant"
-}
-```
+中文 5 分钟教程：[`docs/tutorial/01-quickstart.md`](docs/tutorial/01-quickstart.md).
 
-3.2 Tenant UI + Agent tokens
+## Going Further
 
-```bash
-# Tenant: create UI + Agent tokens (owner role)
-curl -X POST http://127.0.0.1:18080/tenant/tokens \
-  -H "Authorization: Bearer <tenant-a-tenant-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"role":"owner"}'
-```
+| You want… | Read |
+|---|---|
+| Web / mobile UI driving `cc-agent` from a remote server | [Getting Started · step 2](docs/getting-started.md#2--connect-cc-agent-to-cc-control-web--mobile-ui) |
+| Wrap **Claude Code / Codex / Gemini CLI / OpenCode** through the same UI | [Getting Started · step 3 (cc-proxy)](docs/getting-started.md#3--cc-proxy--wrap-an-external-cli-agent) |
+| Hosted `cc-control` (no setup) | <https://console.cc-remote.app> · [iOS / macOS app](https://apps.apple.com/us/app/cc-remote/id6759078097) |
+| Self-host `cc-control` (TLS / Cloudflare Tunnel / systemd) | [Public-server deployment](docs/deploy-public-server.md) |
+| Token model, tenants, admin / UI / agent token issuance | [Tutorial · 02-deploy](docs/tutorial/02-deploy.md) · [API reference](docs/api.md) |
+| Skill marketplace (`:publish` / `:install` / Skills tab) | [v0.8.0 release notes](docs/v0.8.0-release-notes.md) |
+| Chat mode + custom worker (NDJSON protocol) | [Chat mode & permissions](docs/chat-mode-permissions.md) |
 
-Example Tenant token response:
+## Documentation
 
-```json
-{
-  "tenant_id": "<tenant-a-id>",
-  "ui": {
-    "token": "<tenant-a-ui-token>",
-    "token_id": "<tenant-a-ui-token-id>",
-    "role": "owner"
-  },
-  "agent": {
-    "token": "<tenant-a-agent-token>",
-    "token_id": "<tenant-a-agent-token-id>"
-  }
-}
-```
-
-- `ui.token`: use this as the UI login token for Tenant.
-- `agent.token`: use this as `-agent-token` when starting Tenant A `cc-agent`.
-- Token is returned in plaintext only once; if leaked, revoke and re-issue immediately.
-
-4. Start one `cc-agent` for Tenant A.
-
-```bash
-cd cc-agent
-go run ./cmd/cc-agent \
-  -control-url ws://127.0.0.1:18080/ws/agent \
-  -agent-token <tenant-a-agent-token> \
-  -server-id srv-local \
-  -allow-root /path/to/repo \
-  -claude-path /path/to/ai-cli
-```
-
-Example executable values for `-claude-path`:
-
-```bash
-/path/to/opencode
-/path/to/codex
-/path/to/gemini
-```
-
-5. Open browser UI:
-
-`http://127.0.0.1:18080`
-
-Open `http://127.0.0.1:18080/admin` (optional) to access the admin dashboard:
-
-- **Overview** tab: server/session/token/tenant counts at a glance.
-- **Servers** tab: cross-tenant server list with search and online/offline status.
-- **Sessions** tab: cross-tenant session list with search, status filter, and Stop button.
-- **Tokens** tab: create tenant tokens, list/revoke/export issued tokens.
-- Tenant page (`/tenant`): generate UI + Agent tokens with the tenant token.
-
-Or login with the Tenant A UI token returned by `/tenant/tokens` (curl flow above).
-
-## Unified Session ID
-
-系统现在只维护一套 `session_id`。该 ID 可用于：
-
-1. 作为 REST/WS 的会话主键；
-2. 作为 Claude CLI 的统一 conversation ID；
-3. 在同一路径（`cwd`）下重建 PTY/Chat 会话；
-4. 在 Web/App 界面里进行跨模式切换（复用同一 `session_id`）。
-
-补充说明：
-
-- 控制面会为同一个逻辑 `session_id` 维护按模式划分的运行实例槽位（`instance_id`）；Chat 和 PTY 各自最多保留一个实例槽位，不会随着反复切换无限追加。
-- PTY 启动时，若本机已存在 `~/.claude/session-env/<session_id>`，agent 会自动优先使用 `claude --resume <session_id>` 接入已有 Claude conversation，而不是盲目再用 `--session-id` 创建。
-- 若当前逻辑会话还没有真实的 Claude conversation（例如 PTY 创建后一句话都没说，就切到 Chat 再切回 PTY），系统会继续使用 `--session-id`，避免误用 `--resume` 触发 `no conversation found`。
-
-创建会话时可选传入 `session_id`（UUID）。不传则由服务端自动生成；若已存在则返回冲突错误。
-
-## Token Model (Latest)
-
-- Recommended: use `-admin-token` to create a tenant token, then use `POST /tenant/tokens` to issue UI + Agent tokens.
-- Tenant token is only for `/tenant/tokens`, not for UI/WS.
-- UI token roles: `viewer` / `operator` / `owner`.
-- Legacy compatibility: `-ui-token` and `-agent-token` are still accepted and seeded into a default tenant.
-- Tokens are in-memory by default; restart clears them unless you reseed.
-- Use `-token-db ./tokens.db` (or `TOKEN_DB`) to persist tokens across restarts.
-
-## Deployment Modes
-
-- Direct HTTP (`ws://`): fast testing in trusted networks.
-- Nginx + TLS (Let's Encrypt): recommended for production with domain.
-- Nginx + self-signed TLS (`wss://<ip>`): no domain but encrypted transport.
-
-Full guide: `docs/deploy-public-server.md`
-
-## Upgrade Note (Breaking Allowed)
-
-- If you migrate from legacy `-ui-token/-agent-token` to admin-token mode, switch `cc-control` to `-admin-token` first.
-- Then issue fresh UI/Agent tokens via `POST /admin/tokens` and restart agents with the new agent token.
-- During cutover, `servers` may appear empty until agents reconnect with new token.
-- For self-signed TLS, agent must add `-tls-skip-verify`.
-
-## Chat Mode Quick Start
-
-除了传统的终端（PTY）模式，项目还支持 **聊天室模式**——类似微信一问一答的交互方式。后台守护一个 worker 子进程负责处理输入输出，前端以气泡 UI 展示对话。
-
-### 1. 构建 echo worker（测试用）
-
-`cc-chat-echo` 是一个最简的 chat worker，收到什么就原样加 `[echo] ` 前缀返回，用来验证整条链路是否正常。
-
-```bash
-cd cc-agent
-go build -o /tmp/cc-chat-echo ./cmd/cc-chat-echo
-```
-
-### 2. 启动 cc-agent 并指定 chat worker
-
-在原有启动命令上加 `-chat-worker` 参数：
-
-2.1 测试 Chat Worker（Echo）
-
-```bash
-go run ./cmd/cc-agent \
-  -control-url ws://127.0.0.1:18080/ws/agent \
-  -agent-token <your-agent-token> \
-  -server-id srv-local \
-  -allow-root /path/to/repo \
-  -claude-path /path/to/ai-cli \
-  -chat-worker /tmp/cc-chat-echo
-```
-
-2.2 测试 Claude Worker（无头模式）
-
-```bash
-go build -o /tmp/cc-chat-claude ./cmd/cc-chat-claude
-go run ./cmd/cc-agent \
-  -control-url ws://127.0.0.1:18080/ws/agent \
-  -agent-token <your-agent-token> \
-  -server-id srv-local \
-  -allow-root /path/to/repo \
-  -claude-path /path/to/ai-cli \
-  -chat-worker /tmp/cc-chat-claude
-```
-
-注意：测试 Claude 时，Claude CLI 路径必须配置正确（例如 `CC_CLAUDE_CMD=/path/to/claude` 或确保 `claude` 在 `PATH`），否则 worker 无法启动。
-
-示例（可选）：限制可用工具并指定模型
-
-```bash
-export CC_CLAUDE_CMD=/path/to/claude
-export CC_CLAUDE_ALLOWED_TOOLS="Bash(git:*) Read Edit"
-export CC_CLAUDE_MODEL=sonnet
-```
-
-### 3. 打开统一 Workspace
-
-浏览器访问 `http://127.0.0.1:18080/`，输入 UI Token 后：
-
-1. 在左侧选择一个在线 Server。
-2. 如需直接进入 Chat 视图，可访问 `http://127.0.0.1:18080/?view=chat`。
-3. 填写 `cwd`（工作目录），点击 **Create** 创建会话。
-4. 如果当前视图是 Chat，可在右侧输入框输入消息，按 Enter 发送。
-5. echo worker 会回复 `[echo] 你的消息`。
-
-`/chat` 仍保留为兼容路径，但现在会自动跳转到统一 workspace 的 Chat 视图。
-
-### 3.1 命令行主动推送提醒（通知到 Web/iOS/Windows）
-
-当后台任务完成后，可以直接从命令行向 cc-control 发送通知：
-
-```bash
-curl -X POST http://127.0.0.1:18080/api/notifications \
-  -H "Authorization: Bearer <your-ui-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Nightly Build",
-    "message": "build + tests finished",
-    "level": "success",
-    "source": "ci"
-  }'
-```
-
-如果你在自动化脚本里只持有 tenant token，可改用：
-
-```bash
-curl -X POST http://127.0.0.1:18080/tenant/notifications \
-  -H "Authorization: Bearer <tenant-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"message":"backup finished","level":"info","source":"cron"}'
-```
-
-说明：
-- 通知会通过 WebSocket 主动推送到该 tenant 下的在线客户端。
-- 控制面会缓存最近一批通知，客户端重连后会自动回放，降低断线漏提醒概率。
-- 详细字段见 [API 参考](docs/api.md) 中 `/api/notifications` 与 `/tenant/notifications`。
-
-### 4. 替换为真实 worker
-
-echo worker 仅用于测试。正式使用时，将 `-chat-worker` 指向你自己的程序即可。worker 协议是 NDJSON：
-
-- **stdin**（每行一个 JSON）：`{"message_id":"uuid","content":"用户消息"}`
-- **stdout**（每行一个 JSON）：`{"message_id":"uuid","content":"回复内容","meta":{"operations":["step 1","step 2"]}}`
-  - `meta` 为可选字段，可回传中间步骤/工具调用摘要（Chat UI 会展示）。
-
-只要你的程序遵循这个协议，就能无缝接入。
-
-## Current Capabilities
-
-- Server register + heartbeat online/offline
-- Session create/attach/resize/stop/delete
-- PTY streaming to UI/App and input roundtrip
-- **Chat mode**: request/response chat sessions with pluggable worker process
-- Optional prompt detection (`-enable-prompt-detection`, default off)
-- Approve/Reject action routing (`y/n`, Enter/Esc patterns)
-- JSONL audit log (`cc-control/audit.jsonl`)
-- Token issue/list/revoke admin API with tenant isolation
-- Admin dashboard with cross-tenant server/session monitoring
-
-## Security Baseline (MVP)
-
-- Agent-side cwd whitelist (`-allow-root`)
-- Runtime executable path control (`-claude-path`)
-- Env allowlist/prefix (`-env-allow-keys`, `-env-allow-prefix`)
-- Token-based tenant isolation with role checks
-- Basic per-token rate limiting in control plane
-
-## Docs
-
-- [文档索引](docs/README.md) — 入门 / 开发 / 部署 / 测试 / 合规
-- [架构说明](docs/architecture.md)
-- [API 参考](docs/api.md)
-- [公网部署](docs/deploy-public-server.md)
-- [快速上手](docs/getting-started.md) · [使用场景](docs/use-cases.md) · [隐私政策](docs/privacy-policy.md)
-- 测试：[如何跑 E2E](docs/how-to-test-e2e.md) · [Web E2E 设计](docs/web-e2e.md)
+- [Docs index 文档索引](docs/README.md) — the entry point for everything below
+- [Architecture](docs/architecture.md) · [API reference](docs/api.md) · [Use cases](docs/use-cases.md)
+- [Tutorial 教程](docs/tutorial/) — Chinese, step-by-step from local to production
+- [Coding Crew naming](docs/coding-crew.md) — what `cc-*` stands for, shared vocabulary
+- Release notes: [v0.8.0](docs/v0.8.0-release-notes.md) · [v0.7.3](docs/v0.7.3-release-notes.md) · [v0.7.2](docs/v0.7.2-release-notes.md) · [v0.7.1](docs/v0.7.1-release-notes.md) · [v0.7.0](docs/v0.7.0-release-notes.md)
