@@ -4,7 +4,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -150,8 +149,11 @@ func main() {
 	}
 
 	toolReg := tools.DefaultRegistry(cfg.Cwd, cfg.AllowedRoots)
-	stdinReader := bufio.NewReader(os.Stdin)
 	bashTool, _ := toolReg.Get("bash")
+	// cliApprover is plumbed into the REPL later (RunCLI gives it a real
+	// Asker backed by the readline instance). Stays nil for the
+	// full-permission / deny-destructive / daemon paths.
+	var cliApprover *transport.CLIApprover
 	if b, ok := bashTool.(*tools.Bash); ok {
 		switch {
 		case *fullPerm:
@@ -160,7 +162,8 @@ func main() {
 		case *denyDanger:
 			b.Approver = tools.AlwaysDeny{}
 		default:
-			b.Approver = transport.NewCLIApprover(stdinReader, os.Stderr)
+			cliApprover = transport.NewCLIApprover(nil, os.Stderr)
+			b.Approver = cliApprover
 		}
 	}
 	ag := agent.New(provider2, toolReg, mem, agent.Options{
@@ -175,8 +178,16 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// SIGTERM cancels the global ctx (clean daemon shutdown). SIGINT is
+	// handled per-turn inside the REPL so Ctrl+C cancels the current agent
+	// run instead of killing the process. In daemon mode (no REPL) we also
+	// catch SIGINT here so Ctrl+C still stops the daemon.
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	if *controlURL != "" || *httpAddr != "" || cfg.ControlURL != "" || cfg.HTTPListen != "" {
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	} else {
+		signal.Notify(sigCh, syscall.SIGTERM)
+	}
 	go func() { <-sigCh; cancel() }()
 
 	if cfg.ControlURL != "" {
@@ -236,7 +247,7 @@ func main() {
 		return
 	}
 
-	if err := transport.RunCLI(ctx, ag, registryClient, *sessionID, stdinReader); err != nil {
+	if err := transport.RunCLI(ctx, ag, registryClient, *sessionID, cliApprover); err != nil {
 		log.Fatalf("cli: %v", err)
 	}
 	fmt.Println("bye.")

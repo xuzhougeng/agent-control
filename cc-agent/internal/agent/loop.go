@@ -67,6 +67,9 @@ func (a *Agent) SetSkills(reg *skills.Registry, dir string, r skills.Reflector) 
 // Skills returns the registered skill registry (may be nil if not configured).
 func (a *Agent) Skills() *skills.Registry { return a.skills }
 
+// Tools returns the tool registry the agent dispatches against.
+func (a *Agent) Tools() *tools.Registry { return a.tools }
+
 // Reflect distills the current session's transcript into a skill JSON,
 // writes it to <skills_dir>/<name>.json, and loads it into the registry.
 // description is optional (the reflector will write one if empty).
