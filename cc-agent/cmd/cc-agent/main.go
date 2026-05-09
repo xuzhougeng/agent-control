@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -109,9 +110,43 @@ func main() {
 	defer mem.Close()
 
 	skillReg := skills.NewRegistry()
-	if err := skillReg.LoadDir(cfg.SkillsDir); err != nil {
-		log.Printf("skills: %v (continuing without)", err)
+	if cfg.SkillsDir != "" {
+		localDir := filepath.Join(cfg.SkillsDir, "local")
+		teamDir := filepath.Join(cfg.SkillsDir, "team")
+		// If neither subdirectory exists, fall back to flat layout (backwards-compat).
+		_, localErr := os.Stat(localDir)
+		_, teamErr := os.Stat(teamDir)
+		if os.IsNotExist(localErr) && os.IsNotExist(teamErr) {
+			if err := skillReg.LoadDir(cfg.SkillsDir); err != nil {
+				log.Printf("skills: %v (continuing without)", err)
+			}
+		} else {
+			if err := skills.LoadTwoPhase(skillReg, localDir, teamDir); err != nil {
+				log.Printf("skills: %v (continuing without)", err)
+			}
+		}
 	}
+
+	// RegistryClient talks to cc-control's /api/registry/* endpoints for
+	// publish/install/list/history. Built only when both ControlHTTPURL and
+	// AgentToken are set.
+	// TODO(T16): replace `_ = registryClient` below — wire this into
+	// transport.RunCLI so the REPL slash-dispatch (/skill publish, /skill
+	// install, etc.) can reach the registry.
+	var registryClient *skills.RegistryClient
+	if cfg.ControlHTTPURL != "" && cfg.AgentToken != "" {
+		teamDir := ""
+		if cfg.SkillsDir != "" {
+			teamDir = filepath.Join(cfg.SkillsDir, "team")
+		}
+		registryClient = &skills.RegistryClient{
+			BaseURL:    cfg.ControlHTTPURL,
+			AgentToken: cfg.AgentToken,
+			ServerID:   cfg.ServerID,
+			TeamDir:    teamDir,
+		}
+	}
+	_ = registryClient // will be wired into REPL slash dispatch in T16-T19
 
 	toolReg := tools.DefaultRegistry(cfg.Cwd, cfg.AllowedRoots)
 	stdinReader := bufio.NewReader(os.Stdin)
