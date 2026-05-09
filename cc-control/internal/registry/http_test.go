@@ -197,3 +197,48 @@ func TestHistory(t *testing.T) {
 		t.Fatalf("got %d, want 2", len(hist))
 	}
 }
+
+func TestDelete_AdminCanSoftDelete(t *testing.T) {
+	srv, st := newTestServer(t, Actor{Kind: "operator", ID: "admin", IsAdmin: true})
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p"}, "ops-01")
+	req, _ := http.NewRequest("DELETE", srv.URL+"/api/registry/skills/x/1", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 204 {
+		t.Fatalf("status=%d, want 204", resp.StatusCode)
+	}
+	if _, err := st.Latest("x"); err != ErrNotFound {
+		t.Fatalf("Latest after delete: %v", err)
+	}
+}
+
+func TestDelete_NonAdminForbidden(t *testing.T) {
+	srv, st := newTestServer(t, Actor{Kind: "operator", ID: "alice", IsAdmin: false})
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p"}, "ops-01")
+	req, _ := http.NewRequest("DELETE", srv.URL+"/api/registry/skills/x/1", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 403 {
+		t.Fatalf("status=%d, want 403", resp.StatusCode)
+	}
+}
+
+func TestDelete_AgentForbidden(t *testing.T) {
+	srv, st := newTestServer(t, Actor{Kind: "agent", ID: "ops-01"})
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p"}, "ops-01")
+	req, _ := http.NewRequest("DELETE", srv.URL+"/api/registry/skills/x/1", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 403 {
+		t.Fatalf("status=%d, want 403 (agents can't delete)", resp.StatusCode)
+	}
+}

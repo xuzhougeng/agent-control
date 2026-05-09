@@ -176,8 +176,28 @@ func (d *RouteDeps) getHistory(w http.ResponseWriter, _ *http.Request, name stri
 	writeJSON(w, 200, hist)
 }
 
-func (d *RouteDeps) deleteVersion(w http.ResponseWriter, _ *http.Request, _ string, _ string, _ Actor) {
-	http.Error(w, "delete not implemented", http.StatusNotImplemented)
+func (d *RouteDeps) deleteVersion(w http.ResponseWriter, _ *http.Request, name, versionStr string, actor Actor) {
+	if actor.Kind != "operator" || !actor.IsAdmin {
+		writeJSON(w, 403, errBody{Code: "forbidden"})
+		return
+	}
+	version, err := strconv.Atoi(versionStr)
+	if err != nil {
+		writeJSON(w, 400, errBody{Code: "bad_version", Reason: err.Error()})
+		return
+	}
+	if version <= 0 {
+		writeJSON(w, 400, errBody{Code: "bad_version", Reason: "version must be a positive integer"})
+		return
+	}
+	if err := d.Store.SoftDelete(name, version, actor.ID); err == ErrNotFound {
+		writeJSON(w, 404, errBody{Code: "not_found"})
+		return
+	} else if err != nil {
+		writeJSON(w, 500, errBody{Code: "store", Reason: err.Error()})
+		return
+	}
+	w.WriteHeader(204)
 }
 
 func (d *RouteDeps) handleInstallRequest(w http.ResponseWriter, _ *http.Request) {
