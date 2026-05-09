@@ -52,62 +52,62 @@ jobs:
             goos: windows
             goarch: arm64
           - component: cc-chat-claude
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-claude
             goos: linux
             goarch: amd64
           - component: cc-chat-claude
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-claude
             goos: linux
             goarch: arm64
           - component: cc-chat-claude
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-claude
             goos: darwin
             goarch: amd64
           - component: cc-chat-claude
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-claude
             goos: darwin
             goarch: arm64
           - component: cc-chat-claude
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-claude
             goos: windows
             goarch: amd64
           - component: cc-chat-claude
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-claude
             goos: windows
             goarch: arm64
           - component: cc-chat-echo
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-echo
             goos: linux
             goarch: amd64
           - component: cc-chat-echo
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-echo
             goos: linux
             goarch: arm64
           - component: cc-chat-echo
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-echo
             goos: darwin
             goarch: amd64
           - component: cc-chat-echo
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-echo
             goos: darwin
             goarch: arm64
           - component: cc-chat-echo
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-echo
             goos: windows
             goarch: amd64
           - component: cc-chat-echo
-            dir: cc-agent
+            dir: cc-proxy
             pkg: ./cmd/cc-chat-echo
             goos: windows
             goarch: arm64
