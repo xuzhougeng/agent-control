@@ -24,6 +24,7 @@ import (
 	"cc-agent/internal/tools"
 	"cc-agent/internal/transport"
 	"cc-agent/internal/transport/control"
+	"cc-agent/internal/version"
 )
 
 func main() {
@@ -41,14 +42,14 @@ func main() {
 		skillsDir  = flag.String("skills-dir", "", "directory of skill JSON files")
 		listTools  = flag.Bool("list-tools", false, "print registered tools as JSON and exit (no API key needed)")
 		showVer    = flag.Bool("version", false, "print version and exit")
-		fullPerm    = flag.Bool("full-permission", false, "skip approval prompts for destructive commands (yolo mode)")
-		denyDanger  = flag.Bool("deny-destructive", false, "auto-deny destructive commands (no prompt, safe for non-interactive use)")
-		approvalTO  = flag.String("approval-timeout", "", "how long to wait for an operator approval in -control-url mode (e.g. 30s, 5m, 1h). Default 5m.")
+		fullPerm   = flag.Bool("full-permission", false, "skip approval prompts for destructive commands (yolo mode)")
+		denyDanger = flag.Bool("deny-destructive", false, "auto-deny destructive commands (no prompt, safe for non-interactive use)")
+		approvalTO = flag.String("approval-timeout", "", "how long to wait for an operator approval in -control-url mode (e.g. 30s, 5m, 1h). Default 5m.")
 	)
 	flag.Parse()
 
 	if *showVer {
-		fmt.Println("cc-agent dev")
+		fmt.Println(version.String())
 		return
 	}
 

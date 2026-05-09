@@ -54,11 +54,24 @@ server_root="$release_dir/server"
 client_root="$release_dir/client"
 control_dir="$server_root/bin"
 
+VERSION="${VERSION:-}"
+if [[ -z "$VERSION" ]]; then
+  if [[ "$RELEASE_NAME" == v[0-9]* ]]; then
+    VERSION="$RELEASE_NAME"
+  else
+    VERSION="$(git -C "$REPO_ROOT" describe --tags --dirty --always 2>/dev/null || echo dev)"
+  fi
+fi
+COMMIT="${COMMIT:-$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || true)}"
+BUILD_DATE="${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+CC_AGENT_LDFLAGS="-s -w -X cc-agent/internal/version.Version=${VERSION} -X cc-agent/internal/version.Commit=${COMMIT} -X cc-agent/internal/version.Date=${BUILD_DATE}"
+
 mkdir -p "$OUT_BASE"
 rm -rf "$release_dir"
 mkdir -p "$artifacts_dir" "$control_dir" "$client_root"
 
 echo "==> release directory: $release_dir"
+echo "==> cc-agent version: $VERSION"
 
 echo "==> building server (cc-control linux/amd64 + cc-web)"
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C "$REPO_ROOT/cc-control" build -o "$control_dir/cc-control" ./cmd/cc-control
@@ -86,7 +99,7 @@ build_agent_target() {
   CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-proxy" build -ldflags="-s -w" -o "$out_dir/bin/cc-proxy${suffix}" ./cmd/cc-proxy
   CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-proxy" build -ldflags="-s -w" -o "$out_dir/bin/cc-chat-claude${suffix}" ./cmd/cc-chat-claude
   CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-proxy" build -ldflags="-s -w" -o "$out_dir/bin/cc-chat-echo${suffix}" ./cmd/cc-chat-echo
-  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-agent" build -ldflags="-s -w" -o "$out_dir/bin/cc-agent${suffix}" ./cmd/cc-agent
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go -C "$REPO_ROOT/cc-agent" build -ldflags="$CC_AGENT_LDFLAGS" -o "$out_dir/bin/cc-agent${suffix}" ./cmd/cc-agent
 
   cp "$REPO_ROOT/scripts/chat-profile.example.md" "$out_dir/chat-profile.example.md"
   cp "$REPO_ROOT/scripts/chat-profile.example.md" "$out_dir/chat-profile.md"

@@ -21,6 +21,7 @@ import (
 
 	"cc-agent/internal/agent"
 	"cc-agent/internal/skills"
+	"cc-agent/internal/version"
 )
 
 // installedSkillNameRE constrains skill names accepted from install_skill_request
@@ -104,7 +105,7 @@ func New(opts Options) (*Client, error) {
 		opts.Hostname, _ = os.Hostname()
 	}
 	if opts.AgentVersion == "" {
-		opts.AgentVersion = "cc-agent dev"
+		opts.AgentVersion = version.String()
 	}
 	return &Client{
 		opts:      opts,
