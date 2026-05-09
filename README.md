@@ -1,4 +1,4 @@
-# Agent Control (AI Agent Control Plane MVP)
+# Agent Control — the Coding Crew helm
 
 A control plane for your **Coding Crew** — orchestrate Claude Code, Codex, Gemini CLI, OpenCode, and the agents you build yourself, all under one helm.
 
