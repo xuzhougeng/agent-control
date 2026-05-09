@@ -242,3 +242,73 @@ func TestDelete_AgentForbidden(t *testing.T) {
 		t.Fatalf("status=%d, want 403 (agents can't delete)", resp.StatusCode)
 	}
 }
+
+type fakeNotifier struct {
+	calls []NotifyCall
+}
+
+type NotifyCall struct {
+	TargetAgentID string
+	Skill         StoredSkill
+}
+
+func (f *fakeNotifier) NotifyInstall(target string, sk StoredSkill) error {
+	f.calls = append(f.calls, NotifyCall{TargetAgentID: target, Skill: sk})
+	return nil
+}
+
+func newTestServerWithNotifier(t *testing.T, actor Actor, notif InstallNotifier) (*httptest.Server, *Store) {
+	t.Helper()
+	dir := t.TempDir()
+	st, err := OpenStore(filepath.Join(dir, "registry.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &RouteDeps{
+		Store:      st,
+		KnownTools: []string{"bash"},
+		Identity:   stubIdentity{actor: actor},
+		Installer:  notif,
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv, st
+}
+
+func TestInstallRequest_OperatorTriggersNotify(t *testing.T) {
+	notif := &fakeNotifier{}
+	srv, st := newTestServerWithNotifier(t, Actor{Kind: "operator", ID: "alice"}, notif)
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p"}, "ops-01")
+	body, _ := json.Marshal(map[string]any{"name": "x", "version": 0, "target_agent_id": "ops-02"})
+	resp, err := http.Post(srv.URL+"/api/registry/install_request", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 202 {
+		t.Fatalf("status=%d, want 202", resp.StatusCode)
+	}
+	if len(notif.calls) != 1 || notif.calls[0].TargetAgentID != "ops-02" || notif.calls[0].Skill.Name != "x" {
+		t.Fatalf("notifier calls=%+v", notif.calls)
+	}
+}
+
+func TestInstallRequest_AgentForbidden(t *testing.T) {
+	notif := &fakeNotifier{}
+	srv, st := newTestServerWithNotifier(t, Actor{Kind: "agent", ID: "ops-01"}, notif)
+	_, _ = st.Publish(&Skill{Name: "x", Prompt: "p"}, "ops-01")
+	body := strings.NewReader(`{"name":"x","target_agent_id":"ops-02"}`)
+	resp, err := http.Post(srv.URL+"/api/registry/install_request", "application/json", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 403 {
+		t.Fatalf("status=%d, want 403 (agents can't push installs to other agents)", resp.StatusCode)
+	}
+	if len(notif.calls) != 0 {
+		t.Fatalf("expected no notifier calls, got %+v", notif.calls)
+	}
+}

@@ -10,10 +10,18 @@ type IdentityProvider interface {
 	ResolveActor(*http.Request) (Actor, error)
 }
 
+// InstallNotifier delivers an install_skill_request to a connected agent over
+// whatever transport cc-control already uses (chat WS in v1). Defined as an
+// interface so the registry package stays independent of the WS layer.
+type InstallNotifier interface {
+	NotifyInstall(targetAgentID string, sk StoredSkill) error
+}
+
 type RouteDeps struct {
 	Store      *Store
 	KnownTools []string
 	Identity   IdentityProvider
+	Installer  InstallNotifier
 }
 
 // RegisterRoutes wires registry HTTP handlers onto mux. Caller is responsible
@@ -200,8 +208,51 @@ func (d *RouteDeps) deleteVersion(w http.ResponseWriter, _ *http.Request, name, 
 	w.WriteHeader(204)
 }
 
-func (d *RouteDeps) handleInstallRequest(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "install_request not implemented", http.StatusNotImplemented)
+func (d *RouteDeps) handleInstallRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	actor, err := d.Identity.ResolveActor(r)
+	if err != nil {
+		writeJSON(w, 401, errBody{Code: "unauth"})
+		return
+	}
+	if actor.Kind != "operator" {
+		writeJSON(w, 403, errBody{Code: "forbidden", Reason: "operators only"})
+		return
+	}
+	var req struct {
+		Name          string `json:"name"`
+		Version       int    `json:"version"` // 0 = latest
+		TargetAgentID string `json:"target_agent_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, 400, errBody{Code: "bad_json", Reason: err.Error()})
+		return
+	}
+	if req.Name == "" || req.TargetAgentID == "" {
+		writeJSON(w, 400, errBody{Code: "missing_field"})
+		return
+	}
+	got, err := d.Store.Get(req.Name, req.Version)
+	if err == ErrNotFound {
+		writeJSON(w, 404, errBody{Code: "not_found"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, 500, errBody{Code: "store", Reason: err.Error()})
+		return
+	}
+	if d.Installer == nil {
+		writeJSON(w, 503, errBody{Code: "no_installer"})
+		return
+	}
+	if err := d.Installer.NotifyInstall(req.TargetAgentID, *got); err != nil {
+		writeJSON(w, 502, errBody{Code: "notify_failed", Reason: err.Error()})
+		return
+	}
+	w.WriteHeader(202)
 }
 
 type errBody struct {
