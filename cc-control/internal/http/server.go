@@ -10,6 +10,7 @@ import (
 
 	"cc-control/internal/auth"
 	"cc-control/internal/core"
+	"cc-control/internal/registry"
 	wshandler "cc-control/internal/ws"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -20,6 +21,7 @@ type Server struct {
 	Tokens      *auth.Store
 	UIDir       string
 	CheckOrigin bool
+	Registry    *registry.RouteDeps // optional; nil = registry disabled
 }
 
 func (s *Server) Router() http.Handler {
@@ -63,6 +65,10 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("/api/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
+
+	if s.Registry != nil {
+		registry.RegisterRoutes(mux, s.Registry)
+	}
 
 	uiDir := s.UIDir
 	if uiDir == "" {

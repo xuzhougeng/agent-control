@@ -13,6 +13,7 @@ import (
 	"cc-control/internal/auth"
 	"cc-control/internal/core"
 	httpapi "cc-control/internal/http"
+	"cc-control/internal/registry"
 	"github.com/google/uuid"
 )
 
@@ -25,6 +26,7 @@ func main() {
 		uiToken               = flag.String("ui-token", getenv("UI_TOKEN", "admin-dev-token"), "ui bearer token")
 		adminToken            = flag.String("admin-token", getenv("ADMIN_TOKEN", ""), "admin bearer token (optional)")
 		tokenDBPath           = flag.String("token-db", getenv("TOKEN_DB", ""), "sqlite db path for token persistence (optional)")
+		registryDBPath        = flag.String("registry-db", getenv("REGISTRY_DB", ""), "sqlite db path for skill marketplace (optional; empty disables)")
 		auditPath             = flag.String("audit-path", "./audit.jsonl", "audit jsonl path")
 		ringBufferBytes       = flag.Int("ring-buffer-bytes", 128*1024, "session ring buffer size")
 		offlineAfterSec       = flag.Int("offline-after-sec", 20, "mark server offline if no heartbeat")
@@ -89,11 +91,32 @@ func main() {
 		}
 	}
 
+	var regDeps *registry.RouteDeps
+	if *registryDBPath != "" {
+		regStore, err := registry.OpenStore(*registryDBPath)
+		if err != nil {
+			slog.Error("init registry store failed", "err", err)
+			os.Exit(1)
+		}
+		defer func() {
+			if err := regStore.Close(); err != nil {
+				slog.Error("close registry store failed", "err", err)
+			}
+		}()
+		regDeps = &registry.RouteDeps{
+			Store:      regStore,
+			KnownTools: []string{"bash", "read", "write", "grep", "glob", "sysinfo", "proclist", "logtail"},
+			Identity:   &registry.IdentityResolver{Auth: tokenStore},
+			Installer:  &registry.CPNotifier{CP: cp},
+		}
+	}
+
 	api := &httpapi.Server{
 		CP:          cp,
 		Tokens:      tokenStore,
 		UIDir:       *uiDir,
 		CheckOrigin: false,
+		Registry:    regDeps,
 	}
 
 	srv := &http.Server{
