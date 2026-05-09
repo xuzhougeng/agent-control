@@ -104,3 +104,50 @@ func TestClient_Install_VersionedURL(t *testing.T) {
 		t.Fatalf("url=%s", gotURL)
 	}
 }
+
+func TestClient_List(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `[{"name":"x","description":"demo","version":3,"author_server_id":"a","created_at_unix":1}]`)
+	}))
+	defer srv.Close()
+	c := &RegistryClient{BaseURL: srv.URL, AgentToken: "t", ServerID: "ops-A", HTTP: srv.Client()}
+	got, err := c.List("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Name != "x" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestClient_List_PassesQuery(t *testing.T) {
+	var gotURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotURL = r.URL.String()
+		_, _ = io.WriteString(w, `[]`)
+	}))
+	defer srv.Close()
+	c := &RegistryClient{BaseURL: srv.URL, AgentToken: "t", ServerID: "ops-A", HTTP: srv.Client()}
+	_, _ = c.List("nginx")
+	if !strings.Contains(gotURL, "q=nginx") {
+		t.Fatalf("url=%s", gotURL)
+	}
+}
+
+func TestClient_History(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/history") {
+			t.Errorf("path=%s", r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `[{"name":"x","version":1,"author_server_id":"a","created_at_unix":1}]`)
+	}))
+	defer srv.Close()
+	c := &RegistryClient{BaseURL: srv.URL, AgentToken: "t", ServerID: "ops-A", HTTP: srv.Client()}
+	hist, err := c.History("x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hist) != 1 {
+		t.Fatalf("hist=%+v", hist)
+	}
+}

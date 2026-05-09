@@ -27,6 +27,15 @@ type StoredSkill struct {
 	CreatedAtUnix  int64  `json:"created_at_unix"`
 }
 
+// Summary mirrors registry.Summary — list-row data, no full body.
+type Summary struct {
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	Version        int    `json:"version"`
+	AuthorServerID string `json:"author_server_id"`
+	CreatedAtUnix  int64  `json:"created_at_unix"`
+}
+
 func (c *RegistryClient) httpClient() *http.Client {
 	if c.HTTP != nil {
 		return c.HTTP
@@ -114,6 +123,42 @@ func (c *RegistryClient) Install(name string, version int) (*StoredSkill, error)
 		return nil, fmt.Errorf("rename: %w", err)
 	}
 	return &got, nil
+}
+
+func (c *RegistryClient) List(query string) ([]Summary, error) {
+	path := "/api/registry/skills"
+	if query != "" {
+		path += "?" + url.Values{"q": []string{query}}.Encode()
+	}
+	resp, err := c.do("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, decodeAPIError(resp)
+	}
+	var out []Summary
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *RegistryClient) History(name string) ([]Summary, error) {
+	resp, err := c.do("GET", "/api/registry/skills/"+name+"/history", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, decodeAPIError(resp)
+	}
+	var out []Summary
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func decodeAPIError(resp *http.Response) error {
