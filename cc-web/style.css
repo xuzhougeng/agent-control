@@ -10,3 +10,20 @@
 @import url("/styles/chat.css");
 @import url("/styles/responsive.css");
 @import url("/styles/modal.css");
+
+.skills-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
+.skills-list-pane { border-right: 1px solid #333; padding-right: 12px; }
+.skills-search { width: 100%; padding: 6px 8px; margin-bottom: 8px; }
+.skills-list { list-style: none; padding: 0; margin: 0; }
+.skills-list li { padding: 8px; border: 1px solid #333; border-radius: 4px; margin-bottom: 6px; cursor: pointer; }
+.skills-list li.selected { border-color: #6cf; background: #0a1a22; }
+.skills-detail .placeholder { color: #888; }
+.skills-row-name { color: #6cf; font-weight: 600; }
+.skills-row-meta { color: #888; font-size: 11px; }
+.skills-row-desc { font-size: 12px; margin-top: 2px; }
+.skills-prompt { background: #111; padding: 8px; border-radius: 4px; white-space: pre-wrap; }
+.skills-tools .tag { display: inline-block; background: #222; padding: 2px 6px; border-radius: 3px; margin-right: 4px; font-size: 11px; }
+.skills-history { width: 100%; border-collapse: collapse; }
+.skills-history th, .skills-history td { padding: 4px 8px; border-bottom: 1px solid #222; text-align: left; font-size: 12px; }
+.muted { color: #888; font-size: 12px; }
+@media (max-width: 720px) { .skills-layout { grid-template-columns: 1fr; } }
