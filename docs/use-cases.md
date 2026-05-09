@@ -1,126 +1,73 @@
-# 使用场景
+# Use Cases
 
-以下为典型使用场景及对应文档入口。
+Pick the section that matches your goal. Each one points to the relevant deployment depth (stand-alone cc-agent, cc-agent + cc-control, cc-proxy, or hosted).
 
-## 本地开发与联调
+## Standalone automation on your laptop
 
-在本机同时跑 cc-control、cc-agent 和 Web UI，快速验证功能或调试。
+Run `cc-agent` as a single binary against your favourite LLM. No control plane, no tokens. You drive it from the REPL.
 
-- **步骤**：[快速上手](getting-started.md)（依赖 [README Quick Start](../README.md#quick-start)）
-- **Token**：用 Admin 创建 Tenant，再在 Tenant 页生成 UI + Agent Token
-- **Chat 模式**：README 中 [Chat Mode Quick Start](../README.md#chat-mode-quick-start) 配置 `-chat-worker`（如 cc-chat-echo / cc-chat-claude）
+- **Setup**: [Getting Started · step 1](getting-started.md#1--run-cc-agent-locally-single-binary) (English) or [tutorial/01-quickstart](tutorial/01-quickstart.md) (Chinese, full sample).
+- **What it's good for**: trying out Agent Control, embedding `cc-agent` into a one-shot script, or just chatting with an LLM that can actually run `bash`.
 
-## 多租户 / 团队共用控制面
+## Server operations (cc-agent · v0.7.0+)
 
-一个 cc-control 服务多团队，每个租户独立 Token、独立 Agent 与会话。
+Drop `cc-agent` on a Linux server and let it drive bash / read / grep / sysinfo / proclist / logtail to do day-2 ops: log triage, process inspection, disk cleanup, config audits, status reports. **Destructive commands** (`rm -rf`, `mkfs`, `systemctl stop`, `shutdown`, ...) wait for an Approve in the UI; auto-reject after timeout.
 
-- **模型说明**：[架构 - 认证与租户隔离](architecture.md#3-认证与租户隔离)
-- **Token 流程**：[API - Token 与鉴权](api.md) 及 [README - Token Model](../README.md#token-model-latest)
-- **管理入口**：`/admin` 创建 Tenant Token，`/tenant` 由租户自助签发 UI/Agent Token
+Good fits:
 
-## PTY 终端 + Chat 统一会话
+- One or many servers, each with a `cc-agent`; the UI switches between them.
+- Diagnosing nginx / redis / postgres logs and deciding whether to restart.
+- Scheduled health checks (disk, memory, processes, login history) and reports.
+- Light "what's the kernel version and load on prod?" interactions.
+- Distill a successful run into a reusable skill via `:reflect <name>`.
 
-在同一会话内切换终端（PTY）与聊天（Chat），共用同一 `session_id`，支持 Claude 会话恢复。
+Pointers:
 
-- **产品行为**：README [Unified Session ID](../README.md#unified-session-id)、[Chat Mode Quick Start](../README.md#chat-mode-quick-start)
-- **权限与多聊天**：[聊天模式与权限](chat-mode-permissions.md)、[多聊天 Bundle 使用](multichat-bundle-usage.md)
+- **Tutorial**: [tutorial/](tutorial/) — local 5-min run → production deploy → UI.
+- **Module docs**: [`cc-agent/README.md`](https://github.com/xuzhougeng/agent-control/blob/main/cc-agent/README.md).
+- **Approval gate**: [v0.7.1 release notes](v0.7.1-release-notes.md) (UI routing) + [v0.7.3](v0.7.3-release-notes.md) (configurable `-approval-timeout`).
+- **Provider config**: [tutorial/04-providers.md](tutorial/04-providers.md) — DeepSeek / Anthropic / Qwen / local Ollama.
 
-## 公网或生产部署
+## Bioinformatics analysis (cc-agent + the bash toolchain)
 
-将 control 暴露到公网、配置 TLS、多台 Agent 或 Cloudflare Tunnel 等。
+The `bash` tool is just `sh -c`. **Anything you've already `apt install`-ed or `conda activate`-d is callable**: BWA, samtools, bcftools, STAR, hisat2, minimap2, bedtools, vcftools, Snakemake, Nextflow ...
 
-- **入口**：[公网部署总览](deploy-public-server.md)
-- **Agent 常驻**：[后台部署指南](deploy-public-server/04-agent-background.md)（Linux systemd / Windows NSSM）
-
-## 原生客户端（macOS / iOS）
-
-使用 AgentControl 原生 App 接入同一控制面，协议与 Web 一致。
-
-- **部署与运维**：[运维与升级](deploy-public-server/03-operations.md) 中客户端接入说明
-- **项目位置**：`app/AgentControlMac/`
-
-## 服务器运维（cc-agent · v0.7.0+）
-
-把自研 cc-agent 部署到一台 Linux 服务器，让它自主驱动 LLM 调用 bash / read /
-grep / sysinfo / proclist / logtail 等内置工具完成日常运维：日志巡检、进程
-排查、磁盘清理、配置变更、系统状态汇报等。**destructive 命令（rm -rf /
-mkfs / systemctl stop / shutdown / ...）默认在 Web/iOS/Win UI 上等运维点
-Approve 才执行**，超时自动拒绝。
-
-适合场景：
-
-- 单机或多台服务器，每台跑一个 cc-agent，UI 上一键切换执行环境
-- nginx / redis / postgresql 等服务的日志诊断 + 重启决策
-- 定期巡检（磁盘、内存、进程、登录历史）+ 自动报告
-- "我想问一下生产服务器的内核版本和负载" 这种轻量交互
-- 通过 `:reflect <name>` 把成功的运维流程蒸馏成可复用 skill，下次秒启
-
-入门读这里：
-
-- **教程**：[Tutorial 入门](tutorial/README.md) → 5 分钟跑通本地 + 生产部署
-- **模块文档**：[`cc-agent/README.md`](../cc-agent/README.md)
-- **审批闸**：[v0.7.1 release notes](v0.7.1-release-notes.md)（UI 路由）+
-  [v0.7.3](v0.7.3-release-notes.md)（超时可配置 `-approval-timeout 30s/30m/1h`）
-- **Provider 配置**：[tutorial/04-providers.md](tutorial/04-providers.md)（DeepSeek / Anthropic / Qwen / 本地 Ollama）
-
-> 与 cc-proxy（包外部 Claude Code / Codex / Gemini CLI）的区别：cc-agent 自己
-> 跑 LLM 主循环，不依赖外部 CLI；UI 上以紫色 `cc-agent` 徽章区分。一台 server
-> 装哪个看你想要什么——要复用 Claude Code 全套就用 cc-proxy，要更可控的
-> server-ops agent 就用 cc-agent。两者协议在 cc-control 处统一，UI 一致。
-
-## 生物信息学分析（cc-agent + bash 工具链）
-
-cc-agent 的 bash 工具就是 `sh -c` 包装，**任何已 `apt install` / `conda
-activate` 好的生信工具都能直接调用**：BWA / samtools / bcftools / STAR /
-hisat2 / minimap2 / bedtools / vcftools / Snakemake / Nextflow ...
-
-典型 chat 会话流（实测可行）：
+Realistic chat flow:
 
 ```
-你> 用 bwa 把 sample.fastq.gz 比对到 hg38，输出排序后的 bam
+you> Map sample.fastq.gz to hg38 with bwa, sorted bam out.
 
 ▶ bash {command=which bwa samtools && ls /data/ref/hg38*}
-✓ /usr/bin/bwa /usr/bin/samtools / hg38.fa + 索引齐全
+✓ /usr/bin/bwa /usr/bin/samtools / hg38.fa + indexes ok
 ▶ bash {command=ls -la sample.fastq.gz && zcat sample.fastq.gz | head -4}
-✓ 4.5G / 看起来是 Illumina 150bp PE
+✓ 4.5G / looks like Illumina 150bp PE
 ▶ bash {command=bwa mem -t 16 hg38.fa sample.fastq.gz | samtools sort -@8 -o sample.bam -, timeout_sec=600}
 ✓ 95.3% mapped, 8min42s
-assistant> sample.bam (8.7G) 已生成，比对率 95.3%（健康）。建议下一步...
+assistant> sample.bam (8.7G) ready, 95.3% mapped (healthy). Suggested next step ...
 ```
 
-适合场景：
+Good fits:
 
-- **探索性分析**：模型自己 plan + 多步 ReAct（先 `which` 检查环境 → `ls`
-  看数据 → 跑流程 → 读 stderr 修正 → 总结）
-- **小规模流程**：单样本 align、call variant、做 QC 报告
-- **脚本生成**：让模型写 `analysis.py` / `analysis.R` 然后跑
-- **流程触发 + 监控**：`nextflow run ... -bg` + tail `.nextflow.log` + 主动
-  检查 `ps`
-- **跨 server 调度**：cc-control 一套 UI 管多台计算节点
+- **Exploratory analysis**: model self-plans multi-step ReAct (`which` → `ls` → run → read stderr → fix → summarise).
+- **Small flows**: single-sample align, variant call, QC report.
+- **Script generation**: have the model write `analysis.py` / `analysis.R` then run it.
+- **Trigger + monitor**: `nextflow run ... -bg` plus polling `tail .nextflow.log` and `ps`.
+- **Multi-server scheduling**: one cc-control UI, many compute nodes.
 
-约束（写在 `cc-agent/internal/tools/bash.go`）：
+Constraints (defined in `cc-agent/internal/tools/bash.go`):
 
-| 约束 | 当前值 | 影响 |
+| Constraint | Default | Impact |
 |---|---|---|
-| 单条 bash 命令超时 | `timeout_sec` 默认 60s，**最大 600s = 10min** | 长跑任务（whole-genome、大样本）需用 `nohup ... & echo $!` 模式拆分 |
-| bash stdout/stderr 各自上限 | 64 KB | 大输出截断，但 exit_code + tail 可见 |
-| read 工具读文件 | 256 KB / 2000 行 | BAM/big FASTQ 用 `bash zcat \| head` |
-| 命令运行期间无流式输出 | — | 模型只在命令结束后看到 stdout |
+| Per-bash command timeout | `timeout_sec` default 60s, **max 600s = 10 min** | Long jobs (whole-genome, large samples) need `nohup ... & echo $!` patterns |
+| stdout / stderr cap | 64 KB each | Big outputs are truncated, but exit_code + tail are kept |
+| `read` tool file size | 256 KB / 2000 lines | Use `bash zcat \| head` for BAM / large FASTQ |
+| No streaming during a command | — | The model only sees stdout when the command finishes |
 
-长跑任务建议 pattern（模型会主动用，也可以 `:reflect bioinfo-bg-job`
-蒸馏成 skill 重用）：
-
-```bash
-nohup <slow-cmd> > job.log 2>&1 & echo $! > job.pid
-# 然后让模型轮询：
-ps -p $(cat job.pid) > /dev/null && tail -10 job.log
-```
-
-推荐配置：
+Recommended config:
 
 ```bash
 ./cc-agent \
-  -provider anthropic -model claude-sonnet-4-6 \   # bioinfo 命令行复杂，Claude 在领域细节上更稳
+  -provider anthropic -model claude-sonnet-4-6 \   # Claude is the most stable on bioinfo flag minutiae
   -cwd /data/projects \
   -approval-timeout 5m \
   -memory /var/lib/cc-agent/sessions.db \
@@ -129,21 +76,47 @@ ps -p $(cat job.pid) > /dev/null && tail -10 job.log
   -agent-token <token> -server-id bioinfo-node-01
 ```
 
-模型选型差异：
+Model selection:
 
-| Provider / Model | bioinfo 适用度 |
+| Provider / Model | Bioinfo fit |
 |---|---|
-| Claude `claude-sonnet-4-6` | ✓ 推荐，参数最稳 |
-| DeepSeek `deepseek-chat` | ✓ 便宜，简单流程 OK，复杂 RG 字符串偶尔少参数 |
-| Ollama `qwen2.5:32b+` | 可用，速度看硬件 |
-| Ollama < 14B | ⚠ tool calling 不稳，不推荐 |
+| Claude `claude-sonnet-4-6` | ✓ Recommended, most stable on flags |
+| DeepSeek `deepseek-chat` | ✓ Cheap, fine for simple flows; occasionally drops args on complex RG strings |
+| Ollama `qwen2.5:32b+` | OK; depends on hardware |
+| Ollama < 14B | ⚠ Tool calling unreliable; not recommended |
 
-不能做（当前阶段）：
+Out of scope for now:
 
-- GUI / Jupyter 交互（没有）
-- R / Python 交互式 REPL（每次 bash 是无状态的；解决：让模型写脚本，再
-  `python script.py`）
-- bash 工具自带的并行调度（`xargs -P` 可以但截断会丢信息；推荐用 Snakemake/
-  Nextflow 做并行，cc-agent 做 orchestrator）
+- GUI / Jupyter interactivity.
+- Stateful R / Python REPL (each bash call is fresh — have the model write a script, then run it).
+- Built-in parallel scheduling. `xargs -P` works but truncated output loses information; use Snakemake / Nextflow for parallelism and let cc-agent be the orchestrator.
 
-详细架构 + skills 写法见 [`cc-agent/README.md`](../cc-agent/README.md)。
+## Wrapping Claude Code / Codex / Gemini (cc-proxy)
+
+Already invested in `claude`, `codex`, or `gemini` CLI? Run `cc-proxy` instead of `cc-agent` on that node — it surfaces the external CLI as a regular session in the same UI (Browser / iOS / macOS / Windows). cc-agent and cc-proxy live in the same control plane and the UI handles both.
+
+- **Setup**: [Getting Started · step 3](getting-started.md#3--cc-proxy--wrap-an-external-cli-agent).
+- **PTY + chat unified session**: [Chat mode permissions](chat-mode-permissions.md), [Multichat bundle usage](multichat-bundle-usage.md).
+- **Chat mode quick start**: see [README · Chat Mode](https://github.com/xuzhougeng/agent-control#chat-mode-quick-start).
+
+## Multi-tenant / shared control plane
+
+One `cc-control` serving multiple teams. Each tenant has its own tokens, agents, and sessions.
+
+- **Model**: [Architecture · auth & tenant isolation](architecture.html#3-认证与租户隔离).
+- **Tokens**: [API · token & auth](api.md), [README · Token Model](https://github.com/xuzhougeng/agent-control#token-model-latest).
+- **Admin entry**: `/admin` mints tenant tokens; `/tenant` lets the tenant self-serve UI / Agent tokens.
+
+## Public-internet / production deploy
+
+Expose `cc-control` to the internet, terminate TLS, run multiple agents, or front it with a Cloudflare Tunnel.
+
+- **Overview**: [Public-server deployment](deploy-public-server.md).
+- **Long-running agent**: [Background agent guide](deploy-public-server/04-agent-background.md) (Linux systemd / Windows NSSM).
+
+## Native macOS / iOS clients
+
+Use the AgentControl native app against the same control plane (same protocol as the web UI).
+
+- **Operations notes**: [Operations & upgrades](deploy-public-server/03-operations.md).
+- **Project location**: `app/AgentControlMac/`.

@@ -17,10 +17,10 @@
             <nav>
                 <ul>
                     <li><a href="#features">Features</a></li>
-                    <li><a href="#getting-started">Get Started</a></li>
-                    <li><a href="getting-started.html">Tutorial</a></li>
-                    <li><a href="#architecture">Architecture</a></li>
-                    <li><a href="deploy-public-server.html">Deploy</a></li>
+                    <li><a href="#getting-started">How it works</a></li>
+                    <li><a href="getting-started.html">Getting Started</a></li>
+                    <li><a href="use-cases.html">Use Cases</a></li>
+                    <li><a href="deploy-public-server.html">Self-host</a></li>
                     <li><a href="index.zh.html">中文</a></li>
                 </ul>
             </nav>
@@ -29,11 +29,11 @@
 
     <section class="hero">
         <div class="hero-content">
-            <h1>Orchestrate Your AI Agents.</h1>
-            <p>The centralized control plane for AI coding tools. Manage Claude Code, Codex, Gemini, and OpenCode sessions across multiple servers.</p>
+            <h1>One agent. Or a fleet.</h1>
+            <p>Start with <code>cc-agent</code> as a single binary on your laptop. Connect it to a web UI when you need to. Wrap Claude Code, Codex, or Gemini CLI when you have one. Use our hosted console &mdash; or self-host the whole thing.</p>
             <div class="hero-buttons">
-                <a href="https://console.cc-remote.app" class="btn btn-primary">Get Started</a>
-                <a href="getting-started.html" class="btn btn-secondary">Tutorial</a>
+                <a href="#getting-started" class="btn btn-primary">How it works</a>
+                <a href="getting-started.html" class="btn btn-secondary">Getting Started</a>
                 <a href="https://github.com/xuzhougeng/agent-control" class="btn btn-secondary">Star on GitHub</a>
             </div>
         </div>
@@ -45,17 +45,21 @@
                 <div class="dot green"></div>
             </div>
             <div class="terminal-body">
-                <div class="comment"># Install cc-agent (Linux / macOS)</div>
+                <div class="comment"># Run cc-agent locally (no control plane needed)</div>
                 <div class="command">
                     <span class="prompt">$</span>
-                    <span class="cmd-text">curl -fsSL https://cc-remote.app/install.sh | bash</span>
+                    <span class="cmd-text">./cc-agent -provider deepseek -model deepseek-chat -cwd .</span>
                 </div>
-                <div class="comment"># Install cc-agent (Windows PowerShell)</div>
+                <div class="comment"># Ask it to do something</div>
                 <div class="command">
-                    <span class="prompt">$</span>
-                    <span class="cmd-text">irm https://cc-remote.app/install.ps1 | iex</span>
+                    <span class="prompt">you&gt;</span>
+                    <span class="cmd-text">what's the kernel version on this box?</span>
                 </div>
-                <div class="comment"># Agent installed. Ready to connect.</div>
+                <div class="comment"># It runs bash, then answers.</div>
+                <div class="command">
+                    <span class="prompt">▶</span>
+                    <span class="cmd-text">bash {command=uname -r} → 6.6.87.2-microsoft-WSL2</span>
+                </div>
                 <div class="command">
                     <span class="prompt">$</span>
                     <span class="cmd-text blinking-cursor">_</span>
@@ -102,75 +106,88 @@
 
     <section id="getting-started" class="getting-started">
         <div class="container">
-            <h2 class="section-title">Get Started in 4 Steps</h2>
+            <h2 class="section-title">Four progressively richer ways to use it</h2>
+            <p style="text-align: center; max-width: 720px; margin: 0 auto 2rem; opacity: 0.85;">Pick the level that matches what you're doing today. Graduate as you need more.</p>
             <div class="steps">
                 <div class="step">
                     <div class="step-number">1</div>
                     <div class="step-body">
-                        <h3>Register &amp; Get Your Tenant Credentials</h3>
-                        <p>Sign up at <a href="https://console.cc-remote.app" target="_blank">console.cc-remote.app</a> to create your tenant. You will receive a <strong>Tenant ID</strong> and <strong>Admin Token</strong>.</p>
+                        <h3>Run <code>cc-agent</code> locally &mdash; one binary, one LLM key</h3>
+                        <p>Download <code>cc-agent</code>, give it a DeepSeek / Anthropic / OpenAI / local Ollama key, and start chatting. It runs the LLM loop itself with eight built-in tools (<code>bash</code>, <code>read</code>, <code>write</code>, <code>grep</code>, <code>glob</code>, <code>sysinfo</code>, <code>proclist</code>, <code>logtail</code>). Destructive commands hit an approval gate.</p>
+                        <div class="install-block" style="margin: 0;">
+                            <div class="command" style="margin-bottom: 0;">
+                                <span class="cmd-text">CC_AGENT_API_KEY=$(cat ~/.cc-agent-key) \
+CC_AGENT_BASE_URL=https://api.deepseek.com \
+./cc-agent -provider deepseek -model deepseek-chat \
+           -cwd ~/work -memory ~/cc-agent.db</span>
+                            </div>
+                        </div>
+                        <p style="margin-top: 0.75rem;">No control plane, no UI, no remote &mdash; just a REPL.</p>
                     </div>
                 </div>
                 <div class="step">
                     <div class="step-number">2</div>
                     <div class="step-body">
-                        <h3>Generate UI Token &amp; Agent Token</h3>
-                        <p>Use your Admin Token to create two types of credentials:</p>
-                        <div class="token-cards">
-                            <div class="token-card">
-                                <div class="token-icon"><i class="fas fa-desktop"></i></div>
-                                <strong>UI Token</strong>
-                                <p>Authenticates the browser dashboard for viewing sessions, logs, and terminal output.</p>
-                            </div>
-                            <div class="token-card">
-                                <div class="token-icon"><i class="fas fa-robot"></i></div>
-                                <strong>Agent Token</strong>
-                                <p>Authenticates each <code>cc-agent</code> instance that connects to the control plane.</p>
+                        <h3>Connect <code>cc-agent</code> to <code>cc-control</code> &mdash; drive it from the browser</h3>
+                        <p>Want to run it on a remote server, share with teammates, or use the iOS / macOS / Windows clients? Add <code>-control-url</code> and an Agent Token. The agent registers, you get a web UI on top of it.</p>
+                        <div class="install-block" style="margin: 0;">
+                            <div class="command" style="margin-bottom: 0;">
+                                <span class="cmd-text">./cc-agent \
+  -control-url wss://cc-remote.app/ws/agent \
+  -agent-token &lt;your-agent-token&gt; \
+  -server-id srv-01 -allow-root /path/to/repo</span>
                             </div>
                         </div>
+                        <p style="margin-top: 0.75rem;">One process per node; the dashboard shows them all with a purple <code>cc-agent</code> badge.</p>
                     </div>
                 </div>
                 <div class="step">
                     <div class="step-number">3</div>
                     <div class="step-body">
-                        <h3>Connect Agent to Control</h3>
-                        <p>Run <code>cc-agent</code> on your target machine with your Agent Token:</p>
+                        <h3>Already use Claude Code / Codex / Gemini CLI? Run <code>cc-proxy</code></h3>
+                        <p><code>cc-proxy</code> is a PTY proxy that wraps an external CLI agent and exposes it as a regular session in the same UI. Pair <code>cc-agent</code> on some nodes and <code>cc-proxy</code> on others &mdash; the control plane treats them uniformly.</p>
                         <div class="install-block" style="margin: 0;">
                             <div class="command" style="margin-bottom: 0;">
-                                <span class="cmd-text">cc-agent \
+                                <span class="cmd-text">./cc-proxy \
   -control-url wss://cc-remote.app/ws/agent \
   -agent-token &lt;your-agent-token&gt; \
-  -server-id srv-01 \
-  -allow-root /path/to/repo \
-  -claude-path /path/to/claude</span>
+  -server-id claude-node-01 \
+  -claude-path /usr/local/bin/claude</span>
                             </div>
                         </div>
+                        <p style="margin-top: 0.75rem; opacity: 0.8;">Naming note: <code>cc-proxy</code> was called <code>cc-agent</code> before v0.7.0; the self-developed agent took over the name. Different roles, same protocol.</p>
                     </div>
                 </div>
                 <div class="step">
                     <div class="step-number">4</div>
                     <div class="step-body">
-                        <h3>Control Your Agents</h3>
-                        <p>Log in with your UI Token to manage sessions from anywhere.</p>
-                        <div class="hero-buttons" style="margin-top: 1rem;">
-                            <a href="https://console.cc-remote.app/tenant" class="btn btn-primary"><i class="fas fa-globe"></i>&nbsp; Web UI</a>
+                        <h3>Hosted control plane &mdash; or run your own</h3>
+                        <p>Two ways to get the <code>cc-control</code> side:</p>
+                        <div class="token-cards">
+                            <div class="token-card">
+                                <div class="token-icon"><i class="fas fa-cloud"></i></div>
+                                <strong>Hosted</strong>
+                                <p>Sign up at <a href="https://console.cc-remote.app" target="_blank">console.cc-remote.app</a>, mint UI / Agent tokens, point your nodes at <code>wss://cc-remote.app/ws/agent</code>. Works in minutes; iOS / macOS / Windows clients too.</p>
+                            </div>
+                            <div class="token-card">
+                                <div class="token-icon"><i class="fas fa-server"></i></div>
+                                <strong>Self-host</strong>
+                                <p><code>cc-control</code> is MIT-licensed. Run it on Linux behind TLS or a Cloudflare Tunnel. See the <a href="deploy-public-server.html">deployment guide</a>.</p>
+                            </div>
+                        </div>
+                        <div class="hero-buttons" style="margin-top: 1.25rem;">
+                            <a href="https://console.cc-remote.app" class="btn btn-primary"><i class="fas fa-globe"></i>&nbsp; Open Hosted Console</a>
                             <a href="https://apps.apple.com/us/app/cc-remote/id6759078097" target="_blank" class="btn btn-secondary"><i class="fab fa-apple"></i>&nbsp; iOS / macOS App</a>
+                            <a href="deploy-public-server.html" class="btn btn-secondary"><i class="fas fa-server"></i>&nbsp; Self-host Guide</a>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="self-deploy-note">
-                <i class="fas fa-server"></i>
-                <div>
-                    <strong>Prefer self-hosting?</strong>
-                    Agent Control is open source. You can <a href="deploy-public-server.html">deploy your own control plane</a> on Linux.
-                </div>
-            </div>
-            <div class="self-deploy-note">
                 <i class="fas fa-book-open"></i>
                 <div>
-                    <strong>Need a tutorial path?</strong>
-                    Start from <a href="getting-started.html">Tutorial</a>, then continue to <a href="use-cases.html">Use Cases</a>.
+                    <strong>Read the long form?</strong>
+                    English overview at <a href="getting-started.html">Getting Started</a>, then <a href="use-cases.html">Use Cases</a>. Chinese step-by-step at <a href="tutorial/">tutorial/</a>.
                 </div>
             </div>
         </div>

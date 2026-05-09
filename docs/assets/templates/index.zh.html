@@ -17,11 +17,10 @@
             <nav>
                 <ul>
                     <li><a href="#features">核心能力</a></li>
-                    <li><a href="#getting-started">快速开始</a></li>
+                    <li><a href="#getting-started">怎么用</a></li>
                     <li><a href="tutorial/">中文教程</a></li>
-                    <li><a href="getting-started.html">Tutorial (EN)</a></li>
-                    <li><a href="#architecture">架构</a></li>
-                    <li><a href="deploy-public-server.html">部署</a></li>
+                    <li><a href="use-cases.html">使用场景</a></li>
+                    <li><a href="deploy-public-server.html">自部署</a></li>
                     <li><a href="index.en.html">English</a></li>
                 </ul>
             </nav>
@@ -30,11 +29,11 @@
 
     <section class="hero">
         <div class="hero-content">
-            <h1>统一编排你的 AI Agent。</h1>
-            <p>一个集中式控制平面，统一管理 Claude Code、Codex、Gemini、OpenCode 在多台服务器上的会话与执行状态。</p>
+            <h1>一个 agent，或者一支 agent 队伍。</h1>
+            <p>从一个 <code>cc-agent</code> 二进制 + LLM key 起步。需要的时候接入控制面，浏览器/手机/iOS App 一键调度。已经在用 Claude Code / Codex / Gemini CLI？再加 <code>cc-proxy</code>。控制面用我们的托管站，或者自部署，都行。</p>
             <div class="hero-buttons">
-                <a href="https://console.cc-remote.app" class="btn btn-primary">立即开始</a>
-                <a href="getting-started.html" class="btn btn-secondary">查看教程</a>
+                <a href="#getting-started" class="btn btn-primary">怎么用</a>
+                <a href="tutorial/" class="btn btn-secondary">中文教程</a>
                 <a href="https://github.com/xuzhougeng/agent-control" class="btn btn-secondary">GitHub Star</a>
             </div>
         </div>
@@ -46,17 +45,21 @@
                 <div class="dot green"></div>
             </div>
             <div class="terminal-body">
-                <div class="comment"># 安装 cc-agent（Linux / macOS）</div>
+                <div class="comment"># 单机起 cc-agent，不需要控制面</div>
                 <div class="command">
                     <span class="prompt">$</span>
-                    <span class="cmd-text">curl -fsSL https://cc-remote.app/install.sh | bash</span>
+                    <span class="cmd-text">./cc-agent -provider deepseek -model deepseek-chat -cwd .</span>
                 </div>
-                <div class="comment"># 安装 cc-agent（Windows PowerShell）</div>
+                <div class="comment"># 直接问</div>
                 <div class="command">
-                    <span class="prompt">$</span>
-                    <span class="cmd-text">irm https://cc-remote.app/install.ps1 | iex</span>
+                    <span class="prompt">you&gt;</span>
+                    <span class="cmd-text">这台机器内核版本多少？</span>
                 </div>
-                <div class="comment"># Agent 已安装，准备连接控制平面</div>
+                <div class="comment"># 它会自己调 bash，再回答</div>
+                <div class="command">
+                    <span class="prompt">▶</span>
+                    <span class="cmd-text">bash {command=uname -r} → 6.6.87.2-microsoft-WSL2</span>
+                </div>
                 <div class="command">
                     <span class="prompt">$</span>
                     <span class="cmd-text blinking-cursor">_</span>
@@ -103,76 +106,89 @@
 
     <section id="getting-started" class="getting-started">
         <div class="container">
-            <h2 class="section-title">4 步快速开始</h2>
+            <h2 class="section-title">从单机到控制面，4 个台阶</h2>
+            <p style="text-align: center; max-width: 720px; margin: 0 auto 2rem; opacity: 0.85;">按你当前的需求挑一档。后面随时往上加层。</p>
             <div class="steps">
                 <div class="step">
                     <div class="step-number">1</div>
                     <div class="step-body">
-                        <h3>注册并获取租户凭证</h3>
-                        <p>访问 <a href="https://console.cc-remote.app" target="_blank">console.cc-remote.app</a> 创建租户，获得 <strong>Tenant ID</strong> 和 <strong>Admin Token</strong>。</p>
+                        <h3>本机起 <code>cc-agent</code> &mdash; 一个二进制 + 一个 LLM key</h3>
+                        <p>下载 <code>cc-agent</code>，给它一份 DeepSeek / Anthropic / OpenAI / 本地 Ollama 的 key，它就能在终端 REPL 里跑起来。自带 8 个工具（<code>bash</code>、<code>read</code>、<code>write</code>、<code>grep</code>、<code>glob</code>、<code>sysinfo</code>、<code>proclist</code>、<code>logtail</code>），destructive 命令默认走审批闸。</p>
+                        <div class="install-block" style="margin: 0;">
+                            <div class="command" style="margin-bottom: 0;">
+                                <span class="cmd-text">CC_AGENT_API_KEY=$(cat ~/.cc-agent-key) \
+CC_AGENT_BASE_URL=https://api.deepseek.com \
+./cc-agent -provider deepseek -model deepseek-chat \
+           -cwd ~/work -memory ~/cc-agent.db</span>
+                            </div>
+                        </div>
+                        <p style="margin-top: 0.75rem;">不连控制面、不开 UI、不出网，纯 REPL。适合本地用 / 嵌脚本。</p>
                     </div>
                 </div>
                 <div class="step">
                     <div class="step-number">2</div>
                     <div class="step-body">
-                        <h3>生成 UI Token 与 Agent Token</h3>
-                        <p>使用 Admin Token 生成两类凭证：</p>
-                        <div class="token-cards">
-                            <div class="token-card">
-                                <div class="token-icon"><i class="fas fa-desktop"></i></div>
-                                <strong>UI Token</strong>
-                                <p>用于浏览器工作区登录和会话查看。</p>
-                            </div>
-                            <div class="token-card">
-                                <div class="token-icon"><i class="fas fa-robot"></i></div>
-                                <strong>Agent Token</strong>
-                                <p>用于服务器上的 <code>cc-agent</code> 连接控制平面。</p>
+                        <h3>把 <code>cc-agent</code> 接入 <code>cc-control</code> &mdash; 浏览器/手机 一键调度</h3>
+                        <p>想把 agent 跑在远端服务器、给同事一起用、或者用 iOS / macOS / Windows 客户端？加 <code>-control-url</code> 和 Agent Token，agent 就会注册到控制面，UI 自动看见它。</p>
+                        <div class="install-block" style="margin: 0;">
+                            <div class="command" style="margin-bottom: 0;">
+                                <span class="cmd-text">./cc-agent \
+  -control-url wss://cc-remote.app/ws/agent \
+  -agent-token &lt;your-agent-token&gt; \
+  -server-id srv-01 -allow-root /path/to/repo</span>
                             </div>
                         </div>
+                        <p style="margin-top: 0.75rem;">每台机器跑一个进程。仪表盘上 <code>cc-agent</code> 节点带紫色徽章，与 cc-proxy 一目了然。</p>
                     </div>
                 </div>
                 <div class="step">
                     <div class="step-number">3</div>
                     <div class="step-body">
-                        <h3>连接 Agent 到控制平面</h3>
-                        <p>在目标机器运行 <code>cc-agent</code> 并注入 Agent Token：</p>
+                        <h3>已经在用 Claude Code / Codex / Gemini CLI？跑 <code>cc-proxy</code></h3>
+                        <p><code>cc-proxy</code> 是 PTY 代理，包外部 CLI agent，让它以普通 session 形式在 UI 里出现。一台机器跑 <code>cc-agent</code>、另一台跑 <code>cc-proxy</code> 都没问题，控制面统一处理。</p>
                         <div class="install-block" style="margin: 0;">
                             <div class="command" style="margin-bottom: 0;">
-                                <span class="cmd-text">cc-agent \
+                                <span class="cmd-text">./cc-proxy \
   -control-url wss://cc-remote.app/ws/agent \
   -agent-token &lt;your-agent-token&gt; \
-  -server-id srv-01 \
-  -allow-root /path/to/repo \
-  -claude-path /path/to/claude</span>
+  -server-id claude-node-01 \
+  -claude-path /usr/local/bin/claude</span>
                             </div>
                         </div>
+                        <p style="margin-top: 0.75rem; opacity: 0.8;">命名说明：<code>cc-proxy</code> 在 v0.7.0 之前叫 <code>cc-agent</code>，新自研的 agent 拿走了原名字。两者协议一致，角色不同。</p>
                     </div>
                 </div>
                 <div class="step">
                     <div class="step-number">4</div>
                     <div class="step-body">
-                        <h3>开始管理 Agent</h3>
-                        <p>使用 UI Token 登录后，即可在任意位置统一管理会话。</p>
-                        <div class="hero-buttons" style="margin-top: 1rem;">
-                            <a href="https://console.cc-remote.app/tenant" class="btn btn-primary"><i class="fas fa-globe"></i>&nbsp; Web UI</a>
+                        <h3>用我们托管，或自部署 <code>cc-control</code></h3>
+                        <p>控制面有两条路：</p>
+                        <div class="token-cards">
+                            <div class="token-card">
+                                <div class="token-icon"><i class="fas fa-cloud"></i></div>
+                                <strong>托管</strong>
+                                <p>到 <a href="https://console.cc-remote.app" target="_blank">console.cc-remote.app</a> 注册租户、签 UI/Agent Token，agent 连 <code>wss://cc-remote.app/ws/agent</code>。几分钟搞定，iOS / macOS / Windows 客户端齐全。</p>
+                            </div>
+                            <div class="token-card">
+                                <div class="token-icon"><i class="fas fa-server"></i></div>
+                                <strong>自部署</strong>
+                                <p><code>cc-control</code> MIT 开源。一台 Linux + TLS / Cloudflare Tunnel 就能上线，详见 <a href="deploy-public-server.html">部署文档</a>。</p>
+                            </div>
+                        </div>
+                        <div class="hero-buttons" style="margin-top: 1.25rem;">
+                            <a href="https://console.cc-remote.app" class="btn btn-primary"><i class="fas fa-globe"></i>&nbsp; 打开托管控制台</a>
                             <a href="https://apps.apple.com/us/app/cc-remote/id6759078097" target="_blank" class="btn btn-secondary"><i class="fab fa-apple"></i>&nbsp; iOS / macOS App</a>
+                            <a href="deploy-public-server.html" class="btn btn-secondary"><i class="fas fa-server"></i>&nbsp; 自部署指南</a>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="self-deploy-note">
-                <i class="fas fa-server"></i>
-                <div>
-                    <strong>希望自托管？</strong>
-                    Agent Control 完全开源，可参考 <a href="deploy-public-server.html">部署文档</a> 在 Linux 服务器快速上线。
-                </div>
-            </div>
-            <div class="self-deploy-note">
                 <i class="fas fa-book-open"></i>
                 <div>
-                    <strong>想按教程路径学习？</strong>
-                    中文：进入 <a href="tutorial/">教程目录</a>（5 分钟跑通 → 生产部署 → UI / Provider）。
-                    英文：先看 <a href="getting-started.html">快速上手</a>，再继续 <a href="use-cases.html">使用场景</a>。
+                    <strong>想按教程路径学？</strong>
+                    中文进入 <a href="tutorial/">教程目录</a>（5 分钟跑通 → 生产部署 → UI / Provider）。
+                    英文看 <a href="getting-started.html">Getting Started</a> 和 <a href="use-cases.html">Use Cases</a>。
                 </div>
             </div>
         </div>
