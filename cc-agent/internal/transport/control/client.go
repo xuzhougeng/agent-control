@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -18,7 +20,13 @@ import (
 	"github.com/gorilla/websocket"
 
 	"cc-agent/internal/agent"
+	"cc-agent/internal/skills"
 )
+
+// installedSkillNameRE constrains skill names accepted from install_skill_request
+// envelopes. Conservative subset of POSIX path-portable characters that also
+// avoids any traversal sequences (".."/"/"). Mirrors the registry's intent.
+var installedSkillNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{1,63}$`)
 
 // Options configures a Client. Agent and ServerID are required; everything
 // else has sensible defaults.
@@ -32,6 +40,9 @@ type Options struct {
 	HeartbeatEvery time.Duration
 	TLSSkipVerify  bool
 	AgentVersion   string
+	// TeamDir is where skills delivered via install_skill_request envelopes
+	// are written. Empty disables install_skill_request handling.
+	TeamDir string
 
 	Agent *agent.Agent
 }
@@ -277,6 +288,8 @@ func (c *Client) handle(ctx context.Context, msg Envelope) error {
 			"request_id", p.RequestID, "approved", p.Approved, "actor", p.Actor,
 			"approver_attached", hasApprover, "pending_found", pendingFound)
 		return nil
+	case "install_skill_request":
+		return c.installSkillRequest(msg)
 	case "start_session":
 		// Terminal sessions are cc-proxy's job; explicitly reject so the
 		// operator gets a clear message instead of a silent drop.
@@ -490,6 +503,66 @@ func (c *Client) enqueue(env Envelope) error {
 	default:
 		return errors.New("send queue full")
 	}
+}
+
+// writeInstalledSkill writes a registry-delivered skill to teamDir atomically.
+// Mirrors skills.RegistryClient.Install's file-write semantics so the on-disk
+// layout of UI-installed and CLI-installed skills is identical.
+func writeInstalledSkill(teamDir string, sk *skills.StoredSkill) error {
+	if teamDir == "" {
+		return errors.New("install_skill_request: TeamDir not configured")
+	}
+	if sk == nil || sk.Name == "" {
+		return errors.New("install_skill_request: skill missing name")
+	}
+	// Name validation is the only barrier between an attacker-controlled
+	// envelope and arbitrary file writes; reject anything that isn't a plain
+	// lowercase identifier.
+	if !installedSkillNameRE.MatchString(sk.Name) {
+		return fmt.Errorf("install_skill_request: invalid name %q", sk.Name)
+	}
+	if err := os.MkdirAll(teamDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir team: %w", err)
+	}
+	final := filepath.Join(teamDir, sk.Name+".json")
+	tmp := final + ".tmp"
+	body, err := json.MarshalIndent(sk.Skill, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	if err := os.WriteFile(tmp, body, 0o644); err != nil {
+		return fmt.Errorf("write tmp: %w", err)
+	}
+	if err := os.Rename(tmp, final); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("rename: %w", err)
+	}
+	return nil
+}
+
+// installSkillRequest handles an install_skill_request envelope from
+// cc-control: decodes the StoredSkill payload, writes it to TeamDir, and
+// reloads the agent's skill registry so the new skill is immediately
+// available without a restart.
+func (c *Client) installSkillRequest(msg Envelope) error {
+	var sk skills.StoredSkill
+	if err := json.Unmarshal(msg.Data, &sk); err != nil {
+		slog.Error("install_skill_request decode failed", "err", err)
+		return fmt.Errorf("install_skill_request decode: %w", err)
+	}
+	if err := writeInstalledSkill(c.opts.TeamDir, &sk); err != nil {
+		slog.Error("install_skill_request write failed", "err", err, "name", sk.Name)
+		return err
+	}
+	if c.opts.Agent != nil {
+		if reg := c.opts.Agent.Skills(); reg != nil {
+			if err := reg.LoadDir(c.opts.TeamDir); err != nil {
+				slog.Warn("install_skill_request reload failed", "err", err)
+			}
+		}
+	}
+	slog.Info("install_skill_request applied", "name", sk.Name, "version", sk.Version)
+	return nil
 }
 
 func validateCwd(cwd string, allowedRoots []string) error {

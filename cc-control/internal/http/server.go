@@ -10,6 +10,7 @@ import (
 
 	"cc-control/internal/auth"
 	"cc-control/internal/core"
+	"cc-control/internal/registry"
 	wshandler "cc-control/internal/ws"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -20,6 +21,7 @@ type Server struct {
 	Tokens      *auth.Store
 	UIDir       string
 	CheckOrigin bool
+	Registry    *registry.RouteDeps // optional; nil = registry disabled
 }
 
 func (s *Server) Router() http.Handler {
@@ -64,6 +66,10 @@ func (s *Server) Router() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
 
+	if s.Registry != nil {
+		registry.RegisterRoutes(mux, s.Registry)
+	}
+
 	uiDir := s.UIDir
 	if uiDir == "" {
 		uiDir = "cc-web"
@@ -72,6 +78,7 @@ func (s *Server) Router() http.Handler {
 	adminPath := filepath.Join(filepath.Clean(uiDir), "admin.html")
 	tenantPath := filepath.Join(filepath.Clean(uiDir), "tenant.html")
 	chatPath := filepath.Join(filepath.Clean(uiDir), "chat.html")
+	skillsPath := filepath.Join(filepath.Clean(uiDir), "skills.html")
 	fileServer := http.FileServer(http.Dir(filepath.Clean(uiDir)))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
@@ -87,6 +94,9 @@ func (s *Server) Router() http.Handler {
 				return
 			case "/chat", "/chat/":
 				http.ServeFile(w, r, chatPath)
+				return
+			case "/skills", "/skills/":
+				http.ServeFile(w, r, skillsPath)
 				return
 			}
 		}

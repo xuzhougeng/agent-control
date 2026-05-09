@@ -183,6 +183,18 @@ func (cp *ControlPlane) TouchServer(serverID string) {
 	s.Status = ServerOnline
 }
 
+// SendToAgent delivers an envelope to the agent registered under serverID.
+// Returns an error if no agent is currently connected with that ID.
+func (cp *ControlPlane) SendToAgent(serverID string, env Envelope) error {
+	cp.mu.RLock()
+	conn := cp.agentConns[serverID]
+	cp.mu.RUnlock()
+	if conn == nil {
+		return errors.New("no agent connected with server_id " + serverID)
+	}
+	return conn.Send(env)
+}
+
 func (cp *ControlPlane) RemoveAgentConnection(serverID string) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()

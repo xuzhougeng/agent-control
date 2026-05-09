@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -46,10 +47,11 @@ type Config struct {
 	MemoryPath string `json:"memory_path"` // empty = in-memory only
 
 	// Optional integration.
-	ControlURL  string `json:"control_url"`
-	AgentToken  string `json:"agent_token"`
-	ServerID    string `json:"server_id"`
-	HTTPListen  string `json:"http_listen"` // e.g. ":19090"
+	ControlURL     string `json:"control_url"`
+	ControlHTTPURL string `json:"control_http_url"`
+	AgentToken     string `json:"agent_token"`
+	ServerID       string `json:"server_id"`
+	HTTPListen     string `json:"http_listen"` // e.g. ":19090"
 
 	// ApprovalTimeout is how long RemoteApprover (cc-control bridge mode) waits
 	// for a human to click Approve/Reject before auto-denying. Empty/invalid
@@ -97,6 +99,9 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("CC_AGENT_APPROVAL_TIMEOUT"); v != "" {
 		c.ApprovalTimeout = v
 	}
+	if v := os.Getenv("CC_AGENT_CONTROL_HTTP_URL"); v != "" {
+		c.ControlHTTPURL = v
+	}
 }
 
 // ApprovalTimeoutDuration parses ApprovalTimeout into a time.Duration; falls
@@ -143,6 +148,27 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Cwd != "" {
 		c.Cwd, _ = filepath.Abs(c.Cwd)
+	}
+	if c.ControlHTTPURL == "" && c.ControlURL != "" {
+		switch {
+		case strings.HasPrefix(c.ControlURL, "wss://"):
+			c.ControlHTTPURL = "https://" + strings.TrimPrefix(c.ControlURL, "wss://")
+		case strings.HasPrefix(c.ControlURL, "ws://"):
+			c.ControlHTTPURL = "http://" + strings.TrimPrefix(c.ControlURL, "ws://")
+		}
+		// Strip path suffix if present (e.g. /ws/agent)
+		if c.ControlHTTPURL != "" {
+			var prefix string
+			if strings.HasPrefix(c.ControlHTTPURL, "https://") {
+				prefix = "https://"
+			} else {
+				prefix = "http://"
+			}
+			rest := c.ControlHTTPURL[len(prefix):]
+			if i := strings.Index(rest, "/"); i >= 0 {
+				c.ControlHTTPURL = prefix + rest[:i]
+			}
+		}
 	}
 }
 

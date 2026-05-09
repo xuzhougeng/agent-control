@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -109,8 +110,42 @@ func main() {
 	defer mem.Close()
 
 	skillReg := skills.NewRegistry()
-	if err := skillReg.LoadDir(cfg.SkillsDir); err != nil {
-		log.Printf("skills: %v (continuing without)", err)
+	if cfg.SkillsDir != "" {
+		localDir := filepath.Join(cfg.SkillsDir, "local")
+		teamDir := filepath.Join(cfg.SkillsDir, "team")
+		// If neither subdirectory exists, fall back to flat layout (backwards-compat).
+		_, localErr := os.Stat(localDir)
+		_, teamErr := os.Stat(teamDir)
+		if os.IsNotExist(localErr) && os.IsNotExist(teamErr) {
+			if err := skillReg.LoadDir(cfg.SkillsDir); err != nil {
+				log.Printf("skills: %v (continuing without)", err)
+			}
+		} else {
+			if err := skills.LoadTwoPhase(skillReg, localDir, teamDir); err != nil {
+				log.Printf("skills: %v (continuing without)", err)
+			}
+		}
+	}
+
+	// teamDir is the on-disk location for team-scope (registry-delivered)
+	// skills. Shared by the registry HTTP client (CLI-driven installs) and
+	// the WS install_skill_request handler (UI-driven installs).
+	teamDir := ""
+	if cfg.SkillsDir != "" {
+		teamDir = filepath.Join(cfg.SkillsDir, "team")
+	}
+
+	// RegistryClient talks to cc-control's /api/registry/* endpoints for
+	// publish/install/list/history. Built only when both ControlHTTPURL and
+	// AgentToken are set.
+	var registryClient *skills.RegistryClient
+	if cfg.ControlHTTPURL != "" && cfg.AgentToken != "" {
+		registryClient = &skills.RegistryClient{
+			BaseURL:    cfg.ControlHTTPURL,
+			AgentToken: cfg.AgentToken,
+			ServerID:   cfg.ServerID,
+			TeamDir:    teamDir,
+		}
 	}
 
 	toolReg := tools.DefaultRegistry(cfg.Cwd, cfg.AllowedRoots)
@@ -150,6 +185,7 @@ func main() {
 			ServerID:     cfg.ServerID,
 			AllowedRoots: cfg.AllowedRoots,
 			Tags:         []string{"cc-agent"},
+			TeamDir:      teamDir,
 			Agent:        ag,
 		})
 		if err != nil {
@@ -199,7 +235,7 @@ func main() {
 		return
 	}
 
-	if err := transport.RunCLI(ctx, ag, *sessionID, stdinReader); err != nil {
+	if err := transport.RunCLI(ctx, ag, registryClient, *sessionID, stdinReader); err != nil {
 		log.Fatalf("cli: %v", err)
 	}
 	fmt.Println("bye.")

@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"cc-agent/internal/agent"
+	"cc-agent/internal/skills"
 )
 
 // CLIApprover prompts the operator on stderr/stdin for destructive commands.
@@ -37,7 +40,7 @@ func (a *CLIApprover) Approve(_ context.Context, cmd, reason string) (bool, erro
 // RunCLI runs a simple stdin REPL. Each line of input is one user turn; agent
 // events stream to stdout while the model thinks. The shared bufio.Reader is
 // reused by CLIApprover so destructive-command prompts don't fight stdin.
-func RunCLI(ctx context.Context, ag *agent.Agent, sessionID string, r *bufio.Reader) error {
+func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID string, r *bufio.Reader) error {
 	ag.SetListener(func(e agent.Event) {
 		switch e.Kind {
 		case agent.EventAssistant:
@@ -72,7 +75,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, sessionID string, r *bufio.Rea
 			return nil
 		}
 		if strings.HasPrefix(line, ":") {
-			if err := handleSlashCommand(ctx, ag, sessionID, line); err != nil {
+			if err := handleSlashCommand(ctx, ag, rc, sessionID, line); err != nil {
 				fmt.Fprintf(os.Stderr, "command error: %v\n", err)
 			}
 			continue
@@ -87,7 +90,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, sessionID string, r *bufio.Rea
 //   :help                         show commands
 //   :skills                       list loaded skills
 //   :reflect <name> [description] distill the current session into a skill
-func handleSlashCommand(ctx context.Context, ag *agent.Agent, sessionID, line string) error {
+func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID, line string) error {
 	parts := strings.Fields(line)
 	cmd := parts[0]
 	switch cmd {
@@ -96,6 +99,11 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, sessionID, line st
   :help                            show this help
   :skills                          list loaded skills
   :reflect <name> [description]    distill current session into a skill
+  :registry [search]               list team skills
+  :publish <name>                  push a local skill to the team registry
+  :install <name>[@version]        fetch + install a team skill (with preview)
+  :history <name>                  show all versions of a team skill
+  :rollback <name> <version>       install a specific older version
   exit | quit                      leave`)
 		return nil
 	case ":skills":
@@ -138,6 +146,143 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, sessionID, line st
 			}
 		}
 		return nil
+	case ":registry":
+		if rc == nil {
+			fmt.Println("(registry not configured: set control_http_url + agent_token)")
+			return nil
+		}
+		q := ""
+		if len(parts) > 1 {
+			q = strings.Join(parts[1:], " ")
+		}
+		rows, err := rc.List(q)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			fmt.Println("(no skills in registry)")
+			return nil
+		}
+		for _, s := range rows {
+			fmt.Printf("  %-30s v%-3d %-12s %s\n", s.Name, s.Version, s.AuthorServerID, s.Description)
+		}
+		return nil
+	case ":publish":
+		if rc == nil {
+			fmt.Println("(registry not configured)")
+			return nil
+		}
+		if len(parts) < 2 {
+			return fmt.Errorf("usage: :publish <name>")
+		}
+		name := parts[1]
+		reg := ag.Skills()
+		if reg == nil {
+			return fmt.Errorf("no local skills registry")
+		}
+		sk, ok := reg.Get(name)
+		if !ok {
+			return fmt.Errorf("no local skill %q (try :skills to list)", name)
+		}
+		wire := &skills.Skill{
+			Name:        sk.Name,
+			Description: sk.Description,
+			Prompt:      sk.Prompt,
+			Tools:       sk.Tools,
+			Examples:    sk.Examples,
+		}
+		v, err := rc.Publish(wire)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("\033[32m✓ published\033[0m %s@%d\n", name, v)
+		return nil
+	case ":install":
+		if rc == nil {
+			fmt.Println("(registry not configured)")
+			return nil
+		}
+		if len(parts) < 2 {
+			return fmt.Errorf("usage: :install <name>[@version]")
+		}
+		name, version := parseNameVersion(parts[1])
+		// Fetch without writing first to render the preview.
+		preview := *rc       // shallow copy
+		preview.TeamDir = "" // disables file write
+		got, err := preview.Install(name, version)
+		if err != nil {
+			return err
+		}
+		fmt.Println("\033[36m── skill preview ──\033[0m")
+		fmt.Printf("  name:    %s @ v%d\n", got.Name, got.Version)
+		fmt.Printf("  author:  %s\n", got.AuthorServerID)
+		fmt.Printf("  updated: %s\n", time.Unix(got.CreatedAtUnix, 0).Format(time.RFC3339))
+		fmt.Printf("  tools:   %s\n", strings.Join(got.Tools, ", "))
+		fmt.Printf("  prompt:  %s\n", clip(got.Prompt, 200))
+		if len(got.Examples) > 0 {
+			fmt.Println("  examples:")
+			for _, e := range got.Examples {
+				fmt.Printf("    - %s\n", clip(e, 80))
+			}
+		}
+		fmt.Print("install? [y/N]: ")
+		reader := bufio.NewReader(os.Stdin)
+		line, _ := reader.ReadString('\n')
+		line = strings.TrimSpace(strings.ToLower(line))
+		if line != "y" && line != "yes" {
+			fmt.Println("aborted.")
+			return nil
+		}
+		if _, err := rc.Install(name, version); err != nil {
+			return err
+		}
+		teamDir := rc.TeamDir
+		fmt.Printf("\033[32m✓ installed\033[0m %s@%d → %s/%s.json\n", got.Name, got.Version, teamDir, got.Name)
+		if reg := ag.Skills(); reg != nil {
+			_ = reg.LoadDir(teamDir)
+		}
+		return nil
+	case ":history":
+		if rc == nil {
+			fmt.Println("(registry not configured)")
+			return nil
+		}
+		if len(parts) < 2 {
+			return fmt.Errorf("usage: :history <name>")
+		}
+		hist, err := rc.History(parts[1])
+		if err != nil {
+			return err
+		}
+		if len(hist) == 0 {
+			fmt.Println("(no history)")
+			return nil
+		}
+		for _, h := range hist {
+			fmt.Printf("  v%-3d %-12s %s  %s\n", h.Version, h.AuthorServerID,
+				time.Unix(h.CreatedAtUnix, 0).Format(time.RFC3339), h.Description)
+		}
+		return nil
+	case ":rollback":
+		if rc == nil {
+			fmt.Println("(registry not configured)")
+			return nil
+		}
+		if len(parts) < 3 {
+			return fmt.Errorf("usage: :rollback <name> <version>")
+		}
+		v, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return err
+		}
+		if _, err := rc.Install(parts[1], v); err != nil {
+			return err
+		}
+		fmt.Printf("\033[32m✓ rolled back\033[0m %s to v%d\n", parts[1], v)
+		if reg := ag.Skills(); reg != nil {
+			_ = reg.LoadDir(rc.TeamDir)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unknown command %q (try :help)", cmd)
 	}
@@ -160,4 +305,14 @@ func clip(s string, n int) string {
 		return s
 	}
 	return s[:n] + "...(+" + fmt.Sprint(len(s)-n) + ")"
+}
+
+func parseNameVersion(s string) (string, int) {
+	if i := strings.LastIndex(s, "@"); i > 0 {
+		v, err := strconv.Atoi(s[i+1:])
+		if err == nil {
+			return s[:i], v
+		}
+	}
+	return s, 0
 }

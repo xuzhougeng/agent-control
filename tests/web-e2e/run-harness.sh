@@ -19,6 +19,7 @@ HOME_DIR="${TMP_DIR}/home"
 CONTROL_LOG="${TMP_DIR}/cc-control.log"
 AGENT_LOG="${TMP_DIR}/cc-agent.log"
 AUDIT_PATH="${TMP_DIR}/audit.jsonl"
+REGISTRY_DB="${TMP_DIR}/registry.db"
 FAKE_CLAUDE="${ROOT_DIR}/tests/web-e2e/fixtures/fake-claude.py"
 
 mkdir -p "$BIN_DIR" "$HOME_DIR/.claude/session-env"
@@ -56,6 +57,7 @@ HOME="${HOME_DIR}" "${BIN_DIR}/cc-control" \
   -ui-token "${UI_TOKEN}" \
   -agent-token "${AGENT_TOKEN}" \
   -audit-path "${AUDIT_PATH}" \
+  -registry-db "${REGISTRY_DB}" \
   >"${CONTROL_LOG}" 2>&1 &
 CONTROL_PID="$!"
 
