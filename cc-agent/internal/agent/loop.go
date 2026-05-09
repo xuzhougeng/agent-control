@@ -36,6 +36,7 @@ type Agent struct {
 	skills    *skills.Registry
 	skillsDir string
 	reflector skills.Reflector
+	router    skills.Router
 }
 
 // EventListener is invoked at every step boundary so callers (CLI, HTTP, WS)
@@ -63,6 +64,13 @@ func (a *Agent) SetSkills(reg *skills.Registry, dir string, r skills.Reflector) 
 	a.skillsDir = dir
 	a.reflector = r
 }
+
+// SetRouter wires automatic per-turn skill routing. When set, every user
+// turn is first sent through the router, and a matched skill's prompt is
+// woven into the persisted user message via skills.WrapUserInput. The
+// agent's req.System is NEVER modified by routing — that would invalidate
+// the provider's prefix cache. nil router == no automatic routing.
+func (a *Agent) SetRouter(r skills.Router) { a.router = r }
 
 // Skills returns the registered skill registry (may be nil if not configured).
 func (a *Agent) Skills() *skills.Registry { return a.skills }
@@ -164,13 +172,40 @@ func (a *Agent) RunWithListener(ctx context.Context, sessionID, userInput string
 	if err := a.ensureSession(ctx, sessionID); err != nil {
 		return "", err
 	}
+	// Route through a skill (best-effort). The picked skill's prompt is
+	// folded into the user message itself and persisted to memory; that way
+	// the prefix cache stays warm across turns even when later turns route
+	// to a different skill — every prior persisted message is byte-stable.
+	// We must NEVER touch a.opts.SystemPrompt here; mutating req.System
+	// would invalidate the cache on every turn.
+	persistedInput := userInput
+	if a.router != nil && a.skills != nil {
+		all := a.skillsSlice()
+		if len(all) > 0 {
+			name, err := a.router.Route(ctx, userInput, all)
+			switch {
+			case err != nil:
+				emit(Event{Kind: EventError, Text: fmt.Sprintf("router: %v (continuing without skill)", err)})
+			case name == "":
+				// no skill matched — fine, run with bare input
+			default:
+				if sk, ok := a.skills.Get(name); ok {
+					wrapped := skills.WrapUserInput(userInput, sk)
+					if wrapped != userInput {
+						persistedInput = wrapped
+						emit(Event{Kind: EventRouter, Text: name})
+					}
+				}
+			}
+		}
+	}
 	userMsg := memory.Message{
-		Role: string(llm.RoleUser), Content: userInput, At: time.Now().UnixMilli(),
+		Role: string(llm.RoleUser), Content: persistedInput, At: time.Now().UnixMilli(),
 	}
 	if err := a.mem.AppendMessage(ctx, sessionID, userMsg); err != nil {
 		return "", err
 	}
-	emit(Event{Kind: EventUser, Text: userInput})
+	emit(Event{Kind: EventUser, Text: persistedInput})
 
 	defs := toolDefs(a.tools)
 	final := ""
@@ -268,6 +303,23 @@ func (a *Agent) runTool(ctx context.Context, tc llm.ToolCall) (string, bool) {
 		return fmt.Sprintf("error: %v\n%s", err, out), true
 	}
 	return out, false
+}
+
+// skillsSlice returns all loaded skills in name-sorted order. Sorted output
+// matters for the router: it makes the system prompt deterministic across
+// process restarts, which keeps the router's prefix cache warm.
+func (a *Agent) skillsSlice() []*skills.Skill {
+	if a.skills == nil {
+		return nil
+	}
+	names := a.skills.Names() // already sorted
+	out := make([]*skills.Skill, 0, len(names))
+	for _, n := range names {
+		if s, ok := a.skills.Get(n); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func (a *Agent) ensureSession(ctx context.Context, id string) error {

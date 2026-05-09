@@ -8,6 +8,7 @@ const (
 	EventToolCall   EventKind = "tool_call"
 	EventToolResult EventKind = "tool_result"
 	EventError      EventKind = "error"
+	EventRouter     EventKind = "router" // skill routing decision (Text holds the picked skill name)
 )
 
 // Event is emitted by the Agent during a Run, allowing callers to stream

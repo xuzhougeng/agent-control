@@ -133,6 +133,47 @@ files under `skills_dir/`:
 }
 ```
 
+### Automatic per-turn routing
+
+When `-skills-dir` is set, every user turn first goes through a small LLM
+**router** that picks 0 or 1 skill from the registry based on the user's
+input. The matched skill's `prompt` is woven into the **persisted** user
+message via `<skill name="...">…</skill>`, so the model sees the guidance
+in-context for that turn and every replay of it.
+
+```
+-router-model <name>   # model used for routing (default: same as -model)
+-no-route              # disable per-turn routing entirely
+-route-verbose         # print "[router] picked skill: X" decisions
+```
+
+**Why route through the user message and not `req.System`?** Prefix caches
+(DeepSeek's KV cache, Anthropic's prompt caching) hit when the request's
+prefix is byte-identical to a previous request. Mutating `req.System` to
+inject a skill prompt would invalidate the cache on every turn that
+re-routed. Folding the skill into the user message keeps `req.System`
+constant for the lifetime of the agent, and once a wrapped user message is
+persisted to memory it is replayed unchanged forever — so the
+`[system, t1, asst1, …, tN-1]` prefix stays cache-warm even when later
+turns route to a different skill.
+
+Cache stability invariants enforced in code:
+
+1. `req.System = cfg.SystemPrompt` always — never mutated by routing
+   (`internal/agent/loop.go`).
+2. Skill prompts are wrapped into the user message **before** persistence
+   (`skills.WrapUserInput`); replay sends what's in memory, byte-for-byte.
+3. The router's own system prompt is built deterministically from the
+   sorted skill list (`buildRouterSystem`), so the router's prefix cache
+   also hits across turns. Only the user input portion is fresh.
+4. The skill list — not the user input — lives in the router's system,
+   keeping `routerSystem` invariant within a session and only invalidated
+   when the operator runs `:install`/`:reflect`/`:rollback`.
+
+Routing failures (network, JSON parse, hallucinated skill name) fall back
+to the bare user input and surface an `EventError`; the agent never
+blocks on the router.
+
 ### Self-evolution (`:reflect`)
 
 After a successful task, distill the session into a reusable skill from the
@@ -213,6 +254,7 @@ without any frontend change.
 - [x] Default ops tool set
 - [x] Session persistence (in-memory + SQLite)
 - [x] Skills loader + self-evolution (`:reflect`)
+- [x] Automatic per-turn skill routing (cache-stable: skill prompt folded into the user message, never `req.System`)
 - [x] CLI REPL + HTTP API
 - [x] Approval gate for destructive bash commands — CLI prompt, UI-routed via cc-control, or `-full-permission` / `-deny-destructive`
 - [x] `reasoning_content` round-trip for thinking-mode providers

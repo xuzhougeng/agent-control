@@ -3,10 +3,12 @@ package agent
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"cc-agent/internal/llm"
 	"cc-agent/internal/memory"
+	"cc-agent/internal/skills"
 	"cc-agent/internal/tools"
 )
 
@@ -156,6 +158,120 @@ func TestLoop_AtomicityOnCanceledRun(t *testing.T) {
 	if !have["t1"] || !have["t2"] {
 		t.Fatalf("expected tool results for both call IDs, got %v in %d msgs", have, len(hist))
 	}
+}
+
+// stubRouter is a Router that returns a canned skill name (or an error).
+type stubRouter struct {
+	pick string
+	err  error
+	hits int
+}
+
+func (s *stubRouter) Route(_ context.Context, _ string, _ []*skills.Skill) (string, error) {
+	s.hits++
+	return s.pick, s.err
+}
+
+// TestLoop_RouterWrapsAndPersists covers the cache-stable injection path:
+// the matched skill's prompt MUST end up inside the persisted user message
+// (so prefix cache stays warm on replay), the agent's SystemPrompt MUST be
+// untouched, and EventRouter MUST fire so the CLI can show the decision.
+func TestLoop_RouterWrapsAndPersists(t *testing.T) {
+	provider := &stubProvider{responses: []*llm.Response{
+		{StopReason: llm.StopEnd, Message: llm.Message{Role: llm.RoleAssistant, Content: "ok"}},
+	}}
+	mem := memory.NewInMemory()
+	a := New(provider, tools.NewRegistry(), mem, Options{Model: "m", SystemPrompt: "FIXED-SYSTEM"})
+
+	reg := skills.NewRegistry()
+	// Stuff a skill into the registry directly via Save+TempDir to avoid
+	// reaching into unexported fields. We just need *one* skill the router
+	// can return.
+	dir := t.TempDir()
+	if _, err := reg.Save(&skills.Skill{
+		Name:        "nginx-triage",
+		Description: "triage nginx",
+		Prompt:      "Look at access.log first.",
+	}, dir); err != nil {
+		t.Fatalf("save skill: %v", err)
+	}
+	a.SetSkills(reg, dir, nil)
+	a.SetRouter(&stubRouter{pick: "nginx-triage"})
+
+	gotEvents := []Event{}
+	a.SetListener(func(e Event) { gotEvents = append(gotEvents, e) })
+
+	if _, err := a.Run(context.Background(), "s", "nginx 502"); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	// 1) Persisted user message contains the wrap, not the bare input.
+	hist, _ := mem.LoadMessages(context.Background(), "s")
+	var userMsg memory.Message
+	for _, m := range hist {
+		if m.Role == "user" {
+			userMsg = m
+			break
+		}
+	}
+	if !strings.Contains(userMsg.Content, "<skill name=\"nginx-triage\">") {
+		t.Errorf("persisted user message missing skill wrap: %q", userMsg.Content)
+	}
+	if !strings.Contains(userMsg.Content, "Look at access.log first.") {
+		t.Errorf("persisted user message missing skill prompt body: %q", userMsg.Content)
+	}
+	if !strings.Contains(userMsg.Content, "nginx 502") {
+		t.Errorf("user input was lost: %q", userMsg.Content)
+	}
+
+	// 2) EventRouter emitted with the skill name.
+	sawRouter := false
+	for _, e := range gotEvents {
+		if e.Kind == EventRouter && e.Text == "nginx-triage" {
+			sawRouter = true
+		}
+	}
+	if !sawRouter {
+		t.Errorf("expected EventRouter for nginx-triage, events=%+v", gotEvents)
+	}
+
+	// 3) SystemPrompt MUST be untouched — that's the whole reason we wrap
+	// the user message instead of mutating req.System.
+	if a.opts.SystemPrompt != "FIXED-SYSTEM" {
+		t.Errorf("SystemPrompt was mutated by routing: %q", a.opts.SystemPrompt)
+	}
+}
+
+// TestLoop_RouterErrorFallsBackToBareInput: a router failure must not block
+// the user's turn — log it via EventError and persist the bare input.
+func TestLoop_RouterErrorFallsBackToBareInput(t *testing.T) {
+	provider := &stubProvider{responses: []*llm.Response{
+		{StopReason: llm.StopEnd, Message: llm.Message{Role: llm.RoleAssistant, Content: "ok"}},
+	}}
+	mem := memory.NewInMemory()
+	a := New(provider, tools.NewRegistry(), mem, Options{Model: "m"})
+
+	reg := skills.NewRegistry()
+	dir := t.TempDir()
+	if _, err := reg.Save(&skills.Skill{Name: "x", Description: "x", Prompt: "x"}, dir); err != nil {
+		t.Fatalf("save skill: %v", err)
+	}
+	a.SetSkills(reg, dir, nil)
+	a.SetRouter(&stubRouter{err: errors.New("boom")})
+
+	if _, err := a.Run(context.Background(), "s", "the bare input"); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	hist, _ := mem.LoadMessages(context.Background(), "s")
+	for _, m := range hist {
+		if m.Role == "user" {
+			if m.Content != "the bare input" {
+				t.Errorf("router error should leave user msg bare, got %q", m.Content)
+			}
+			return
+		}
+	}
+	t.Errorf("no user message persisted")
 }
 
 func TestLoop_RespectsMaxIterations(t *testing.T) {

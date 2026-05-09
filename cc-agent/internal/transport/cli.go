@@ -154,7 +154,10 @@ func makeCompleter(ag *agent.Agent, rc *skills.RegistryClient) readline.AutoComp
 // approver, when non-nil, has its readline instance wired in so destructive-
 // command prompts share the same input pipeline. A fresh bufio.Reader on
 // os.Stdin would race the readline IoLoop goroutine and hang.
-func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID string, approver *CLIApprover) error {
+//
+// routeVerbose prints "[router] picked skill: X" for each EventRouter so
+// operators can see which skill the auto-router selected per turn.
+func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID string, approver *CLIApprover, routeVerbose bool) error {
 	cfg := &readline.Config{
 		Prompt:            "you> ",
 		HistoryFile:       historyFilePath(),
@@ -176,6 +179,10 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 
 	ag.SetListener(func(e agent.Event) {
 		switch e.Kind {
+		case agent.EventRouter:
+			if routeVerbose {
+				fmt.Fprintf(rl.Stdout(), "\033[35m[router]\033[0m picked skill: %s\n", e.Text)
+			}
 		case agent.EventAssistant:
 			fmt.Fprintf(rl.Stdout(), "\n\033[36massistant>\033[0m %s\n", e.Text)
 		case agent.EventToolCall:

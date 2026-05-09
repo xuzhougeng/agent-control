@@ -41,9 +41,12 @@ func main() {
 		skillsDir  = flag.String("skills-dir", "", "directory of skill JSON files")
 		listTools  = flag.Bool("list-tools", false, "print registered tools as JSON and exit (no API key needed)")
 		showVer    = flag.Bool("version", false, "print version and exit")
-		fullPerm   = flag.Bool("full-permission", false, "skip approval prompts for destructive commands (yolo mode)")
-		denyDanger = flag.Bool("deny-destructive", false, "auto-deny destructive commands (no prompt, safe for non-interactive use)")
-		approvalTO = flag.String("approval-timeout", "", "how long to wait for an operator approval in -control-url mode (e.g. 30s, 5m, 1h). Default 5m.")
+		fullPerm     = flag.Bool("full-permission", false, "skip approval prompts for destructive commands (yolo mode)")
+		denyDanger   = flag.Bool("deny-destructive", false, "auto-deny destructive commands (no prompt, safe for non-interactive use)")
+		approvalTO   = flag.String("approval-timeout", "", "how long to wait for an operator approval in -control-url mode (e.g. 30s, 5m, 1h). Default 5m.")
+		routerModel  = flag.String("router-model", "", "model used for per-turn skill routing (default: same as -model). Cheap small models work well here.")
+		noRoute      = flag.Bool("no-route", false, "disable automatic per-turn skill routing")
+		routeVerbose = flag.Bool("route-verbose", false, "print router decisions in the REPL")
 	)
 	flag.Parse()
 
@@ -174,6 +177,17 @@ func main() {
 	})
 	if cfg.SkillsDir != "" {
 		ag.SetSkills(skillReg, cfg.SkillsDir, &skills.LLMReflector{Provider: provider2, Model: cfg.Model})
+		// Per-turn skill routing is on by default whenever skills are
+		// loaded. The router never touches req.System; matched skills are
+		// woven into the persisted user message so the prefix cache stays
+		// warm across turns.
+		if !*noRoute {
+			rmodel := *routerModel
+			if rmodel == "" {
+				rmodel = cfg.Model
+			}
+			ag.SetRouter(&skills.LLMRouter{Provider: provider2, Model: rmodel})
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -247,7 +261,7 @@ func main() {
 		return
 	}
 
-	if err := transport.RunCLI(ctx, ag, registryClient, *sessionID, cliApprover); err != nil {
+	if err := transport.RunCLI(ctx, ag, registryClient, *sessionID, cliApprover, *routeVerbose); err != nil {
 		log.Fatalf("cli: %v", err)
 	}
 	fmt.Println("bye.")
