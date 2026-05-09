@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -55,5 +57,50 @@ func TestClient_Publish_PropagatesValidationError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid_skill") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestClient_Install_AtomicWriteAndReload(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"name":"nginx-triage","version":3,"prompt":"p","tools":["bash"],"author_server_id":"ops-01","created_at_unix":100}`)
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	teamDir := filepath.Join(dir, "team")
+	c := &RegistryClient{BaseURL: srv.URL, AgentToken: "t", ServerID: "ops-A", HTTP: srv.Client(), TeamDir: teamDir}
+	got, err := c.Install("nginx-triage", 0)
+	if err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if got.Version != 3 {
+		t.Fatalf("version=%d", got.Version)
+	}
+	written, err := os.ReadFile(filepath.Join(teamDir, "nginx-triage.json"))
+	if err != nil {
+		t.Fatalf("read installed: %v", err)
+	}
+	if !strings.Contains(string(written), `"nginx-triage"`) {
+		t.Fatalf("body: %s", written)
+	}
+	// Repeated install must succeed (idempotent).
+	if _, err := c.Install("nginx-triage", 0); err != nil {
+		t.Fatalf("second Install: %v", err)
+	}
+}
+
+func TestClient_Install_VersionedURL(t *testing.T) {
+	var gotURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotURL = r.URL.String()
+		_, _ = io.WriteString(w, `{"name":"x","version":2,"prompt":"p","author_server_id":"o","created_at_unix":1}`)
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	c := &RegistryClient{BaseURL: srv.URL, AgentToken: "t", ServerID: "ops-A", HTTP: srv.Client(), TeamDir: dir}
+	if _, err := c.Install("x", 2); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotURL, "version=2") {
+		t.Fatalf("url=%s", gotURL)
 	}
 }
