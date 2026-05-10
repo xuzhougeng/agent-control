@@ -39,7 +39,7 @@ func watchEscDuringRun(runCancel context.CancelFunc) (func(), error) {
 // drive it through a pty pair without depending on the process's stdin.
 // Caller must ensure fd is a TTY (or any fd that supports termios ioctls).
 func watchEscOnFd(fd int, runCancel context.CancelFunc) (func(), error) {
-	orig, err := unix.IoctlGetTermios(fd, unix.TCGETS)
+	orig, err := unix.IoctlGetTermios(fd, tcGet)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func watchEscOnFd(fd int, runCancel context.CancelFunc) (func(), error) {
 	// be interrupted from Go.
 	t.Cc[unix.VMIN] = 0
 	t.Cc[unix.VTIME] = 1
-	if err := unix.IoctlSetTermios(fd, unix.TCSETS, &t); err != nil {
+	if err := unix.IoctlSetTermios(fd, tcSet, &t); err != nil {
 		return nil, err
 	}
 
@@ -87,8 +87,8 @@ func watchEscOnFd(fd int, runCancel context.CancelFunc) (func(), error) {
 	return func() {
 		close(stopCh)
 		<-done
-		// TCSETSF restores AND flushes input — drops any half-typed escape
-		// sequence or text the user banged on while the agent was running.
-		_ = unix.IoctlSetTermios(fd, unix.TCSETSF, orig)
+		// Flushing variant restores AND drops any half-typed escape sequence
+		// or text the user banged on while the agent was running.
+		_ = unix.IoctlSetTermios(fd, tcSetFlush, orig)
 	}, nil
 }
