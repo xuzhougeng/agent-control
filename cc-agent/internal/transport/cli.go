@@ -141,6 +141,8 @@ func makeCompleter(ag *agent.Agent, rc *skills.RegistryClient) readline.AutoComp
 		readline.PcItem(":install", readline.PcItemDynamic(teamNames)),
 		readline.PcItem(":history", readline.PcItemDynamic(teamNames)),
 		readline.PcItem(":rollback", readline.PcItemDynamic(teamNames)),
+		readline.PcItem(":quit"),
+		readline.PcItem(":exit"),
 		readline.PcItem("exit"),
 		readline.PcItem("quit"),
 	)
@@ -211,7 +213,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 		if line == "" {
 			continue
 		}
-		if line == "exit" || line == "quit" {
+		if line == "exit" || line == "quit" || line == ":exit" || line == ":quit" {
 			return nil
 		}
 		if strings.HasPrefix(line, ":") {
@@ -286,7 +288,7 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
   :install <name>[@version]        fetch + install a team skill (with preview)
   :history <name>                  show all versions of a team skill
   :rollback <name> <version>       install a specific older version
-  exit | quit | Ctrl+D             leave the REPL`)
+  :quit | :exit | exit | quit | Ctrl+D   leave the REPL`)
 		return nil
 	case ":tools":
 		reg := ag.Tools()
