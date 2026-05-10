@@ -274,6 +274,83 @@ func TestLoop_RouterErrorFallsBackToBareInput(t *testing.T) {
 	t.Errorf("no user message persisted")
 }
 
+func TestRewind_DropsLastUserTurn(t *testing.T) {
+	provider := &stubProvider{
+		responses: []*llm.Response{
+			{StopReason: llm.StopEnd, Message: llm.Message{Role: llm.RoleAssistant, Content: "first reply"}},
+			{StopReason: llm.StopEnd, Message: llm.Message{Role: llm.RoleAssistant, Content: "second reply"}},
+		},
+	}
+	mem := memory.NewInMemory()
+	a := New(provider, tools.NewRegistry(), mem, Options{Model: "m"})
+
+	ctx := context.Background()
+	if _, err := a.Run(ctx, "s", "first question"); err != nil {
+		t.Fatalf("run 1: %v", err)
+	}
+	if _, err := a.Run(ctx, "s", "second question"); err != nil {
+		t.Fatalf("run 2: %v", err)
+	}
+	dropped, err := a.Rewind(ctx, "s", 1)
+	if err != nil {
+		t.Fatalf("rewind: %v", err)
+	}
+	// Dropped: the 2nd user message + the 2nd assistant reply = 2 messages.
+	if dropped != 2 {
+		t.Errorf("expected 2 dropped, got %d", dropped)
+	}
+	hist, _ := mem.LoadMessages(ctx, "s")
+	if len(hist) != 2 {
+		t.Fatalf("expected 2 messages remaining, got %d: %+v", len(hist), hist)
+	}
+	if hist[0].Role != "user" || hist[0].Content != "first question" {
+		t.Errorf("first message wrong: %+v", hist[0])
+	}
+	if hist[1].Role != "assistant" || hist[1].Content != "first reply" {
+		t.Errorf("second message wrong: %+v", hist[1])
+	}
+}
+
+func TestRewind_RejectsTooMany(t *testing.T) {
+	provider := &stubProvider{responses: []*llm.Response{
+		{StopReason: llm.StopEnd, Message: llm.Message{Role: llm.RoleAssistant, Content: "ok"}},
+	}}
+	mem := memory.NewInMemory()
+	a := New(provider, tools.NewRegistry(), mem, Options{Model: "m"})
+	if _, err := a.Run(context.Background(), "s", "only question"); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if _, err := a.Rewind(context.Background(), "s", 5); err == nil {
+		t.Error("rewind 5 from 1-turn session should error")
+	}
+	hist, _ := mem.LoadMessages(context.Background(), "s")
+	if len(hist) != 2 {
+		t.Errorf("memory should be untouched on error, got %d msgs", len(hist))
+	}
+}
+
+func TestRewind_DropsAllOnFullRewind(t *testing.T) {
+	provider := &stubProvider{responses: []*llm.Response{
+		{StopReason: llm.StopEnd, Message: llm.Message{Role: llm.RoleAssistant, Content: "ok"}},
+	}}
+	mem := memory.NewInMemory()
+	a := New(provider, tools.NewRegistry(), mem, Options{Model: "m"})
+	if _, err := a.Run(context.Background(), "s", "only question"); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	dropped, err := a.Rewind(context.Background(), "s", 1)
+	if err != nil {
+		t.Fatalf("rewind: %v", err)
+	}
+	if dropped != 2 {
+		t.Errorf("expected 2 dropped, got %d", dropped)
+	}
+	hist, _ := mem.LoadMessages(context.Background(), "s")
+	if len(hist) != 0 {
+		t.Errorf("expected empty session, got %d msgs", len(hist))
+	}
+}
+
 func TestLoop_RespectsMaxIterations(t *testing.T) {
 	loop := func() *llm.Response {
 		return &llm.Response{

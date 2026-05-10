@@ -108,6 +108,18 @@ func (s *SQLite) Sessions(ctx context.Context) ([]string, error) {
 	return out, rows.Err()
 }
 
+func (s *SQLite) DropAfter(ctx context.Context, sessionID string, afterID int64) (int, error) {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM messages WHERE session_id = ? AND id > ?`,
+		sessionID, afterID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 func (s *SQLite) Close() error { return s.db.Close() }
 
 func boolToInt(b bool) int {

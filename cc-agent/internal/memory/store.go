@@ -63,6 +63,10 @@ type Store interface {
 	AppendMessage(ctx context.Context, sessionID string, m Message) error
 	LoadMessages(ctx context.Context, sessionID string) ([]Message, error)
 	Sessions(ctx context.Context) ([]string, error)
+	// DropAfter removes every message in sessionID with ID strictly greater
+	// than afterID. Pass 0 to drop the whole session's messages. Returns the
+	// number of rows removed. Used by Agent.Rewind to support :rewind.
+	DropAfter(ctx context.Context, sessionID string, afterID int64) (int, error)
 	Close() error
 }
 
@@ -112,6 +116,23 @@ func (m *InMemory) Sessions(_ context.Context) ([]string, error) {
 		out = append(out, k)
 	}
 	return out, nil
+}
+
+func (m *InMemory) DropAfter(_ context.Context, id string, afterID int64) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	src := m.sessions[id]
+	keep := src[:0]
+	dropped := 0
+	for _, msg := range src {
+		if msg.ID > afterID {
+			dropped++
+			continue
+		}
+		keep = append(keep, msg)
+	}
+	m.sessions[id] = keep
+	return dropped, nil
 }
 
 func (m *InMemory) Close() error { return nil }

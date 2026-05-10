@@ -141,6 +141,7 @@ func makeCompleter(ag *agent.Agent, rc *skills.RegistryClient) readline.AutoComp
 		readline.PcItem(":install", readline.PcItemDynamic(teamNames)),
 		readline.PcItem(":history", readline.PcItemDynamic(teamNames)),
 		readline.PcItem(":rollback", readline.PcItemDynamic(teamNames)),
+		readline.PcItem(":rewind"),
 		readline.PcItem(":quit"),
 		readline.PcItem(":exit"),
 		readline.PcItem("exit"),
@@ -223,14 +224,20 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 			continue
 		}
 		runCtx, cancelRun := context.WithCancel(ctx)
-		stop := installRunInterrupt(cancelRun)
+		stopSig := installRunInterrupt(cancelRun)
+		stopEsc, escErr := watchEscDuringRun(cancelRun)
+		if escErr != nil {
+			fmt.Fprintf(rl.Stderr(), "esc-watch: %v (continuing without ESC interrupt)\n", escErr)
+			stopEsc = func() {}
+		}
 		_, runErr := ag.Run(runCtx, sessionID, line)
-		stop()
+		stopEsc()
+		stopSig()
 		cancelRun()
 		switch {
 		case runErr == nil:
 		case errors.Is(runErr, context.Canceled):
-			fmt.Fprintln(rl.Stderr(), "\n\033[33minterrupted current turn\033[0m")
+			fmt.Fprintln(rl.Stderr(), "\n\033[33minterrupted current turn (ESC)\033[0m")
 		default:
 			fmt.Fprintf(rl.Stderr(), "run error: %v\n", runErr)
 		}
@@ -288,7 +295,9 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
   :install <name>[@version]        fetch + install a team skill (with preview)
   :history <name>                  show all versions of a team skill
   :rollback <name> <version>       install a specific older version
-  :quit | :exit | exit | quit | Ctrl+D   leave the REPL`)
+  :rewind [N]                      drop the last N user turn(s) + replies (default 1)
+  :quit | :exit | exit | quit | Ctrl+D   leave the REPL
+  ESC during a run                 cancel the current turn`)
 		return nil
 	case ":tools":
 		reg := ag.Tools()
@@ -466,6 +475,21 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
 			fmt.Printf("  v%-3d %-12s %s  %s\n", h.Version, h.AuthorServerID,
 				time.Unix(h.CreatedAtUnix, 0).Format(time.RFC3339), h.Description)
 		}
+		return nil
+	case ":rewind":
+		n := 1
+		if len(parts) > 1 {
+			v, err := strconv.Atoi(parts[1])
+			if err != nil || v < 1 {
+				return fmt.Errorf("usage: :rewind [N]   (N >= 1, default 1)")
+			}
+			n = v
+		}
+		dropped, err := ag.Rewind(ctx, sessionID, n)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("\033[33mrewound\033[0m %d user turn(s), dropped %d message(s) from session %q\n", n, dropped, sessionID)
 		return nil
 	case ":rollback":
 		if rc == nil {

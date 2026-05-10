@@ -78,6 +78,38 @@ func (a *Agent) Skills() *skills.Registry { return a.skills }
 // Tools returns the tool registry the agent dispatches against.
 func (a *Agent) Tools() *tools.Registry { return a.tools }
 
+// Rewind drops the most recent n user-anchored turns from the session: the
+// last n user messages plus every assistant / tool message that followed
+// them. Returns (dropped messages, error). Used by the REPL's :rewind to
+// give the operator Claude-Code-style "undo my last question(s)".
+//
+// If the session has fewer than n user turns, returns an error and leaves
+// memory untouched. n must be >= 1.
+func (a *Agent) Rewind(ctx context.Context, sessionID string, n int) (int, error) {
+	if n < 1 {
+		return 0, errors.New("rewind: n must be >= 1")
+	}
+	hist, err := a.mem.LoadMessages(ctx, sessionID)
+	if err != nil {
+		return 0, err
+	}
+	userIdx := make([]int, 0)
+	for i, m := range hist {
+		if m.Role == string(llm.RoleUser) {
+			userIdx = append(userIdx, i)
+		}
+	}
+	if len(userIdx) < n {
+		return 0, fmt.Errorf("rewind: only %d user turn(s) in session, asked to drop %d", len(userIdx), n)
+	}
+	cutAt := userIdx[len(userIdx)-n]
+	var cutoffID int64
+	if cutAt > 0 {
+		cutoffID = hist[cutAt-1].ID
+	}
+	return a.mem.DropAfter(ctx, sessionID, cutoffID)
+}
+
 // Reflect distills the current session's transcript into a skill JSON,
 // writes it to <skills_dir>/<name>.json, and loads it into the registry.
 // description is optional (the reflector will write one if empty).
