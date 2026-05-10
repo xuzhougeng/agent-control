@@ -1,0 +1,199 @@
+[
+  {
+    "prompt": "nginx is returning 502 to half of the requests, what should I check?",
+    "expected": "nginx-triage",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "504 gateway timeout from nginx upstream, please diagnose",
+    "expected": "nginx-triage",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "nginx access log 里全是 500,帮我排查",
+    "expected": "nginx-triage",
+    "tags": ["clear-hit", "zh"]
+  },
+
+  {
+    "prompt": "what kernel version is this server running?",
+    "expected": "kernel-probe",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "show me uname -r output",
+    "expected": "kernel-probe",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "查一下当前内核版本号",
+    "expected": "kernel-probe",
+    "tags": ["clear-hit", "zh"]
+  },
+
+  {
+    "prompt": "/ partition is 96% full, what's eating the space?",
+    "expected": "disk-cleanup",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "find the largest files under /var",
+    "expected": "disk-cleanup",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "磁盘满了,帮我看看哪些目录占用最多空间",
+    "expected": "disk-cleanup",
+    "tags": ["clear-hit", "zh"]
+  },
+
+  {
+    "prompt": "restart the nginx service and tell me if it came back up cleanly",
+    "expected": "service-restart",
+    "tags": ["clear-hit", "en", "ambiguous-with-nginx-triage"]
+  },
+  {
+    "prompt": "systemctl status redis — is it healthy?",
+    "expected": "service-restart",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "重启 docker.service",
+    "expected": "service-restart",
+    "tags": ["clear-hit", "zh"]
+  },
+
+  {
+    "prompt": "show me the last 100 lines of /var/log/syslog",
+    "expected": "log-tail",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "tail /tmp/build.log please",
+    "expected": "log-tail",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "看一下 /var/log/messages 最后 50 行",
+    "expected": "log-tail",
+    "tags": ["clear-hit", "zh"]
+  },
+
+  {
+    "prompt": "what's eating my memory? show me the top processes by RSS",
+    "expected": "process-hunt",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "list the top 5 CPU consumers right now",
+    "expected": "process-hunt",
+    "tags": ["clear-hit", "en"]
+  },
+  {
+    "prompt": "找出占用内存最多的 10 个进程",
+    "expected": "process-hunt",
+    "tags": ["clear-hit", "zh"]
+  },
+
+  {
+    "prompt": "thanks!",
+    "expected": null,
+    "tags": ["no-match", "small-talk"]
+  },
+  {
+    "prompt": "what time is it?",
+    "expected": null,
+    "tags": ["no-match", "off-domain"]
+  },
+  {
+    "prompt": "explain the difference between TCP and UDP",
+    "expected": null,
+    "tags": ["no-match", "general-knowledge"]
+  },
+  {
+    "prompt": "how do I write a python decorator?",
+    "expected": null,
+    "tags": ["no-match", "off-domain"]
+  },
+
+  {
+    "prompt": "nginx 挂了,先看下日志再重启",
+    "expected": "nginx-triage",
+    "tags": ["ambiguous", "zh", "could-also-be-service-restart"],
+    "notes": "Inspecting first → triage; restart is the follow-up. Either is defensible."
+  },
+  {
+    "prompt": "/var/log 占了 30G,帮我清理",
+    "expected": "disk-cleanup",
+    "tags": ["ambiguous", "zh", "could-also-be-log-tail"],
+    "notes": "Cleanup intent dominates over reading logs."
+  },
+
+  {
+    "prompt": "just restart nginx, don't bother diagnosing first",
+    "expected": "service-restart",
+    "tags": ["adversarial", "restart-vs-triage"],
+    "notes": "Explicit restart intent should win over nginx-triage despite nginx vocabulary."
+  },
+  {
+    "prompt": "nginx is throwing 502 — read the error log but DO NOT restart anything",
+    "expected": "nginx-triage",
+    "tags": ["adversarial", "triage-vs-restart"],
+    "notes": "Mirror of the above: explicit no-restart intent."
+  },
+  {
+    "prompt": "tail -f /var/log/nginx/error.log",
+    "expected": "log-tail",
+    "tags": ["adversarial", "log-tail-vs-nginx-triage"],
+    "notes": "Concrete file path → log-tail, even though it's nginx's error log."
+  },
+  {
+    "prompt": "redis 进程占了 8G 内存,先找出来然后 kill 掉",
+    "expected": "process-hunt",
+    "tags": ["adversarial", "process-vs-service", "zh"],
+    "notes": "Process-focused intent (find by RSS, then kill) outranks service-restart."
+  },
+  {
+    "prompt": "df shows / at 50%, just FYI no action needed",
+    "expected": null,
+    "tags": ["adversarial", "no-action", "looks-like-ops"],
+    "notes": "Informational, no ask. Router must not over-pick."
+  },
+  {
+    "prompt": "你好,在吗?",
+    "expected": null,
+    "tags": ["no-match", "small-talk", "zh"]
+  },
+
+  {
+    "prompt": "show /proc/version",
+    "expected": "kernel-probe",
+    "tags": ["paraphrase", "kernel-probe", "en"]
+  },
+  {
+    "prompt": "uname -a please",
+    "expected": "kernel-probe",
+    "tags": ["paraphrase", "kernel-probe", "en"]
+  },
+  {
+    "prompt": "what's the kernel release string on this box",
+    "expected": "kernel-probe",
+    "tags": ["paraphrase", "kernel-probe", "en"]
+  },
+
+  {
+    "prompt": "biggest 20 files under /opt",
+    "expected": "disk-cleanup",
+    "tags": ["paraphrase", "disk-cleanup", "en"]
+  },
+  {
+    "prompt": "/data 目录哪几个子目录最大",
+    "expected": "disk-cleanup",
+    "tags": ["paraphrase", "disk-cleanup", "zh"]
+  },
+  {
+    "prompt": "openvpn.service died, bring it back up",
+    "expected": "service-restart",
+    "tags": ["paraphrase", "service-restart", "en"]
+  }
+]

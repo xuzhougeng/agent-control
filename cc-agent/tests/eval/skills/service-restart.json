@@ -1,0 +1,11 @@
+{
+  "name": "service-restart",
+  "description": "Inspect, restart, enable, or disable a systemd unit (service). Includes status checks and recent unit logs via journalctl.",
+  "prompt": "Use `systemctl status <unit>` first to see current state and recent failures, then `journalctl -u <unit> -n 50 --no-pager` for context. Restart only after confirming the issue isn't dependency-related; warn the operator about any --now flag side-effects.",
+  "tools": ["bash"],
+  "examples": [
+    "restart nginx",
+    "systemctl status redis",
+    "重启一下 docker 服务"
+  ]
+}

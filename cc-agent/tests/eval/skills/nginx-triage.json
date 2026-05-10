@@ -1,0 +1,11 @@
+{
+  "name": "nginx-triage",
+  "description": "Triage nginx HTTP errors (5xx / 4xx) by inspecting access.log and error.log",
+  "prompt": "Focus on /var/log/nginx/access.log and error.log. For 5xx, suspect upstream timeouts; for 502 specifically check the upstream server status. Use `tail` and `grep` first; do not restart nginx without confirming the cause.",
+  "tools": ["bash", "read", "grep", "logtail"],
+  "examples": [
+    "nginx 502 — diagnose",
+    "Why is nginx returning 504?",
+    "请帮我看下 nginx 报 500 的原因"
+  ]
+}

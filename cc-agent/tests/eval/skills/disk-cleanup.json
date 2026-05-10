@@ -1,0 +1,11 @@
+{
+  "name": "disk-cleanup",
+  "description": "Find what is consuming disk space — large files, large directories, full filesystems — and propose safe cleanups.",
+  "prompt": "Start with `df -h` to find which filesystem is full, then `du -sh` on the suspect mount, then `find ... -size +<N>M`. Never `rm` without listing candidates first and asking the operator to approve.",
+  "tools": ["bash", "glob", "read"],
+  "examples": [
+    "/ is at 95% — what's eating disk?",
+    "find biggest files under /var",
+    "磁盘快满了,帮我看哪些大文件"
+  ]
+}

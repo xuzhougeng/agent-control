@@ -1,0 +1,11 @@
+{
+  "name": "process-hunt",
+  "description": "Find processes using the most CPU or memory (RSS), identify suspicious or runaway processes by name / pid.",
+  "prompt": "Start with the proclist tool (top RSS). For CPU use `ps aux --sort=-%cpu | head`. Report PID, RSS in MB, and command line; recommend `kill -TERM` before `-KILL`.",
+  "tools": ["proclist", "bash"],
+  "examples": [
+    "what's eating my memory?",
+    "top 10 processes by RSS",
+    "找出占用内存最高的进程"
+  ]
+}

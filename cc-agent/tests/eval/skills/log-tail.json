@@ -1,0 +1,11 @@
+{
+  "name": "log-tail",
+  "description": "Read the last N lines of an arbitrary log file (not bound to any specific service). Use when the operator names a file path.",
+  "prompt": "Use the logtail tool when the operator gives a concrete file path. Default to 200 lines unless asked otherwise. Quote line numbers / timestamps when summarizing.",
+  "tools": ["logtail", "read"],
+  "examples": [
+    "show me the last 100 lines of /var/log/syslog",
+    "tail /tmp/myapp.log",
+    "看一下 /var/log/messages 最后 50 行"
+  ]
+}

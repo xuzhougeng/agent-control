@@ -1,0 +1,11 @@
+{
+  "name": "kernel-probe",
+  "description": "Identify the running Linux kernel version and confirm system identity (uname / os-release).",
+  "prompt": "Use `uname -r` for the kernel release and /etc/os-release for distro identity. Report only the version strings the operator asked for; do not list everything.",
+  "tools": ["bash", "read", "sysinfo"],
+  "examples": [
+    "What kernel version am I running?",
+    "Show me the kernel release",
+    "查一下当前内核版本"
+  ]
+}
