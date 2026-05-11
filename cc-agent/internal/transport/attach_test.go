@@ -93,6 +93,30 @@ func TestReadAttach_Truncation(t *testing.T) {
 	}
 }
 
+func TestReadAttach_Symlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real.txt")
+	if err := os.WriteFile(real, []byte("via-symlink\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.txt")
+	if err := os.Symlink(real, link); err != nil {
+		// Skip rather than fail on filesystems that disallow symlinks
+		// (rare on Linux/macOS; commonly hit on a Windows test runner).
+		t.Skipf("symlink not supported: %v", err)
+	}
+	got, trunc, err := readAttach(link, "")
+	if err != nil {
+		t.Fatalf("readAttach via symlink: %v", err)
+	}
+	if got != "via-symlink\n" {
+		t.Errorf("symlink target not followed; got %q", got)
+	}
+	if trunc {
+		t.Errorf("unexpected truncation")
+	}
+}
+
 func TestReadAttach_TildeExpansion(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
