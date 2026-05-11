@@ -118,7 +118,8 @@ This single string is what `agent.Run` receives. It is what gets persisted to `m
 
 - Unit test for `execShell`: success, non-zero exit, timeout, large output truncation.
 - Unit test for `pendingShell`: push, take, empty.
-- Integration-style test against `RunCLI` using the existing test harness: type `!echo hi`, assert no memory write happened; type `!!echo hi` then `fix it`, assert the persisted user message contains both the folded shell block and `fix it`.
+- Unit test for `foldShellContext`: empty buffer passthrough, single entry, multiple entries with empty-output fallback.
+- Manual smoke against the built binary: confirms wiring (`!`, `!!`, ESC, empty-arg, `:help`). A full `RunCLI`-level integration test is out of scope for v1 — it would require a PTY harness and readline mocking, which is significant scaffolding for code paths that are mechanical (HasPrefix + helper call + buffer drain).
 
 ## Migration / compat
 
