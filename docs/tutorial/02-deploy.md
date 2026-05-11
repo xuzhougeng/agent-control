@@ -39,7 +39,7 @@ sudo chmod 600 /etc/cc-agent/api-key
 ```bash
 # 二进制
 sudo curl -L -o /usr/local/bin/cc-agent \
-  https://github.com/xuzhougeng/agent-control/releases/download/v0.7.3/cc-agent-linux-amd64
+  https://github.com/xuzhougeng/agent-control/releases/latest/download/cc-agent-linux-amd64
 sudo chmod +x /usr/local/bin/cc-agent
 
 # 数据目录
