@@ -161,7 +161,11 @@ func makeCompleter(ag *agent.Agent, rc *skills.RegistryClient) readline.AutoComp
 //
 // routeVerbose prints "[router] picked skill: X" for each EventRouter so
 // operators can see which skill the auto-router selected per turn.
-func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID string, approver *CLIApprover, routeVerbose bool) error {
+//
+// cwd is the agent's working directory — used by `@<path>` to resolve
+// relative paths the same way tools see them (i.e. cfg.Cwd from main),
+// not the operator's shell pwd. Empty falls back to os.Getwd at use time.
+func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID string, approver *CLIApprover, routeVerbose bool, cwd string) error {
 	cfg := &readline.Config{
 		Prompt:            "you> ",
 		HistoryFile:       historyFilePath(),
@@ -266,7 +270,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 				continue
 			}
 			path, userText := splitAttachArgs(rest)
-			folded, fire := runAttach(rl, path, userText, "", &injectBuf)
+			folded, fire := runAttach(rl, path, userText, cwd, &injectBuf)
 			if !fire {
 				continue
 			}

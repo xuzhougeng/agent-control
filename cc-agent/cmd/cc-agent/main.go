@@ -261,7 +261,7 @@ func main() {
 		return
 	}
 
-	if err := transport.RunCLI(ctx, ag, registryClient, *sessionID, cliApprover, *routeVerbose); err != nil {
+	if err := transport.RunCLI(ctx, ag, registryClient, *sessionID, cliApprover, *routeVerbose, cfg.Cwd); err != nil {
 		log.Fatalf("cli: %v", err)
 	}
 	fmt.Println("bye.")
