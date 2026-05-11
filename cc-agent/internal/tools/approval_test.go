@@ -8,8 +8,8 @@ import (
 
 func TestDangerousReason(t *testing.T) {
 	cases := []struct {
-		cmd   string
-		want  string // "" means safe
+		cmd  string
+		want string // "" means safe
 	}{
 		{"ls -la /tmp", ""},
 		{"echo hello", ""},
@@ -26,6 +26,10 @@ func TestDangerousReason(t *testing.T) {
 		{"shutdown -h now", "shutdown"},
 		{"systemctl stop nginx", "systemctl stop"},
 		{"systemctl disable redis", "systemctl stop"},
+		{"Remove-Item -Recurse -Force C:\\temp\\old", "Remove-Item"},
+		{"Stop-Service w3svc", "service stop"},
+		{"sc stop Spooler", "service stop"},
+		{"format C:", "format"},
 		{"iptables -F", "iptables flush"},
 		{"kill -9 1234", "SIGKILL"},
 		{"chmod -R 777 /", "chmod 777 /"},

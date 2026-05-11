@@ -3,10 +3,13 @@ package transport
 import (
 	"bytes"
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"cc-agent/internal/host"
 )
 
 func TestExecShell_Success(t *testing.T) {
@@ -94,6 +97,32 @@ func TestExecShell_Cwd(t *testing.T) {
 	}
 	if !strings.Contains(got, resolved) {
 		t.Errorf("captured output missing cwd %q; got=%q", resolved, got)
+	}
+}
+
+func TestExecShellWithShell_UsesConfiguredShellInvocation(t *testing.T) {
+	var live bytes.Buffer
+	dir := t.TempDir()
+	shellPath := filepath.Join(dir, "fake-shell")
+	if err := os.WriteFile(shellPath, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\n"), 0o755); err != nil {
+		t.Fatalf("write fake shell: %v", err)
+	}
+	got, err := execShellWithShell(
+		context.Background(),
+		host.Shell{Kind: host.ShellCmd, Command: shellPath},
+		"dir",
+		dir,
+		&live,
+		2*time.Second,
+		1<<14,
+	)
+	if err != nil {
+		t.Fatalf("execShellWithShell: %v", err)
+	}
+	for _, want := range []string{"/C", "dir"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("captured output missing %q:\n%s", want, got)
+		}
 	}
 }
 

@@ -86,7 +86,7 @@ Bundled tools (`tools.DefaultRegistry`):
 
 | Tool      | Purpose                                              |
 |-----------|------------------------------------------------------|
-| `bash`    | exec shell command (cwd-fixed, timeout-bound)        |
+| `bash`    | exec host shell command (cwd-fixed, timeout-bound)   |
 | `read`    | read text file (path containment via allowed_roots)  |
 | `write`   | write file (overwrite=false by default)              |
 | `grep`    | RE2 regex search across a directory tree             |
@@ -213,7 +213,7 @@ asking the LLM:
 
 | Prefix     | LLM sees it? | Approver? | Behavior                                                                    |
 |------------|--------------|-----------|-----------------------------------------------------------------------------|
-| `!cmd`     | no           | no        | run `cmd` via `/bin/sh -c`, stream output, return to prompt                 |
+| `!cmd`     | no           | no        | run `cmd` via the host shell, stream output, return to prompt               |
 | `!!cmd`    | next turn    | no        | same as `!cmd`, plus buffer `(cmd, output)` to fold into the next user line |
 
 `!` is a pure shell escape — the agent's memory store is never touched, the
@@ -243,6 +243,12 @@ fix the failing test
 
 The fold runs `!!` in FIFO order if you stage several. The buffer is
 discarded if the REPL exits before a real user line drains it.
+
+Shell selection:
+
+- Linux / macOS: POSIX shell syntax via `sh -c`.
+- Windows: PowerShell is preferred when available (`pwsh` / `powershell`);
+  otherwise `cmd.exe /C` is used.
 
 Limitations:
 

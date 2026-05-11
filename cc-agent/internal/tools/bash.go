@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"cc-agent/internal/host"
 )
 
 // Bash runs a shell command. Constructed with a fixed cwd and an allow-list of
@@ -22,6 +24,7 @@ type Bash struct {
 	MaxOutputBytes int
 	BlockedSubstr  []string // commands containing any of these strings are rejected outright
 	Approver       Approver
+	Shell          host.Shell
 }
 
 func NewBash(cwd string) *Bash {
@@ -30,24 +33,26 @@ func NewBash(cwd string) *Bash {
 		DefaultTimeout: 60 * time.Second,
 		MaxOutputBytes: 64 * 1024,
 		BlockedSubstr:  nil,
+		Shell:          host.CurrentShell(),
 	}
 }
 
 func (*Bash) Name() string { return "bash" }
 
-func (*Bash) Description() string {
+func (b *Bash) Description() string {
 	return "Execute a shell command. Use for system inspection, log queries, " +
 		"package status, etc. Output is truncated to a fixed size; chain commands " +
-		"with shell pipelines as needed. Working directory is fixed by the agent."
+		"with shell pipelines as needed. Working directory is fixed by the agent. " +
+		"Commands run via " + b.Shell.DisplayName() + "."
 }
 
-func (*Bash) InputSchema() map[string]any {
+func (b *Bash) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"command": map[string]any{
 				"type":        "string",
-				"description": "Shell command to run via 'sh -c'.",
+				"description": "Shell command to run via " + b.Shell.DisplayName() + ".",
 			},
 			"timeout_sec": map[string]any{
 				"type":        "integer",
@@ -88,7 +93,8 @@ func (b *Bash) Run(ctx context.Context, input map[string]any) (string, error) {
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(cctx, "sh", "-c", cmdStr)
+	name, args := b.Shell.CommandLine(cmdStr)
+	cmd := exec.CommandContext(cctx, name, args...)
 	cmd.Dir = b.Cwd
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out

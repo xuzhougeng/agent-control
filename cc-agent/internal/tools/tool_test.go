@@ -2,8 +2,12 @@ package tools
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"cc-agent/internal/host"
 )
 
 func TestDefaultRegistryHasOpsTools(t *testing.T) {
@@ -27,6 +31,26 @@ func TestBashRunsAndReportsExit(t *testing.T) {
 	}
 	if !strings.Contains(out, "hi") {
 		t.Errorf("missing stdout: %s", out)
+	}
+}
+
+func TestBashUsesConfiguredShellInvocation(t *testing.T) {
+	dir := t.TempDir()
+	shellPath := filepath.Join(dir, "fake-shell")
+	if err := os.WriteFile(shellPath, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\n"), 0o755); err != nil {
+		t.Fatalf("write fake shell: %v", err)
+	}
+	b := NewBash(dir)
+	b.Shell = host.Shell{Kind: host.ShellPowerShell, Command: shellPath}
+
+	out, err := b.Run(context.Background(), map[string]any{"command": "Get-Process"})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	for _, want := range []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "Get-Process"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
 	}
 }
 

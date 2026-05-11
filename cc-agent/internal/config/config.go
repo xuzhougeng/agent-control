@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"cc-agent/internal/host"
 )
 
 const DefaultSystemPrompt = `You are cc-agent, a server operations assistant.
-You help diagnose, configure, and maintain Linux servers via a small set of
+You help diagnose, configure, and maintain the current host via a small set of
 local tools (bash, read, write, grep, glob, sysinfo, proclist, logtail).
 
 Operating principles:
@@ -26,6 +28,33 @@ Operating principles:
 - When unsure, ask the user before continuing.
 - Keep responses tight; output is read by an operator on a terminal.
 `
+
+func DefaultSystemPromptForHost(h host.Context) string {
+	return strings.TrimRight(DefaultSystemPrompt, "\n") + "\n\n" + runtimeSystemContext(h) + "\n"
+}
+
+func runtimeSystemContext(h host.Context) string {
+	goos := h.GOOS
+	if goos == "" {
+		goos = "unknown"
+	}
+	goarch := h.GOARCH
+	if goarch == "" {
+		goarch = "unknown"
+	}
+	shell := h.Shell
+	if shell.Kind == "" {
+		shell = host.DetectShell(goos, func(string) (string, error) {
+			return "", errors.New("not found")
+		})
+	}
+	return fmt.Sprintf(`Host runtime:
+- OS/arch: %s/%s
+- Command shell: %s (%s)
+- Match commands to this host and shell. %s
+- Do not assume Linux-only commands on Windows unless the user confirms a compatibility layer such as WSL, Git Bash, or MSYS2.
+`, goos, goarch, shell.DisplayName(), shell.InvocationDescription(), shell.SyntaxHint())
+}
 
 type Config struct {
 	// Provider: "anthropic" | "openai" | "deepseek" | "qwen" | "openai-compat".
@@ -139,7 +168,7 @@ func (c *Config) applyDefaults() {
 		c.MaxTokens = 4096
 	}
 	if c.SystemPrompt == "" {
-		c.SystemPrompt = DefaultSystemPrompt
+		c.SystemPrompt = DefaultSystemPromptForHost(host.Current())
 	}
 	if c.Cwd == "" {
 		if pwd, err := os.Getwd(); err == nil {

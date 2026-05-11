@@ -8,9 +8,11 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"cc-agent/internal/host"
 )
 
-// execShell runs cmdStr through /bin/sh -c, streaming combined stdout+stderr
+// execShell runs cmdStr through the host shell, streaming combined stdout+stderr
 // to live (typically the readline Stdout) and capturing them into a returned
 // string. The captured form is truncated to maxBytes with a marker, so the
 // REPL buffer can safely fold huge command output into a memory write
@@ -24,12 +26,17 @@ import (
 // shell-level failures, so callers can rely on err == nil for any
 // shell-side problem. A non-nil error indicates an internal misuse.
 func execShell(ctx context.Context, cmdStr, cwd string, live io.Writer, timeout time.Duration, maxBytes int) (string, error) {
+	return execShellWithShell(ctx, host.CurrentShell(), cmdStr, cwd, live, timeout, maxBytes)
+}
+
+func execShellWithShell(ctx context.Context, shell host.Shell, cmdStr, cwd string, live io.Writer, timeout time.Duration, maxBytes int) (string, error) {
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	cmd := exec.CommandContext(ctx, "sh", "-c", cmdStr)
+	name, args := shell.CommandLine(cmdStr)
+	cmd := exec.CommandContext(ctx, name, args...)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
