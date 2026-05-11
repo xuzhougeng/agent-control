@@ -320,7 +320,12 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
   :rollback <name> <version>       install a specific older version
   :rewind [N]                      drop the last N user turn(s) + replies (default 1)
   :quit | :exit | exit | quit | Ctrl+D   leave the REPL
-  ESC during a run                 cancel the current turn`)
+  ! <command>                      run a shell command (LLM does NOT see it)
+  !! <command>                     run a shell command and fold (cmd, output)
+                                   into the NEXT user message
+                                   (each ! is a fresh subshell; cd / interactive
+                                   commands like vim, less won't persist or work)
+  ESC during a run                 cancel the current turn (or the current !)`)
 		return nil
 	case ":tools":
 		reg := ag.Tools()
