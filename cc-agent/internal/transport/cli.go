@@ -176,6 +176,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 	}
 	defer rl.Close()
 
+	// bangBuf is touched only from this loop; do not share across goroutines.
 	var bangBuf pendingShell
 
 	if approver != nil {
@@ -234,7 +235,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 				fmt.Fprintln(rl.Stderr(), "usage: !! <command>   (run + buffer for next turn)")
 				continue
 			}
-			runBang(ctx, rl, cmd, &bangBuf, true)
+			runBang(ctx, rl, cmd, &bangBuf)
 			continue
 		}
 		if strings.HasPrefix(line, "!") {
@@ -243,7 +244,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 				fmt.Fprintln(rl.Stderr(), "usage: ! <command>   (run shell; LLM does not see it)")
 				continue
 			}
-			runBang(ctx, rl, cmd, nil, false)
+			runBang(ctx, rl, cmd, nil)
 			continue
 		}
 		runCtx, cancelRun := context.WithCancel(ctx)
@@ -588,7 +589,7 @@ func parseNameVersion(s string) (string, int) {
 // user turn can fold it in via foldShellContext. ESC during the run cancels
 // the shell process via watchEscDuringRun; SIGINT routes the same way it
 // does for agent.Run.
-func runBang(parent context.Context, rl *readline.Instance, cmd string, buf *pendingShell, persist bool) {
+func runBang(parent context.Context, rl *readline.Instance, cmd string, buf *pendingShell) {
 	fmt.Fprintf(rl.Stdout(), "\033[90m$ %s\033[0m\n", cmd)
 	runCtx, cancelRun := context.WithCancel(parent)
 	defer cancelRun()
@@ -606,7 +607,7 @@ func runBang(parent context.Context, rl *readline.Instance, cmd string, buf *pen
 		fmt.Fprintf(rl.Stderr(), "shell error: %v\n", err)
 		return
 	}
-	if persist && buf != nil {
+	if buf != nil {
 		buf.push(cmd, out)
 		fmt.Fprintln(rl.Stdout(), "\033[90m[buffered for next turn]\033[0m")
 	}
