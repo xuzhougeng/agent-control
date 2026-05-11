@@ -42,12 +42,21 @@ func TestExecShell_NonZeroExit(t *testing.T) {
 
 func TestExecShell_Timeout(t *testing.T) {
 	var live bytes.Buffer
+	start := time.Now()
 	got, err := execShell(context.Background(), "sleep 5", "", &live, 200*time.Millisecond, 1<<14)
+	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("expected nil err; got %v", err)
 	}
 	if !strings.Contains(got, "[timed out]") {
 		t.Errorf("missing timeout marker: %q", got)
+	}
+	// Without process-group kill, cmd.Run waits for the grandchild
+	// `sleep` to close the inherited stdout pipe — taking ~5s instead
+	// of ~200ms. Cap at 2s so we catch the regression but tolerate CI
+	// jitter.
+	if elapsed > 2*time.Second {
+		t.Errorf("timeout returned slowly (%v); grandchild likely not killed", elapsed)
 	}
 }
 

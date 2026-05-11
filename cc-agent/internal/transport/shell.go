@@ -33,6 +33,11 @@ func execShell(ctx context.Context, cmdStr, cwd string, live io.Writer, timeout 
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
+	// On Unix, put the shell in its own process group so context
+	// cancellation can SIGKILL the whole tree. Otherwise a grandchild
+	// (e.g. `sleep 10`) keeps the inherited stdout pipe open and
+	// cmd.Run blocks until it exits naturally, wedging the REPL.
+	configureProcessGroup(cmd)
 	var captured bytes.Buffer
 	w := io.MultiWriter(live, &captured)
 	cmd.Stdout = w
