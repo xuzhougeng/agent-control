@@ -28,14 +28,14 @@ func readAttach(path, cwd string) (content string, truncated bool, err error) {
 	}
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return "", false, fmt.Errorf("stat %s: %w", resolved, err)
+		return "", false, err
 	}
 	if info.IsDir() {
-		return "", false, fmt.Errorf("%s is a directory (use a glob is out of scope; pass a file)", resolved)
+		return "", false, fmt.Errorf("%s is a directory (glob patterns are out of scope; pass a file path)", resolved)
 	}
 	f, err := os.Open(resolved)
 	if err != nil {
-		return "", false, fmt.Errorf("open %s: %w", resolved, err)
+		return "", false, err
 	}
 	defer f.Close()
 
@@ -61,18 +61,21 @@ func readAttach(path, cwd string) (content string, truncated bool, err error) {
 	if total > attachMaxBytes {
 		truncated = true
 		remaining := info.Size() - int64(attachMaxBytes)
+		if remaining <= 0 {
+			remaining = 1
+		}
 		return string(buf[:attachMaxBytes]) + fmt.Sprintf("\n…(+%d more bytes, truncated)\n", remaining), true, nil
 	}
 	return string(buf[:total]), false, nil
 }
 
 func resolveAttachPath(path, cwd string) (string, error) {
-	if strings.HasPrefix(path, "~") {
+	if path == "~" || strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("resolve ~: %w", err)
 		}
-		path = filepath.Join(home, path[1:])
+		path = filepath.Join(home, strings.TrimPrefix(path, "~"))
 	}
 	if filepath.IsAbs(path) {
 		return filepath.Clean(path), nil

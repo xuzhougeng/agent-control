@@ -88,19 +88,19 @@ func TestReadAttach_Truncation(t *testing.T) {
 	if !strings.Contains(got, "…(+") {
 		t.Errorf("missing truncation marker: ends with %q", got[len(got)-80:])
 	}
+	if !strings.Contains(got, "…(+45056 more bytes, truncated)") {
+		t.Errorf("expected exact truncation marker '+45056 more bytes, truncated'; got tail=%q", got[len(got)-80:])
+	}
 }
 
 func TestReadAttach_TildeExpansion(t *testing.T) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("no home dir")
-	}
-	path := filepath.Join(home, ".cc-agent-attach-test.txt")
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	path := filepath.Join(tmpHome, "tilde-test.txt")
 	if err := os.WriteFile(path, []byte("home"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Remove(path) })
-	got, _, err := readAttach("~/.cc-agent-attach-test.txt", "")
+	got, _, err := readAttach("~/tilde-test.txt", "")
 	if err != nil {
 		t.Fatalf("readAttach with ~: %v", err)
 	}
