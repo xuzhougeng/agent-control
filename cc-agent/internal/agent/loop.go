@@ -261,6 +261,9 @@ func (a *Agent) applyRouter(ctx context.Context, userInput string, emit func(Eve
 // Surfaces a "pinned" EventRouter so transcripts make clear the skill was
 // operator-chosen, not auto-picked.
 func (a *Agent) RunWithForcedSkill(ctx context.Context, sessionID, userInput string, skill *skills.Skill, listener EventListener) (string, error) {
+	if listener == nil {
+		listener = a.listener
+	}
 	if skill == nil {
 		return a.RunWithListener(ctx, sessionID, userInput, listener)
 	}
