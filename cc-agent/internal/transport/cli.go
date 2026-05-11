@@ -176,6 +176,8 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 	}
 	defer rl.Close()
 
+	var bangBuf pendingShell
+
 	if approver != nil {
 		approver.SetReadline(rl)
 	}
@@ -223,6 +225,27 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 			}
 			continue
 		}
+		// Shell-escape prefixes. !! captures output for the next turn; !
+		// is a pure side-trip. Both skip the destructive-command approver
+		// because the operator is hand-typing.
+		if strings.HasPrefix(line, "!!") {
+			cmd := strings.TrimSpace(strings.TrimPrefix(line, "!!"))
+			if cmd == "" {
+				fmt.Fprintln(rl.Stderr(), "usage: !! <command>   (run + buffer for next turn)")
+				continue
+			}
+			runBang(ctx, rl, cmd, &bangBuf, true)
+			continue
+		}
+		if strings.HasPrefix(line, "!") {
+			cmd := strings.TrimSpace(strings.TrimPrefix(line, "!"))
+			if cmd == "" {
+				fmt.Fprintln(rl.Stderr(), "usage: ! <command>   (run shell; LLM does not see it)")
+				continue
+			}
+			runBang(ctx, rl, cmd, nil, false)
+			continue
+		}
 		runCtx, cancelRun := context.WithCancel(ctx)
 		stopSig := installRunInterrupt(cancelRun)
 		stopEsc, escErr := watchEscDuringRun(cancelRun)
@@ -230,7 +253,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 			fmt.Fprintf(rl.Stderr(), "esc-watch: %v (continuing without ESC interrupt)\n", escErr)
 			stopEsc = func() {}
 		}
-		_, runErr := ag.Run(runCtx, sessionID, line)
+		_, runErr := ag.Run(runCtx, sessionID, foldShellContext(bangBuf.take(), line))
 		stopEsc()
 		stopSig()
 		cancelRun()
@@ -553,4 +576,33 @@ func parseNameVersion(s string) (string, int) {
 		}
 	}
 	return s, 0
+}
+
+// runBang executes a single ! or !! command. When buf is non-nil, the
+// (cmd, captured-output) pair is pushed into the buffer so the NEXT normal
+// user turn can fold it in via foldShellContext. ESC during the run cancels
+// the shell process via watchEscDuringRun; SIGINT routes the same way it
+// does for agent.Run.
+func runBang(parent context.Context, rl *readline.Instance, cmd string, buf *pendingShell, persist bool) {
+	fmt.Fprintf(rl.Stdout(), "\033[90m$ %s\033[0m\n", cmd)
+	runCtx, cancelRun := context.WithCancel(parent)
+	defer cancelRun()
+	stopSig := installRunInterrupt(cancelRun)
+	defer stopSig()
+	stopEsc, escErr := watchEscDuringRun(cancelRun)
+	if escErr != nil {
+		fmt.Fprintf(rl.Stderr(), "esc-watch: %v (continuing without ESC interrupt)\n", escErr)
+		stopEsc = func() {}
+	}
+	defer stopEsc()
+
+	out, err := execShell(runCtx, cmd, "", rl.Stdout(), 60*time.Second, 16<<10)
+	if err != nil {
+		fmt.Fprintf(rl.Stderr(), "shell error: %v\n", err)
+		return
+	}
+	if persist && buf != nil {
+		buf.push(cmd, out)
+		fmt.Fprintln(rl.Stdout(), "\033[90m[buffered for next turn]\033[0m")
+	}
 }
