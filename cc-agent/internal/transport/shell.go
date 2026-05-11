@@ -17,6 +17,11 @@ import (
 //
 // timeout is enforced as a hard cap on top of ctx; when timeout <= 0 the
 // caller's ctx alone gates the run.
+//
+// All run failures (non-zero exit, missing shell, permission errors) are
+// folded into the captured string; the returned error is always nil for
+// shell-level failures, so callers can rely on err == nil for any
+// shell-side problem. A non-nil error indicates an internal misuse.
 func execShell(ctx context.Context, cmdStr, cwd string, live io.Writer, timeout time.Duration, maxBytes int) (string, error) {
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -27,12 +32,12 @@ func execShell(ctx context.Context, cmdStr, cwd string, live io.Writer, timeout 
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
-	var cap bytes.Buffer
-	w := io.MultiWriter(live, &cap)
+	var captured bytes.Buffer
+	w := io.MultiWriter(live, &captured)
 	cmd.Stdout = w
 	cmd.Stderr = w
 	runErr := cmd.Run()
-	out := truncateBytes(cap.Bytes(), maxBytes)
+	out := truncateBytes(captured.Bytes(), maxBytes)
 	if ctx.Err() == context.DeadlineExceeded {
 		return string(out) + "\n[timed out]\n", nil
 	}

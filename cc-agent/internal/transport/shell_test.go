@@ -3,6 +3,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -60,7 +61,29 @@ func TestExecShell_Truncation(t *testing.T) {
 	if !strings.Contains(got, "…(+") {
 		t.Errorf("expected truncation marker; got=%q", got)
 	}
+	if !strings.Contains(got, "+3996 more bytes") {
+		t.Errorf("expected exact dropped-bytes marker '+3996 more bytes'; got=%q", got)
+	}
+	if len(got) > 200 {
+		t.Errorf("captured output should be truncated; got %d bytes", len(got))
+	}
 	if len(live.String()) < 4096 {
 		t.Errorf("live stream should be uncapped; got %d bytes", len(live.String()))
+	}
+}
+
+func TestExecShell_Cwd(t *testing.T) {
+	var live bytes.Buffer
+	tmp := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmp)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", tmp, err)
+	}
+	got, err := execShell(context.Background(), "pwd", tmp, &live, 2*time.Second, 1<<14)
+	if err != nil {
+		t.Fatalf("execShell: %v", err)
+	}
+	if !strings.Contains(got, resolved) {
+		t.Errorf("captured output missing cwd %q; got=%q", resolved, got)
 	}
 }
