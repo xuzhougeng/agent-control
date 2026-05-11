@@ -176,8 +176,8 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 	}
 	defer rl.Close()
 
-	// bangBuf is touched only from this loop; do not share across goroutines.
-	var bangBuf pendingShell
+	// injectBuf is touched only from this loop; do not share across goroutines.
+	var injectBuf pendingInject
 
 	if approver != nil {
 		approver.SetReadline(rl)
@@ -235,7 +235,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 				fmt.Fprintln(rl.Stderr(), "usage: !! <command>   (run + buffer for next turn)")
 				continue
 			}
-			runBang(ctx, rl, cmd, &bangBuf)
+			runBang(ctx, rl, cmd, &injectBuf)
 			continue
 		}
 		if strings.HasPrefix(line, "!") {
@@ -254,7 +254,7 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 			fmt.Fprintf(rl.Stderr(), "esc-watch: %v (continuing without ESC interrupt)\n", escErr)
 			stopEsc = func() {}
 		}
-		_, runErr := ag.Run(runCtx, sessionID, foldShellContext(bangBuf.take(), line))
+		_, runErr := ag.Run(runCtx, sessionID, foldInject(injectBuf.take(), line))
 		stopEsc()
 		stopSig()
 		cancelRun()
@@ -586,10 +586,10 @@ func parseNameVersion(s string) (string, int) {
 
 // runBang executes a single ! or !! command. When buf is non-nil, the
 // (cmd, captured-output) pair is pushed into the buffer so the NEXT normal
-// user turn can fold it in via foldShellContext. ESC during the run cancels
+// user turn can fold it in via foldInject. ESC during the run cancels
 // the shell process via watchEscDuringRun; SIGINT routes the same way it
 // does for agent.Run.
-func runBang(parent context.Context, rl *readline.Instance, cmd string, buf *pendingShell) {
+func runBang(parent context.Context, rl *readline.Instance, cmd string, buf *pendingInject) {
 	fmt.Fprintf(rl.Stdout(), "\033[90m$ %s\033[0m\n", cmd)
 	runCtx, cancelRun := context.WithCancel(parent)
 	defer cancelRun()
@@ -608,7 +608,7 @@ func runBang(parent context.Context, rl *readline.Instance, cmd string, buf *pen
 		return
 	}
 	if buf != nil {
-		buf.push(cmd, out)
+		buf.pushShell(cmd, out)
 		fmt.Fprintln(rl.Stdout(), "\033[90m[buffered for next turn]\033[0m")
 	}
 }

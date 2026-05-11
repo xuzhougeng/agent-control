@@ -61,38 +61,52 @@ func truncateBytes(b []byte, maxBytes int) []byte {
 	return append(cut, []byte(fmt.Sprintf("\n…(+%d more bytes)\n", len(b)-maxBytes))...)
 }
 
-// shellEntry is one !! invocation captured for later folding into the next
-// real user message. Strings already include any [exit:] / [timed out]
-// markers added by execShell.
-type shellEntry struct {
-	cmd string
-	out string
+// injectEntry is one staged item — either a !! shell capture or an @ file
+// attach — waiting to be folded into the next real user message. The label
+// drives the fold header (`[user-shell]` or `[user-attach]`); head is the
+// post-bracket title line ("$ <cmd>" or "@<path>"); body is the multi-line
+// content (command output or file contents, with any markers already baked in
+// by the producer).
+type injectEntry struct {
+	label string // "user-shell" | "user-attach"
+	head  string
+	body  string
 }
 
-// pendingShell is a single-session FIFO of !! captures. Not goroutine-safe
-// because RunCLI is single-threaded — the REPL goroutine is the only writer
-// and reader.
-type pendingShell struct {
-	entries []shellEntry
+// pendingInject is a single-session FIFO of staged !! and @ entries. Not
+// goroutine-safe because RunCLI is single-threaded — the REPL goroutine is
+// the only writer and reader.
+type pendingInject struct {
+	entries []injectEntry
 }
 
-func (p *pendingShell) push(cmd, out string) {
-	p.entries = append(p.entries, shellEntry{cmd: cmd, out: out})
+func (p *pendingInject) pushShell(cmd, out string) {
+	p.entries = append(p.entries, injectEntry{label: "user-shell", head: "$ " + cmd, body: out})
 }
 
-func (p *pendingShell) take() []shellEntry {
+func (p *pendingInject) pushAttach(path, content string, truncated bool) {
+	head := "@" + path
+	if truncated {
+		head += " (truncated)"
+	}
+	p.entries = append(p.entries, injectEntry{label: "user-attach", head: head, body: content})
+}
+
+func (p *pendingInject) take() []injectEntry {
 	out := p.entries
 	p.entries = nil
 	return out
 }
 
-func (p *pendingShell) empty() bool { return len(p.entries) == 0 }
+func (p *pendingInject) empty() bool { return len(p.entries) == 0 }
 
-// foldShellContext renders a drained pendingShell buffer + the operator's
-// fresh line into the single user message that gets handed to agent.Run.
-// When entries is empty the raw line is returned unchanged so a session with
-// zero !! usage is byte-identical to today.
-func foldShellContext(entries []shellEntry, userLine string) string {
+// foldInject renders a drained pendingInject buffer + the operator's fresh
+// line into the single user message that gets handed to agent.Run. Shell
+// captures and file attaches share one format: a "[label] head" line, then
+// the body, with "---" between entries and "===" before the user line.
+// When entries is empty the raw line is returned unchanged so a session
+// with zero injections is byte-identical to today.
+func foldInject(entries []injectEntry, userLine string) string {
 	if len(entries) == 0 {
 		return userLine
 	}
@@ -101,16 +115,18 @@ func foldShellContext(entries []shellEntry, userLine string) string {
 		if i > 0 {
 			sb.WriteString("---\n")
 		}
-		sb.WriteString("[user-shell] $ ")
-		sb.WriteString(e.cmd)
+		sb.WriteString("[")
+		sb.WriteString(e.label)
+		sb.WriteString("] ")
+		sb.WriteString(e.head)
 		sb.WriteByte('\n')
-		out := e.out
-		if out == "" {
-			out = "(no output)\n"
-		} else if !strings.HasSuffix(out, "\n") {
-			out += "\n"
+		body := e.body
+		if body == "" {
+			body = "(no output)\n"
+		} else if !strings.HasSuffix(body, "\n") {
+			body += "\n"
 		}
-		sb.WriteString(out)
+		sb.WriteString(body)
 	}
 	sb.WriteString("===\n")
 	sb.WriteString(userLine)

@@ -97,18 +97,18 @@ func TestExecShell_Cwd(t *testing.T) {
 	}
 }
 
-func TestPendingShell_PushTake(t *testing.T) {
-	var p pendingShell
+func TestPendingInject_PushTake(t *testing.T) {
+	var p pendingInject
 	if !p.empty() {
 		t.Fatal("new buffer should be empty")
 	}
-	p.push("echo a", "a\n")
-	p.push("echo b", "b\n")
+	p.pushShell("echo a", "a\n")
+	p.pushShell("echo b", "b\n")
 	if p.empty() {
 		t.Fatal("buffer should be non-empty")
 	}
 	got := p.take()
-	if len(got) != 2 || got[0].cmd != "echo a" || got[1].cmd != "echo b" {
+	if len(got) != 2 || got[0].head != "$ echo a" || got[1].head != "$ echo b" {
 		t.Errorf("unexpected drain: %+v", got)
 	}
 	if !p.empty() {
@@ -116,28 +116,28 @@ func TestPendingShell_PushTake(t *testing.T) {
 	}
 }
 
-func TestFoldShellContext_NoEntriesReturnsRawInput(t *testing.T) {
-	got := foldShellContext(nil, "hello")
+func TestFoldInject_NoEntriesReturnsRawInput(t *testing.T) {
+	got := foldInject(nil, "hello")
 	if got != "hello" {
 		t.Errorf("empty buffer should pass input through; got=%q", got)
 	}
 }
 
-func TestFoldShellContext_OneEntry(t *testing.T) {
-	entries := []shellEntry{{cmd: "ls", out: "foo\nbar\n"}}
-	got := foldShellContext(entries, "fix it")
+func TestFoldInject_OneShellEntry(t *testing.T) {
+	entries := []injectEntry{{label: "user-shell", head: "$ ls", body: "foo\nbar\n"}}
+	got := foldInject(entries, "fix it")
 	want := "[user-shell] $ ls\nfoo\nbar\n===\nfix it"
 	if got != want {
 		t.Errorf("fold mismatch:\nwant=%q\ngot =%q", want, got)
 	}
 }
 
-func TestFoldShellContext_MultipleEntriesAndEmptyOutput(t *testing.T) {
-	entries := []shellEntry{
-		{cmd: "true", out: ""},
-		{cmd: "echo y", out: "y\n"},
+func TestFoldInject_MultipleShellEntriesAndEmptyOutput(t *testing.T) {
+	entries := []injectEntry{
+		{label: "user-shell", head: "$ true", body: ""},
+		{label: "user-shell", head: "$ echo y", body: "y\n"},
 	}
-	got := foldShellContext(entries, "now what")
+	got := foldInject(entries, "now what")
 	want := "[user-shell] $ true\n(no output)\n---\n[user-shell] $ echo y\ny\n===\nnow what"
 	if got != want {
 		t.Errorf("fold mismatch:\nwant=%q\ngot =%q", want, got)
