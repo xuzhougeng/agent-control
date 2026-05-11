@@ -16,8 +16,8 @@ Agent Control gives you four progressively richer ways to use it. Pick the one t
 `cc-agent` is the new server-ops agent (v0.7.0+). It runs the LLM loop itself and ships with 8 built-in tools (`bash`, `read`, `write`, `grep`, `glob`, `sysinfo`, `proclist`, `logtail`). Destructive commands hit an approval gate.
 
 ```bash
-mkdir -p ~/cc-agent && cd ~/cc-agent
-curl -LO https://github.com/xuzhougeng/agent-control/releases/download/v0.7.3/cc-agent-linux-amd64
+mkdir -p ~/cc-agent/yard ~/cc-agent/skills.d && cd ~/cc-agent
+curl -LO https://github.com/xuzhougeng/agent-control/releases/latest/download/cc-agent-linux-amd64
 chmod +x cc-agent-linux-amd64 && mv cc-agent-linux-amd64 cc-agent
 
 # DeepSeek key (cheapest to start; swap providers later)
@@ -27,6 +27,7 @@ CC_AGENT_API_KEY="$(cat ~/.cc-agent-key)" \
 CC_AGENT_BASE_URL="https://api.deepseek.com" \
 ./cc-agent -provider deepseek -model deepseek-chat \
            -cwd ~/cc-agent/yard \
+           -skills-dir ~/cc-agent/skills.d \
            -memory ~/cc-agent/sessions.db
 ```
 

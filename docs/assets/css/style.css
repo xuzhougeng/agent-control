@@ -483,8 +483,13 @@ footer {
 .doc-content h3 { font-size: 1.4rem; margin-top: 1.5rem; }
 .doc-content p { line-height: 1.7; margin-bottom: 1.2rem; }
 .doc-content code { background: var(--accent-soft); padding: 0.2rem 0.4rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.9em; color: var(--accent); }
-.doc-content pre { background: var(--bg-ink); padding: 1rem; border-radius: var(--radius-sm); overflow-x: auto; margin-bottom: 1.5rem; border: 1px solid rgba(201, 183, 159, 0.3); box-shadow: var(--shadow-card); }
+.doc-content pre { position: relative; background: var(--bg-ink); padding: 1rem; border-radius: var(--radius-sm); overflow-x: auto; margin-bottom: 1.5rem; border: 1px solid rgba(201, 183, 159, 0.3); box-shadow: var(--shadow-card); }
 .doc-content pre code { background: none; color: #d4d4d4; padding: 0; }
+.doc-content pre .copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.5rem; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 4px; color: #d4d4d4; font-size: 0.85rem; cursor: pointer; opacity: 0; transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease; line-height: 1; }
+.doc-content pre:hover .copy-btn,
+.doc-content pre:focus-within .copy-btn { opacity: 1; }
+.doc-content pre .copy-btn:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.doc-content pre .copy-btn.copied { color: #4ade80; opacity: 1; }
 .doc-content table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; display: block; overflow-x: auto; }
 .doc-content th, .doc-content td { padding: 0.75rem; border: 1px solid rgba(201, 183, 159, 0.5); text-align: left; }
 .doc-content th { background: rgba(255, 252, 247, 0.92); color: var(--text); font-weight: 600; }
