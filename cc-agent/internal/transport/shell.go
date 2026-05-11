@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -53,4 +54,60 @@ func truncateBytes(b []byte, maxBytes int) []byte {
 	}
 	cut := b[:maxBytes]
 	return append(cut, []byte(fmt.Sprintf("\n…(+%d more bytes)\n", len(b)-maxBytes))...)
+}
+
+// shellEntry is one !! invocation captured for later folding into the next
+// real user message. Strings already include any [exit:] / [timed out]
+// markers added by execShell.
+type shellEntry struct {
+	cmd string
+	out string
+}
+
+// pendingShell is a single-session FIFO of !! captures. Not goroutine-safe
+// because RunCLI is single-threaded — the REPL goroutine is the only writer
+// and reader.
+type pendingShell struct {
+	entries []shellEntry
+}
+
+func (p *pendingShell) push(cmd, out string) {
+	p.entries = append(p.entries, shellEntry{cmd: cmd, out: out})
+}
+
+func (p *pendingShell) take() []shellEntry {
+	out := p.entries
+	p.entries = nil
+	return out
+}
+
+func (p *pendingShell) empty() bool { return len(p.entries) == 0 }
+
+// foldShellContext renders a drained pendingShell buffer + the operator's
+// fresh line into the single user message that gets handed to agent.Run.
+// When entries is empty the raw line is returned unchanged so a session with
+// zero !! usage is byte-identical to today.
+func foldShellContext(entries []shellEntry, userLine string) string {
+	if len(entries) == 0 {
+		return userLine
+	}
+	var sb strings.Builder
+	for i, e := range entries {
+		if i > 0 {
+			sb.WriteString("---\n")
+		}
+		sb.WriteString("[user-shell] $ ")
+		sb.WriteString(e.cmd)
+		sb.WriteByte('\n')
+		out := e.out
+		if out == "" {
+			out = "(no output)\n"
+		} else if !strings.HasSuffix(out, "\n") {
+			out += "\n"
+		}
+		sb.WriteString(out)
+	}
+	sb.WriteString("===\n")
+	sb.WriteString(userLine)
+	return sb.String()
 }

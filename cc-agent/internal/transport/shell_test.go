@@ -87,3 +87,50 @@ func TestExecShell_Cwd(t *testing.T) {
 		t.Errorf("captured output missing cwd %q; got=%q", resolved, got)
 	}
 }
+
+func TestPendingShell_PushTake(t *testing.T) {
+	var p pendingShell
+	if !p.empty() {
+		t.Fatal("new buffer should be empty")
+	}
+	p.push("echo a", "a\n")
+	p.push("echo b", "b\n")
+	if p.empty() {
+		t.Fatal("buffer should be non-empty")
+	}
+	got := p.take()
+	if len(got) != 2 || got[0].cmd != "echo a" || got[1].cmd != "echo b" {
+		t.Errorf("unexpected drain: %+v", got)
+	}
+	if !p.empty() {
+		t.Fatal("take() should drain the buffer")
+	}
+}
+
+func TestFoldShellContext_NoEntriesReturnsRawInput(t *testing.T) {
+	got := foldShellContext(nil, "hello")
+	if got != "hello" {
+		t.Errorf("empty buffer should pass input through; got=%q", got)
+	}
+}
+
+func TestFoldShellContext_OneEntry(t *testing.T) {
+	entries := []shellEntry{{cmd: "ls", out: "foo\nbar\n"}}
+	got := foldShellContext(entries, "fix it")
+	want := "[user-shell] $ ls\nfoo\nbar\n===\nfix it"
+	if got != want {
+		t.Errorf("fold mismatch:\nwant=%q\ngot =%q", want, got)
+	}
+}
+
+func TestFoldShellContext_MultipleEntriesAndEmptyOutput(t *testing.T) {
+	entries := []shellEntry{
+		{cmd: "true", out: ""},
+		{cmd: "echo y", out: "y\n"},
+	}
+	got := foldShellContext(entries, "now what")
+	want := "[user-shell] $ true\n(no output)\n---\n[user-shell] $ echo y\ny\n===\nnow what"
+	if got != want {
+		t.Errorf("fold mismatch:\nwant=%q\ngot =%q", want, got)
+	}
+}
