@@ -351,6 +351,85 @@ func TestRewind_DropsAllOnFullRewind(t *testing.T) {
 	}
 }
 
+// fakeProvider lets a closure-based Complete satisfy llm.Provider; useful
+// when a test needs to inspect the incoming request.
+type fakeProvider struct {
+	complete func(ctx context.Context, req llm.Request) (*llm.Response, error)
+}
+
+func (f *fakeProvider) Name() string { return "fake" }
+
+func (f *fakeProvider) Complete(ctx context.Context, req llm.Request) (*llm.Response, error) {
+	return f.complete(ctx, req)
+}
+
+func TestAgent_RunWithForcedSkill_BypassesRouter(t *testing.T) {
+	ctx := context.Background()
+	mem := memory.NewInMemory()
+
+	// Provider records the request and returns a trivial reply.
+	var lastUser string
+	prov := &fakeProvider{
+		complete: func(ctx context.Context, req llm.Request) (*llm.Response, error) {
+			for _, m := range req.Messages {
+				if m.Role == llm.RoleUser {
+					lastUser = m.Content
+				}
+			}
+			return &llm.Response{
+				Message:    llm.Message{Role: llm.RoleAssistant, Content: "ok"},
+				StopReason: llm.StopEnd,
+			}, nil
+		},
+	}
+	reg := skills.NewRegistry()
+	pinned := &skills.Skill{
+		Name: "kernel-probe", Description: "probe kernel",
+		Prompt: "PROBE-PROMPT",
+	}
+	skillsDir := t.TempDir()
+	if _, err := reg.Save(pinned, skillsDir); err != nil {
+		t.Fatalf("save skill: %v", err)
+	}
+	// Router that would pick a DIFFERENT skill if invoked — we assert it is
+	// NOT invoked.
+	routed := false
+	router := skills.RouterFunc(func(_ context.Context, _ string, _ []*skills.Skill) (string, error) {
+		routed = true
+		return "wrong-skill", nil
+	})
+
+	ag := New(prov, tools.NewRegistry(), mem, Options{Model: "x", MaxTokens: 8})
+	ag.SetSkills(reg, skillsDir, nil)
+	ag.SetRouter(router)
+
+	var events []Event
+	listener := func(e Event) { events = append(events, e) }
+
+	if _, err := ag.RunWithForcedSkill(ctx, "s1", "hello", pinned, listener); err != nil {
+		t.Fatalf("RunWithForcedSkill: %v", err)
+	}
+	if routed {
+		t.Error("router should NOT have been invoked under RunWithForcedSkill")
+	}
+	if !strings.Contains(lastUser, "PROBE-PROMPT") {
+		t.Errorf("expected pinned skill prompt to be folded into user msg; got %q", lastUser)
+	}
+	if !strings.Contains(lastUser, "kernel-probe") {
+		t.Errorf("expected pinned skill name in wrap; got %q", lastUser)
+	}
+	// Confirm we emitted the (pinned) router event.
+	foundEvent := false
+	for _, e := range events {
+		if e.Kind == EventRouter && strings.Contains(e.Text, "kernel-probe") && strings.Contains(e.Text, "pinned") {
+			foundEvent = true
+		}
+	}
+	if !foundEvent {
+		t.Errorf("expected EventRouter with pinned marker; got events=%+v", events)
+	}
+}
+
 func TestLoop_RespectsMaxIterations(t *testing.T) {
 	loop := func() *llm.Response {
 		return &llm.Response{

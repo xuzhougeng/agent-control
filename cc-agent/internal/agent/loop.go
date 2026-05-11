@@ -204,33 +204,77 @@ func (a *Agent) RunWithListener(ctx context.Context, sessionID, userInput string
 	if err := a.ensureSession(ctx, sessionID); err != nil {
 		return "", err
 	}
-	// Route through a skill (best-effort). The picked skill's prompt is
-	// folded into the user message itself and persisted to memory; that way
-	// the prefix cache stays warm across turns even when later turns route
-	// to a different skill — every prior persisted message is byte-stable.
-	// We must NEVER touch a.opts.SystemPrompt here; mutating req.System
-	// would invalidate the cache on every turn.
-	persistedInput := userInput
-	if a.router != nil && a.skills != nil {
-		all := a.skillsSlice()
-		if len(all) > 0 {
-			name, err := a.router.Route(ctx, userInput, all)
-			switch {
-			case err != nil:
-				emit(Event{Kind: EventError, Text: fmt.Sprintf("router: %v (continuing without skill)", err)})
-			case name == "":
-				// no skill matched — fine, run with bare input
-			default:
-				if sk, ok := a.skills.Get(name); ok {
-					wrapped := skills.WrapUserInput(userInput, sk)
-					if wrapped != userInput {
-						persistedInput = wrapped
-						emit(Event{Kind: EventRouter, Text: name})
-					}
-				}
-			}
+	persistedInput := a.applyRouter(ctx, userInput, emit)
+	return a.runTurnBody(ctx, sessionID, persistedInput, emit)
+}
+
+// applyRouter runs the auto-router (if configured) and returns the user
+// input wrapped with the picked skill's prompt, or the original input when
+// no router is configured or no skill matched. emit may surface router
+// errors as agent events.
+//
+// We must NEVER touch a.opts.SystemPrompt here; mutating req.System would
+// invalidate the provider's prefix cache.
+func (a *Agent) applyRouter(ctx context.Context, userInput string, emit func(Event)) string {
+	if a.router == nil || a.skills == nil {
+		return userInput
+	}
+	all := a.skillsSlice()
+	if len(all) == 0 {
+		return userInput
+	}
+	name, err := a.router.Route(ctx, userInput, all)
+	switch {
+	case err != nil:
+		emit(Event{Kind: EventError, Text: fmt.Sprintf("router: %v (continuing without skill)", err)})
+		return userInput
+	case name == "":
+		return userInput
+	}
+	sk, ok := a.skills.Get(name)
+	if !ok {
+		return userInput
+	}
+	wrapped := skills.WrapUserInput(userInput, sk)
+	if wrapped == userInput {
+		return userInput
+	}
+	emit(Event{Kind: EventRouter, Text: name})
+	return wrapped
+}
+
+// RunWithForcedSkill drives one turn pinned to skill — bypassing the
+// auto-router. The wrapped user message is byte-identical to what a
+// router-picked turn would produce (same skills.WrapUserInput), so memory
+// replay and prefix caches behave the same.
+//
+// A nil skill is equivalent to RunWithListener (no wrap, no route).
+//
+// Surfaces a "pinned" EventRouter so transcripts make clear the skill was
+// operator-chosen, not auto-picked.
+func (a *Agent) RunWithForcedSkill(ctx context.Context, sessionID, userInput string, skill *skills.Skill, listener EventListener) (string, error) {
+	if skill == nil {
+		return a.RunWithListener(ctx, sessionID, userInput, listener)
+	}
+	emit := func(e Event) {
+		if listener != nil {
+			listener(e)
 		}
 	}
+	if err := a.ensureSession(ctx, sessionID); err != nil {
+		return "", err
+	}
+	persistedInput := skills.WrapUserInput(userInput, skill)
+	if persistedInput != userInput {
+		emit(Event{Kind: EventRouter, Text: skill.Name + " (pinned)"})
+	}
+	return a.runTurnBody(ctx, sessionID, persistedInput, emit)
+}
+
+// runTurnBody is the post-routing body shared by RunWithListener and
+// RunWithForcedSkill: persist the user message, then loop tool calls until
+// the model stops or MaxIterations is hit.
+func (a *Agent) runTurnBody(ctx context.Context, sessionID, persistedInput string, emit func(Event)) (string, error) {
 	userMsg := memory.Message{
 		Role: string(llm.RoleUser), Content: persistedInput, At: time.Now().UnixMilli(),
 	}

@@ -117,6 +117,13 @@ func parseRouteDecision(raw string) string {
 	return strings.TrimSpace(*d.Skill)
 }
 
+// RouterFunc lets a bare function satisfy Router; useful in tests.
+type RouterFunc func(ctx context.Context, userInput string, available []*Skill) (string, error)
+
+func (f RouterFunc) Route(ctx context.Context, userInput string, available []*Skill) (string, error) {
+	return f(ctx, userInput, available)
+}
+
 // WrapUserInput weaves a skill's prompt into the user message. The wrapped
 // form is what gets persisted to memory and replayed verbatim every
 // subsequent turn — that immutability is what keeps the LLM's prefix cache
