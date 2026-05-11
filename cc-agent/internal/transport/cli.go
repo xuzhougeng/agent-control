@@ -247,6 +247,22 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 			runBang(ctx, rl, cmd, nil)
 			continue
 		}
+		if strings.HasPrefix(line, "@") {
+			rest := strings.TrimPrefix(line, "@")
+			rest = strings.TrimLeft(rest, " \t")
+			if rest == "" {
+				fmt.Fprintln(rl.Stderr(), "usage: @<path> [prompt]   (attach file; with prompt sends immediately)")
+				continue
+			}
+			path, userText := splitAttachArgs(rest)
+			folded, fire := runAttach(rl, path, userText, "", &injectBuf)
+			if !fire {
+				continue
+			}
+			// Fall through to a normal turn with the folded content. We
+			// rebind `line` so the existing dispatch code below picks it up.
+			line = folded
+		}
 		runCtx, cancelRun := context.WithCancel(ctx)
 		stopSig := installRunInterrupt(cancelRun)
 		stopEsc, escErr := watchEscDuringRun(cancelRun)
@@ -582,6 +598,63 @@ func parseNameVersion(s string) (string, int) {
 		}
 	}
 	return s, 0
+}
+
+// runAttach reads a file and either buffers it for the next turn (when
+// userText is empty) or returns a folded "this turn" user message that the
+// caller dispatches immediately. cwd is the agent's cwd at REPL startup —
+// passed in explicitly so the helper stays test-friendly.
+//
+// On error, the buffer is left untouched and the error message is written
+// to rl.Stderr(); the caller should `continue` the REPL loop.
+//
+// When userText != "", the returned string is a one-shot folded message
+// already containing the file body + "===" + userText. When userText == "",
+// the file is pushed to buf and "" is returned.
+func runAttach(rl *readline.Instance, path, userText, cwd string, buf *pendingInject) (string, bool) {
+	content, truncated, err := readAttach(path, cwd)
+	if err != nil {
+		fmt.Fprintf(rl.Stderr(), "attach error: %v\n", err)
+		return "", false
+	}
+	size := len(content)
+	suffix := fmt.Sprintf("(%d bytes)", size)
+	if truncated {
+		suffix = fmt.Sprintf("(%d bytes, truncated to %d KiB)", size, attachMaxBytes>>10)
+	}
+	fmt.Fprintf(rl.Stdout(), "\033[90m@%s %s\033[0m\n", path, suffix)
+	if strings.TrimSpace(userText) == "" {
+		buf.pushAttach(path, content, truncated)
+		fmt.Fprintln(rl.Stdout(), "\033[90m[buffered for next turn]\033[0m")
+		return "", false
+	}
+	// Inline form: build a one-shot entry list (drained existing buffer +
+	// this attach) and fold against userText.
+	entries := buf.take()
+	entries = append(entries, injectEntry{
+		label: labelAttach,
+		head:  attachHead(path, truncated),
+		body:  content,
+	})
+	return foldInject(entries, userText), true
+}
+
+func attachHead(path string, truncated bool) string {
+	if truncated {
+		return "@" + path + " (truncated)"
+	}
+	return "@" + path
+}
+
+// splitAttachArgs splits "<path> <prompt...>" into (path, prompt). The path
+// runs up to the first whitespace; everything after the first run of
+// whitespace is the prompt. Paths with spaces are not supported in v1.
+func splitAttachArgs(s string) (path, prompt string) {
+	i := strings.IndexAny(s, " \t")
+	if i < 0 {
+		return s, ""
+	}
+	return s[:i], strings.TrimSpace(s[i+1:])
 }
 
 // runBang executes a single ! or !! command. When buf is non-nil, the

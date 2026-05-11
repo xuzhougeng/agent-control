@@ -143,3 +143,43 @@ func TestFoldInject_MultipleShellEntriesAndEmptyOutput(t *testing.T) {
 		t.Errorf("fold mismatch:\nwant=%q\ngot =%q", want, got)
 	}
 }
+
+func TestSplitAttachArgs(t *testing.T) {
+	cases := []struct {
+		in, path, prompt string
+	}{
+		{"foo.txt", "foo.txt", ""},
+		{"foo.txt explain", "foo.txt", "explain"},
+		{"foo.txt   what's wrong", "foo.txt", "what's wrong"},
+		{"a/b.c\tinline-tab", "a/b.c", "inline-tab"},
+	}
+	for _, c := range cases {
+		gotP, gotT := splitAttachArgs(c.in)
+		if gotP != c.path || gotT != c.prompt {
+			t.Errorf("split(%q) = (%q, %q); want (%q, %q)", c.in, gotP, gotT, c.path, c.prompt)
+		}
+	}
+}
+
+func TestFoldInject_AttachOnly(t *testing.T) {
+	entries := []injectEntry{
+		{label: labelAttach, head: "@/tmp/foo.txt", body: "hello\n"},
+	}
+	got := foldInject(entries, "summarize")
+	want := "[user-attach] @/tmp/foo.txt\nhello\n===\nsummarize"
+	if got != want {
+		t.Errorf("fold mismatch:\nwant=%q\ngot =%q", want, got)
+	}
+}
+
+func TestFoldInject_MixedShellAndAttach(t *testing.T) {
+	entries := []injectEntry{
+		{label: labelShell, head: "$ ls", body: "a\nb\n"},
+		{label: labelAttach, head: "@/tmp/x.log", body: "ERROR: boom\n"},
+	}
+	got := foldInject(entries, "explain")
+	want := "[user-shell] $ ls\na\nb\n---\n[user-attach] @/tmp/x.log\nERROR: boom\n===\nexplain"
+	if got != want {
+		t.Errorf("fold mismatch:\nwant=%q\ngot =%q", want, got)
+	}
+}
