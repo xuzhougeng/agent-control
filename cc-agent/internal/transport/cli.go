@@ -223,10 +223,19 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 			return nil
 		}
 		if strings.HasPrefix(line, ":") {
-			if err := handleSlashCommand(ctx, ag, rc, sessionID, line, approver, &nextSkill); err != nil {
+			var pendingPrompt string
+			if err := handleSlashCommand(ctx, ag, rc, sessionID, line, approver, &nextSkill, &pendingPrompt); err != nil {
 				fmt.Fprintf(rl.Stderr(), "command error: %v\n", err)
+				continue
 			}
-			continue
+			if pendingPrompt == "" {
+				continue
+			}
+			// Slash command (e.g. `:use foo bar`) staged a prompt to fire
+			// immediately. Rebind `line` and fall through to the normal
+			// dispatch so it gets ESC/SIGINT watching, inject-buffer drain,
+			// and the same skill-pin path as a bare user turn.
+			line = pendingPrompt
 		}
 		// Shell-escape prefixes. !! captures output for the next turn; !
 		// is a pure side-trip. Both skip the destructive-command approver
@@ -332,7 +341,7 @@ func historyFilePath() string {
 //	:skills                       list loaded skills
 //	:reflect <name> [description] distill the current session into a skill
 //	:registry / :publish / :install / :history / :rollback   team registry ops
-func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID, line string, approver *CLIApprover, nextSkill **skills.Skill) error {
+func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, sessionID, line string, approver *CLIApprover, nextSkill **skills.Skill, pendingPrompt *string) error {
 	parts := strings.Fields(line)
 	cmd := parts[0]
 	switch cmd {
@@ -348,13 +357,17 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
   :history <name>                  show all versions of a team skill
   :rollback <name> <version>       install a specific older version
   :rewind [N]                      drop the last N user turn(s) + replies (default 1)
-  :use <skill> [prompt]            pin next turn (or run immediately) to a skill; :use - to clear
+  :use <skill> [prompt]            force a specific skill on the next turn
+  :use                             show the pinned skill
+  :use -                           clear the pinned skill
   :quit | :exit | exit | quit | Ctrl+D   leave the REPL
   ! <command>                      run a shell command (LLM does NOT see it)
   !! <command>                     run a shell command and fold (cmd, output)
                                    into the NEXT user message
                                    (each ! is a fresh subshell; cd / interactive
                                    commands like vim, less won't persist or work)
+  @<path>                          attach a file to the next user turn
+  @<path> <text>                   attach a file and send <text> as the prompt now
   ESC during a run                 cancel the current turn (or the current !)`)
 		return nil
 	case ":tools":
@@ -437,15 +450,12 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
 		}
 		*nextSkill = sk
 		if len(parts) > 2 {
-			// Combined form: stash skill, then dispatch the trailing prompt
-			// immediately.
-			prompt := strings.Join(parts[2:], " ")
-			runCtx, cancelRun := context.WithCancel(ctx)
-			defer cancelRun()
-			fmt.Fprintf(os.Stdout, "\033[90m[skill pinned: %s]\033[0m\n", sk.Name)
-			_, err := ag.RunWithForcedSkill(runCtx, sessionID, prompt, sk, nil)
-			*nextSkill = nil
-			return err
+			// Combined form: stash skill + signal the REPL to fire the
+			// trailing prompt as the next user turn. Keeping the dispatch
+			// in RunCLI guarantees the same interrupt-watching, inject-
+			// buffer drain, and listener wiring as a normal turn.
+			*pendingPrompt = strings.Join(parts[2:], " ")
+			return nil
 		}
 		fmt.Printf("\033[32m✓\033[0m next turn pinned to skill: %s\n", sk.Name)
 		return nil
