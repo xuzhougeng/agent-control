@@ -61,6 +61,11 @@ func truncateBytes(b []byte, maxBytes int) []byte {
 	return append(cut, []byte(fmt.Sprintf("\n…(+%d more bytes)\n", len(b)-maxBytes))...)
 }
 
+const (
+	labelShell  = "user-shell"
+	labelAttach = "user-attach"
+)
+
 // injectEntry is one staged item — either a !! shell capture or an @ file
 // attach — waiting to be folded into the next real user message. The label
 // drives the fold header (`[user-shell]` or `[user-attach]`); head is the
@@ -81,15 +86,18 @@ type pendingInject struct {
 }
 
 func (p *pendingInject) pushShell(cmd, out string) {
-	p.entries = append(p.entries, injectEntry{label: "user-shell", head: "$ " + cmd, body: out})
+	p.entries = append(p.entries, injectEntry{label: labelShell, head: "$ " + cmd, body: out})
 }
 
 func (p *pendingInject) pushAttach(path, content string, truncated bool) {
+	if content == "" {
+		content = "(empty file)\n"
+	}
 	head := "@" + path
 	if truncated {
 		head += " (truncated)"
 	}
-	p.entries = append(p.entries, injectEntry{label: "user-attach", head: head, body: content})
+	p.entries = append(p.entries, injectEntry{label: labelAttach, head: head, body: content})
 }
 
 func (p *pendingInject) take() []injectEntry {
