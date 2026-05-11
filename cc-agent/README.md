@@ -206,6 +206,62 @@ REPL slash commands:
 | `:skills`                           | list loaded skills                       |
 | `:reflect <name> [description]`     | distill the current session into a skill |
 
+## Shell escape (`!` and `!!`)
+
+The REPL has two prefix forms for running shell commands directly, without
+asking the LLM:
+
+| Prefix     | LLM sees it? | Approver? | Behavior                                                                    |
+|------------|--------------|-----------|-----------------------------------------------------------------------------|
+| `!cmd`     | no           | no        | run `cmd` via `/bin/sh -c`, stream output, return to prompt                 |
+| `!!cmd`    | next turn    | no        | same as `!cmd`, plus buffer `(cmd, output)` to fold into the next user line |
+
+`!` is a pure shell escape — the agent's memory store is never touched, the
+destructive-command approver is bypassed (you typed it, you meant it), and
+the LLM has no idea you ran it. Useful for the `git status` / `ls` / `cat
+foo.log` checks you'd otherwise have to leave the REPL for.
+
+`!!` is the same execution path, but the command and its output are staged
+to fold into your next normal user line. So:
+
+```
+you> !!make test
+$ make test
+--- FAIL: TestPanic ...
+[buffered for next turn]
+you> fix the failing test
+```
+
+becomes a single user message to the LLM:
+
+```
+[user-shell] $ make test
+--- FAIL: TestPanic ...
+===
+fix the failing test
+```
+
+The fold runs `!!` in FIFO order if you stage several. The buffer is
+discarded if the REPL exits before a real user line drains it.
+
+Limitations:
+
+- Each `!` is a fresh subshell, so `!cd foo` and other state changes don't
+  persist across invocations. Use shell pipelines (`!cd foo && ls`) when
+  you need them.
+- Interactive commands like `vim`, `less`, `ssh` won't work — stdin is not
+  passed through, so they hang or exit immediately. Drop out of the REPL
+  for those.
+- The 60s execution cap is fixed in v1; long-running commands should be
+  backgrounded or run in your host shell.
+- Captured output (the thing folded into the next user message) is capped
+  at 16 KiB per `!!`. The live terminal stream is uncapped — only the
+  memory write is bounded.
+
+ESC during a `!` run cancels the command (whole process group, so
+grandchildren like `sleep` die promptly), same way ESC interrupts an
+agent turn.
+
 ## HTTP API (optional)
 
 ```bash
