@@ -183,3 +183,23 @@ func TestFoldInject_MixedShellAndAttach(t *testing.T) {
 		t.Errorf("fold mismatch:\nwant=%q\ngot =%q", want, got)
 	}
 }
+
+func TestNewAttachEntry_EmptyContent(t *testing.T) {
+	e := newAttachEntry("/tmp/empty.txt", "", false)
+	if e.body != "(empty file)\n" {
+		t.Errorf("empty content should normalize to '(empty file)\\n'; got %q", e.body)
+	}
+	if e.head != "@/tmp/empty.txt" {
+		t.Errorf("head mismatch: got %q", e.head)
+	}
+	if e.label != labelAttach {
+		t.Errorf("label mismatch: got %q", e.label)
+	}
+}
+
+func TestNewAttachEntry_Truncated(t *testing.T) {
+	e := newAttachEntry("/tmp/big.txt", "first 256 KiB...", true)
+	if e.head != "@/tmp/big.txt (truncated)" {
+		t.Errorf("truncated head mismatch: got %q", e.head)
+	}
+}

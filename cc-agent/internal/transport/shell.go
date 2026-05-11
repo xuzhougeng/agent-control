@@ -89,7 +89,11 @@ func (p *pendingInject) pushShell(cmd, out string) {
 	p.entries = append(p.entries, injectEntry{label: labelShell, head: "$ " + cmd, body: out})
 }
 
-func (p *pendingInject) pushAttach(path, content string, truncated bool) {
+// newAttachEntry builds the canonical injectEntry for an @ file attach.
+// It is the single source of truth for the attach head format and the
+// empty-body fallback, so the stage form (pushAttach) and inline form
+// (runAttach) cannot drift.
+func newAttachEntry(path, content string, truncated bool) injectEntry {
 	if content == "" {
 		content = "(empty file)\n"
 	}
@@ -97,7 +101,11 @@ func (p *pendingInject) pushAttach(path, content string, truncated bool) {
 	if truncated {
 		head += " (truncated)"
 	}
-	p.entries = append(p.entries, injectEntry{label: labelAttach, head: head, body: content})
+	return injectEntry{label: labelAttach, head: head, body: content}
+}
+
+func (p *pendingInject) pushAttach(path, content string, truncated bool) {
+	p.entries = append(p.entries, newAttachEntry(path, content, truncated))
 }
 
 func (p *pendingInject) take() []injectEntry {

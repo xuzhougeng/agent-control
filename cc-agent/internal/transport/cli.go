@@ -261,6 +261,8 @@ func RunCLI(ctx context.Context, ag *agent.Agent, rc *skills.RegistryClient, ses
 			}
 			// Fall through to a normal turn with the folded content. We
 			// rebind `line` so the existing dispatch code below picks it up.
+			// `line` is now a folded @ payload; do not insert any early
+			// exit between here and ag.Run below, or inline @ will be lost.
 			line = folded
 		}
 		runCtx, cancelRun := context.WithCancel(ctx)
@@ -618,6 +620,9 @@ func runAttach(rl *readline.Instance, path, userText, cwd string, buf *pendingIn
 		return "", false
 	}
 	size := len(content)
+	if truncated && size > attachMaxBytes {
+		size = attachMaxBytes
+	}
 	suffix := fmt.Sprintf("(%d bytes)", size)
 	if truncated {
 		suffix = fmt.Sprintf("(%d bytes, truncated to %d KiB)", size, attachMaxBytes>>10)
@@ -631,19 +636,8 @@ func runAttach(rl *readline.Instance, path, userText, cwd string, buf *pendingIn
 	// Inline form: build a one-shot entry list (drained existing buffer +
 	// this attach) and fold against userText.
 	entries := buf.take()
-	entries = append(entries, injectEntry{
-		label: labelAttach,
-		head:  attachHead(path, truncated),
-		body:  content,
-	})
+	entries = append(entries, newAttachEntry(path, content, truncated))
 	return foldInject(entries, userText), true
-}
-
-func attachHead(path string, truncated bool) string {
-	if truncated {
-		return "@" + path + " (truncated)"
-	}
-	return "@" + path
 }
 
 // splitAttachArgs splits "<path> <prompt...>" into (path, prompt). The path
