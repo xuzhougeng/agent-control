@@ -428,6 +428,24 @@ func TestAgent_RunWithForcedSkill_BypassesRouter(t *testing.T) {
 	if !foundEvent {
 		t.Errorf("expected EventRouter with pinned marker; got events=%+v", events)
 	}
+
+	// Direct memory assertion: the persisted user message should be the
+	// wrapped form, not the raw "hello" — proving runTurnBody saved the
+	// wrap-output, not the pre-wrap input.
+	hist, err := mem.LoadMessages(ctx, "s1")
+	if err != nil {
+		t.Fatalf("LoadMessages: %v", err)
+	}
+	var persisted string
+	for _, m := range hist {
+		if m.Role == "user" {
+			persisted = m.Content
+			break
+		}
+	}
+	if !strings.Contains(persisted, "PROBE-PROMPT") {
+		t.Errorf("persisted user message missing skill wrap: %q", persisted)
+	}
 }
 
 func TestLoop_RespectsMaxIterations(t *testing.T) {

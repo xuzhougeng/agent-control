@@ -213,6 +213,11 @@ func (a *Agent) RunWithListener(ctx context.Context, sessionID, userInput string
 // no router is configured or no skill matched. emit may surface router
 // errors as agent events.
 //
+// The picked skill's prompt is folded into the user message itself and
+// persisted to memory (via skills.WrapUserInput), so the prefix cache
+// stays warm across turns even when later turns route to a different
+// skill — every prior persisted message is byte-stable.
+//
 // We must NEVER touch a.opts.SystemPrompt here; mutating req.System would
 // invalidate the provider's prefix cache.
 func (a *Agent) applyRouter(ctx context.Context, userInput string, emit func(Event)) string {
@@ -249,6 +254,9 @@ func (a *Agent) applyRouter(ctx context.Context, userInput string, emit func(Eve
 // replay and prefix caches behave the same.
 //
 // A nil skill is equivalent to RunWithListener (no wrap, no route).
+//
+// Callers must pass the raw, unwrapped user line — passing an already-
+// wrapped string would produce a double-wrapped persisted message.
 //
 // Surfaces a "pinned" EventRouter so transcripts make clear the skill was
 // operator-chosen, not auto-picked.
