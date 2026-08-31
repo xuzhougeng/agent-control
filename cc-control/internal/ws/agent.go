@@ -214,6 +214,18 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			h.CP.HandleAgentApprovalRequest(reg.ServerID, msg.SessionID, msg.InstanceID, req.RequestID, req.Command, req.Reason)
+		case "credential_request":
+			var req struct {
+				RequestID string `json:"request_id"`
+				Name      string `json:"name"`
+				Reason    string `json:"reason"`
+				Command   string `json:"command"`
+			}
+			if err := json.Unmarshal(msg.Data, &req); err != nil {
+				slog.Warn("credential_request decode", "err", err, "server_id", reg.ServerID)
+				continue
+			}
+			h.CP.HandleAgentCredentialRequest(reg.ServerID, msg.SessionID, msg.InstanceID, req.RequestID, req.Name, req.Reason, req.Command)
 		case "error":
 			var payload struct {
 				Message string `json:"message"`

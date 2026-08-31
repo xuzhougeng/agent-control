@@ -91,6 +91,9 @@ type SessionEvent struct {
 	// approve/reject decision is routed back as an approval_decision
 	// envelope keyed by this id rather than as `y\n` / `n\n` term_in.
 	AgentRequestID string `json:"agent_request_id,omitempty"`
+	// SecretName is set on credential_needed events (password book). The
+	// secret value itself is never stored on the event.
+	SecretName string `json:"secret_name,omitempty"`
 }
 
 type NotificationLevel string
@@ -150,6 +153,8 @@ type SwitchSessionRequest struct {
 type ActionRequest struct {
 	Kind    string `json:"kind"`
 	EventID string `json:"event_id,omitempty"`
+	// Secret is only used for credential_submit and must never be audited.
+	Secret string `json:"secret,omitempty"`
 }
 
 type AgentRegister struct {

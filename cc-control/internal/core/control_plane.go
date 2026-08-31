@@ -347,7 +347,7 @@ func (cp *ControlPlane) GetPendingApprovalEvents(tenantID string) []SessionEvent
 	out := make([]SessionEvent, 0)
 	for _, events := range cp.sessionEvents {
 		for _, ev := range events {
-			if ev.Kind != "approval_needed" || ev.Resolved {
+			if !isOperatorGateKind(ev.Kind) || ev.Resolved {
 				continue
 			}
 			if tenantID != "" && ev.TenantID != tenantID {
@@ -1001,6 +1001,10 @@ func (cp *ControlPlane) HandlePTYOut(serverID, sessionID, instanceID string, seq
 	cp.createApprovalEvent(sessionID, instanceID, serverID, excerpt)
 }
 
+func isOperatorGateKind(kind string) bool {
+	return kind == "approval_needed" || kind == "credential_needed"
+}
+
 func (cp *ControlPlane) createApprovalEvent(sessionID, instanceID, serverID, excerpt string) {
 	cp.createApprovalEventInner(sessionID, instanceID, serverID, excerpt, "")
 }
@@ -1033,10 +1037,38 @@ func (cp *ControlPlane) HandleAgentApprovalRequest(serverID, sessionID, instance
 	if reason != "" {
 		excerpt = "[" + reason + "] " + command
 	}
-	cp.createApprovalEventInner(sessionID, instanceID, serverID, excerpt, requestID)
+	cp.createGateEvent(sessionID, instanceID, serverID, "approval_needed", excerpt, requestID, "")
+}
+
+// HandleAgentCredentialRequest surfaces a password-book request as a
+// credential_needed event. The secret value is not stored here; it only
+// transits later via SendCredentialDecision.
+func (cp *ControlPlane) HandleAgentCredentialRequest(serverID, sessionID, instanceID, requestID, name, reason, command string) {
+	if requestID == "" || name == "" {
+		slog.Warn("agent credential request ignored", "server_id", serverID, "session_id", sessionID, "name", name)
+		return
+	}
+	excerpt := "[" + name + "]"
+	if reason != "" {
+		excerpt += " " + reason
+	}
+	if command != "" {
+		excerpt += "\n" + command
+	}
+	slog.Info("agent credential request received",
+		"server_id", serverID, "session_id", sessionID, "instance_id", instanceID,
+		"request_id", requestID, "name", name, "reason", reason)
+	cp.createGateEvent(sessionID, instanceID, serverID, "credential_needed", excerpt, requestID, name)
 }
 
 func (cp *ControlPlane) createApprovalEventInner(sessionID, instanceID, serverID, excerpt, agentRequestID string) {
+	cp.createGateEvent(sessionID, instanceID, serverID, "approval_needed", excerpt, agentRequestID, "")
+}
+
+func (cp *ControlPlane) createGateEvent(sessionID, instanceID, serverID, kind, excerpt, agentRequestID, secretName string) {
+	if kind == "" {
+		kind = "approval_needed"
+	}
 	cp.mu.Lock()
 	sess, ok := cp.sessions[sessionID]
 	if !ok || sess.AwaitingApproval || sess.ActiveInstanceID != instanceID {
@@ -1047,8 +1079,8 @@ func (cp *ControlPlane) createApprovalEventInner(sessionID, instanceID, serverID
 			activeIID = sess.ActiveInstanceID
 		}
 		cp.mu.Unlock()
-		slog.Warn("approval event suppressed",
-			"session_id", sessionID, "session_found", ok,
+		slog.Warn("gate event suppressed",
+			"kind", kind, "session_id", sessionID, "session_found", ok,
 			"awaiting", awaiting, "active_instance", activeIID, "got_instance", instanceID,
 			"agent_request_id", agentRequestID)
 		return
@@ -1069,10 +1101,11 @@ func (cp *ControlPlane) createApprovalEventInner(sessionID, instanceID, serverID
 		InstanceID:     instanceID,
 		ServerID:       serverID,
 		TenantID:       sess.TenantID,
-		Kind:           "approval_needed",
+		Kind:           kind,
 		PromptText:     excerpt,
 		TsMS:           time.Now().UnixMilli(),
 		AgentRequestID: agentRequestID,
+		SecretName:     secretName,
 	}
 	cp.sessionEvents[sessionID] = append(cp.sessionEvents[sessionID], ev)
 	cp.mu.Unlock()
@@ -1097,9 +1130,10 @@ func (cp *ControlPlane) createApprovalEventInner(sessionID, instanceID, serverID
 		Actor:     "system",
 		ServerID:  serverID,
 		SessionID: sessionID,
-		Kind:      "approval_needed",
+		Kind:      kind,
 		Meta: map[string]any{
-			"event_id": eventID,
+			"event_id":    eventID,
+			"secret_name": secretName,
 		},
 	})
 }
@@ -1172,6 +1206,30 @@ func (cp *ControlPlane) SendApprovalDecision(serverID, sessionID, instanceID, re
 		"actor":      actor,
 	})
 	env := NewEnvelope("approval_decision", serverID, sessionID)
+	env.InstanceID = instanceID
+	env.Data = payload
+	return conn.Send(env)
+}
+
+// SendCredentialDecision forwards an operator-supplied secret to cc-agent.
+// The secret is not written to the audit log or session events.
+func (cp *ControlPlane) SendCredentialDecision(serverID, sessionID, instanceID, requestID string, granted bool, secret, actor string) error {
+	if requestID == "" {
+		return errors.New("send credential decision: empty request id")
+	}
+	cp.mu.Lock()
+	conn := cp.agentConns[serverID]
+	cp.mu.Unlock()
+	if conn == nil {
+		return errors.New("agent offline")
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"request_id": requestID,
+		"granted":    granted,
+		"secret":     secret,
+		"actor":      actor,
+	})
+	env := NewEnvelope("credential_decision", serverID, sessionID)
 	env.InstanceID = instanceID
 	env.Data = payload
 	return conn.Send(env)
@@ -1347,6 +1405,19 @@ func (cp *ControlPlane) HandleClientAction(actor, tenantID, sessionID string, re
 		eventID := sess.PendingEventID
 		var promptExcerpt string
 		var agentRequestID string
+		var pendingKind string
+		for i := len(cp.sessionEvents[sessionID]) - 1; i >= 0; i-- {
+			if cp.sessionEvents[sessionID][i].EventID == eventID {
+				promptExcerpt = cp.sessionEvents[sessionID][i].PromptText
+				agentRequestID = cp.sessionEvents[sessionID][i].AgentRequestID
+				pendingKind = cp.sessionEvents[sessionID][i].Kind
+				break
+			}
+		}
+		if pendingKind == "credential_needed" && req.Kind == "approve" {
+			cp.mu.Unlock()
+			return errors.New("password required")
+		}
 		sess.AwaitingApproval = false
 		sess.PendingEventID = ""
 		if inst := cp.activeInstanceBySessionLocked(sessionID); inst != nil {
@@ -1355,8 +1426,6 @@ func (cp *ControlPlane) HandleClientAction(actor, tenantID, sessionID string, re
 		}
 		for i := len(cp.sessionEvents[sessionID]) - 1; i >= 0; i-- {
 			if cp.sessionEvents[sessionID][i].EventID == eventID {
-				promptExcerpt = cp.sessionEvents[sessionID][i].PromptText
-				agentRequestID = cp.sessionEvents[sessionID][i].AgentRequestID
 				cp.sessionEvents[sessionID][i].Resolved = true
 				cp.sessionEvents[sessionID][i].Actor = actor
 				break
@@ -1367,6 +1436,24 @@ func (cp *ControlPlane) HandleClientAction(actor, tenantID, sessionID string, re
 		cp.mu.Unlock()
 
 		// cc-agent flow: send a structured decision back to the agent.
+		if pendingKind == "credential_needed" && agentRequestID != "" {
+			if err := cp.SendCredentialDecision(serverIDForAction, sessionID, instanceForAction, agentRequestID, false, "", actor); err != nil {
+				return err
+			}
+			cp.broadcastSessionUpdate(sessionID)
+			cp.audit.Log(AuditEvent{
+				Actor:     actor,
+				ServerID:  serverIDForAction,
+				SessionID: sessionID,
+				Kind:      "action_credential_reject",
+				Meta: map[string]any{
+					"event_id":           eventID,
+					"requested_event_id": requestedEventID,
+					"agent_request_id":   agentRequestID,
+				},
+			})
+			return nil
+		}
 		if agentRequestID != "" {
 			if err := cp.SendApprovalDecision(serverIDForAction, sessionID, instanceForAction, agentRequestID, req.Kind == "approve", actor); err != nil {
 				return err
@@ -1413,11 +1500,92 @@ func (cp *ControlPlane) HandleClientAction(actor, tenantID, sessionID string, re
 			},
 		})
 		return nil
+	case "credential_submit", "credential_reject":
+		return cp.handleCredentialAction(actor, tenantID, sessionID, req)
 	case "stop":
 		return cp.StopSession(actor, tenantID, sessionID, cp.cfg.DefaultGraceMS, cp.cfg.DefaultKillMS)
 	default:
 		return errors.New("invalid action")
 	}
+}
+
+func (cp *ControlPlane) handleCredentialAction(actor, tenantID, sessionID string, req ActionRequest) error {
+	secret := req.Secret
+	req.Secret = ""
+	if req.Kind == "credential_submit" && strings.TrimSpace(secret) == "" {
+		return errors.New("password required")
+	}
+
+	cp.mu.Lock()
+	sess, ok := cp.sessions[sessionID]
+	if !ok {
+		cp.mu.Unlock()
+		return errors.New("session not found")
+	}
+	if tenantID != "" && sess.TenantID != tenantID {
+		cp.mu.Unlock()
+		return errors.New("session not found")
+	}
+	if !sess.AwaitingApproval {
+		cp.mu.Unlock()
+		return errors.New("no pending credential")
+	}
+	eventID := sess.PendingEventID
+	var agentRequestID string
+	var secretName string
+	var pendingKind string
+	for i := len(cp.sessionEvents[sessionID]) - 1; i >= 0; i-- {
+		if cp.sessionEvents[sessionID][i].EventID == eventID {
+			pendingKind = cp.sessionEvents[sessionID][i].Kind
+			agentRequestID = cp.sessionEvents[sessionID][i].AgentRequestID
+			secretName = cp.sessionEvents[sessionID][i].SecretName
+			break
+		}
+	}
+	if pendingKind != "credential_needed" {
+		cp.mu.Unlock()
+		return errors.New("no pending credential")
+	}
+	sess.AwaitingApproval = false
+	sess.PendingEventID = ""
+	if inst := cp.activeInstanceBySessionLocked(sessionID); inst != nil {
+		inst.AwaitingApproval = false
+		inst.PendingEventID = ""
+	}
+	for i := len(cp.sessionEvents[sessionID]) - 1; i >= 0; i-- {
+		if cp.sessionEvents[sessionID][i].EventID == eventID {
+			cp.sessionEvents[sessionID][i].Resolved = true
+			cp.sessionEvents[sessionID][i].Actor = actor
+			break
+		}
+	}
+	serverIDForAction := sess.ServerID
+	instanceForAction := sess.ActiveInstanceID
+	cp.mu.Unlock()
+
+	granted := req.Kind == "credential_submit"
+	if !granted {
+		secret = ""
+	}
+	if agentRequestID != "" {
+		if err := cp.SendCredentialDecision(serverIDForAction, sessionID, instanceForAction, agentRequestID, granted, secret, actor); err != nil {
+			return err
+		}
+	}
+	cp.broadcastSessionUpdate(sessionID)
+	cp.audit.Log(AuditEvent{
+		Actor:     actor,
+		ServerID:  serverIDForAction,
+		SessionID: sessionID,
+		Kind:      "action_" + req.Kind,
+		Meta: map[string]any{
+			"event_id":         eventID,
+			"agent_request_id": agentRequestID,
+			"secret_name":      secretName,
+			"granted":          granted,
+		},
+	})
+	return nil
 }
 
 func looksLikeApprovalMenuPrompt(prompt string) bool {

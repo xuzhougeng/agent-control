@@ -185,10 +185,22 @@ export function createSessionController(ctx) {
       // pre-formatted prompt_excerpt like "[recursive rm] rm -rf /tmp/x".
       // For these we surface inline Approve/Reject buttons so the operator
       // can decide without having to type into a terminal.
-      const isAgentApproval = !!ev.agent_request_id;
+      const isCredential = ev.kind === "credential_needed";
+      const isAgentApproval = !!ev.agent_request_id && !isCredential;
       const promptText = ev.prompt_excerpt ? escapeHtml(ev.prompt_excerpt) : "";
       const promptHtml = promptText ? `<div class="approval-item-prompt"><code>${promptText}</code></div>` : "";
-      const buttonsHtml = isAgentApproval
+      const secretLabel = isCredential
+        ? `<div class="approval-item-subtle">secret ${escapeHtml(ev.secret_name || "password")}</div>`
+        : "";
+      const buttonsHtml = isCredential
+        ? `<div class="approval-item-secret">
+             <input type="password" autocomplete="new-password" data-secret-input placeholder="Password" aria-label="Secret for ${escapeHtml(ev.secret_name || "credential")}">
+           </div>
+           <div class="approval-item-actions">
+             <button type="button" data-action="credential_submit" class="approval-btn approval-btn-approve">Submit</button>
+             <button type="button" data-action="credential_reject" class="approval-btn approval-btn-reject">Deny</button>
+           </div>`
+        : isAgentApproval
         ? `<div class="approval-item-actions">
              <button type="button" data-action="approve" class="approval-btn approval-btn-approve">Approve</button>
              <button type="button" data-action="reject" class="approval-btn approval-btn-reject">Reject</button>
@@ -197,12 +209,13 @@ export function createSessionController(ctx) {
       li.innerHTML = `
         <div><strong>${escapeHtml(ev.session_id.slice(0, 8))}</strong> @ ${escapeHtml(ev.server_id)}</div>
         <div class="approval-item-subtle">${instanceText}</div>
+        ${secretLabel}
         ${promptHtml}
         ${buttonsHtml}
       `;
       const open = () => attachSession(ev.session_id);
       li.addEventListener("click", (e) => {
-        if (e.target.closest("button")) return;
+        if (e.target.closest("button") || e.target.closest("input")) return;
         open();
       });
       li.addEventListener("keydown", (e) => {
@@ -213,19 +226,43 @@ export function createSessionController(ctx) {
       });
       const approveBtn = li.querySelector('[data-action="approve"]');
       const rejectBtn = li.querySelector('[data-action="reject"]');
-      const decide = (kind) => {
+      const submitBtn = li.querySelector('[data-action="credential_submit"]');
+      const denyBtn = li.querySelector('[data-action="credential_reject"]');
+      const secretInput = li.querySelector("[data-secret-input]");
+      const decide = (kind, extra) => {
         // Make sure the UI is attached to this session so server-side
         // sub.AttachedSession is populated; cc-control falls back to it
         // for actions that omit session_id.
         attachSession(ev.session_id);
+        const data = { kind, event_id: ev.event_id, ...(extra || {}) };
         ctx.wsClient.send({
           type: "action",
           session_id: ev.session_id,
-          data: { kind, event_id: ev.event_id },
+          data,
         });
+        if (secretInput) secretInput.value = "";
       };
       if (approveBtn) approveBtn.addEventListener("click", () => decide("approve"));
       if (rejectBtn) rejectBtn.addEventListener("click", () => decide("reject"));
+      if (submitBtn) {
+        submitBtn.addEventListener("click", () => {
+          const secret = secretInput ? secretInput.value : "";
+          if (!secret) {
+            if (secretInput) secretInput.focus();
+            return;
+          }
+          decide("credential_submit", { secret });
+        });
+      }
+      if (denyBtn) denyBtn.addEventListener("click", () => decide("credential_reject"));
+      if (secretInput) {
+        secretInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submitBtn?.click();
+          }
+        });
+      }
       ctx.approvalList.appendChild(li);
     }
     ctx.approvalCount.textContent = String(pendingCount);

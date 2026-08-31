@@ -220,7 +220,7 @@ func (h *ClientHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			events := h.CP.GetSessionEvents(rec.TenantID, req.SessionID)
 			pendingApprovals := 0
 			for _, ev := range events {
-				if ev.Kind != "approval_needed" || ev.Resolved {
+				if (ev.Kind != "approval_needed" && ev.Kind != "credential_needed") || ev.Resolved {
 					continue
 				}
 				pendingApprovals++

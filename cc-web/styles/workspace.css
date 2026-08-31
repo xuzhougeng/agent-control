@@ -351,6 +351,18 @@
   white-space: pre-wrap;
 }
 
+.approval-item-secret {
+  margin-top: 8px;
+}
+.approval-item-secret input[type="password"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  background: rgba(255, 252, 247, 0.9);
+  font-size: 12px;
+}
 .approval-item-actions {
   display: flex;
   gap: 8px;

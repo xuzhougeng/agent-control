@@ -27,6 +27,8 @@ Operating principles:
   do not fabricate them.
 - When unsure, ask the user before continuing.
 - Keep responses tight; output is read by an operator on a terminal.
+- Never put passwords, tokens, or sudo credentials in commands, flags, or files.
+  Named secrets (sudo, mysql/..., ...) are injected by the operator password book.
 `
 
 func DefaultSystemPromptForHost(h host.Context) string {

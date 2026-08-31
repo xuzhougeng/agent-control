@@ -19,6 +19,7 @@ import (
 	"cc-agent/internal/config"
 	"cc-agent/internal/llm"
 	"cc-agent/internal/memory"
+	"cc-agent/internal/secrets"
 	"cc-agent/internal/skills"
 	"cc-agent/internal/tools"
 	"cc-agent/internal/transport"
@@ -27,20 +28,28 @@ import (
 )
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == tools.AskpassFlag {
+		sock := ""
+		if len(os.Args) >= 3 {
+			sock = os.Args[2]
+		}
+		os.Exit(tools.RunAskpass(sock))
+	}
+
 	var (
-		cfgPath    = flag.String("config", "", "JSON config file (optional)")
-		provider   = flag.String("provider", "", "override provider (anthropic|openai|deepseek)")
-		model      = flag.String("model", "", "override model name")
-		cwd        = flag.String("cwd", "", "agent working directory (default $PWD)")
-		memoryPath = flag.String("memory", "", "SQLite path for persistent sessions; empty = in-memory")
-		httpAddr   = flag.String("http", "", "optional HTTP API listen addr (e.g. :19090)")
-		controlURL = flag.String("control-url", "", "optional cc-control WS URL")
-		agentToken = flag.String("agent-token", "", "agent token (with -control-url)")
-		serverID   = flag.String("server-id", "", "agent server id (with -control-url)")
-		sessionID  = flag.String("session", "default", "session id for the CLI REPL")
-		skillsDir  = flag.String("skills-dir", "", "directory of skill JSON files")
-		listTools  = flag.Bool("list-tools", false, "print registered tools as JSON and exit (no API key needed)")
-		showVer    = flag.Bool("version", false, "print version and exit")
+		cfgPath      = flag.String("config", "", "JSON config file (optional)")
+		provider     = flag.String("provider", "", "override provider (anthropic|openai|deepseek)")
+		model        = flag.String("model", "", "override model name")
+		cwd          = flag.String("cwd", "", "agent working directory (default $PWD)")
+		memoryPath   = flag.String("memory", "", "SQLite path for persistent sessions; empty = in-memory")
+		httpAddr     = flag.String("http", "", "optional HTTP API listen addr (e.g. :19090)")
+		controlURL   = flag.String("control-url", "", "optional cc-control WS URL")
+		agentToken   = flag.String("agent-token", "", "agent token (with -control-url)")
+		serverID     = flag.String("server-id", "", "agent server id (with -control-url)")
+		sessionID    = flag.String("session", "default", "session id for the CLI REPL")
+		skillsDir    = flag.String("skills-dir", "", "directory of skill JSON files")
+		listTools    = flag.Bool("list-tools", false, "print registered tools as JSON and exit (no API key needed)")
+		showVer      = flag.Bool("version", false, "print version and exit")
 		fullPerm     = flag.Bool("full-permission", false, "skip approval prompts for destructive commands (yolo mode)")
 		denyDanger   = flag.Bool("deny-destructive", false, "auto-deny destructive commands (no prompt, safe for non-interactive use)")
 		approvalTO   = flag.String("approval-timeout", "", "how long to wait for an operator approval in -control-url mode (e.g. 30s, 5m, 1h). Default 5m.")
@@ -153,11 +162,16 @@ func main() {
 
 	toolReg := tools.DefaultRegistry(cfg.Cwd, cfg.AllowedRoots)
 	bashTool, _ := toolReg.Get("bash")
+	secretBook := secrets.NewBook(nil)
 	// cliApprover is plumbed into the REPL later (RunCLI calls SetReadline
-	// once the readline.Instance is built). Stays nil for the full-permission
-	// / deny-destructive / daemon paths.
+	// once the readline.Instance is built). Control-bridge mode replaces
+	// the book's prompter with a UI-routed RemotePrompter.
 	var cliApprover *transport.CLIApprover
 	if b, ok := bashTool.(*tools.Bash); ok {
+		b.Book = secretBook
+		cliApprover = transport.NewCLIApprover(nil, os.Stderr)
+		cliApprover.Book = secretBook
+		secretBook.SetPrompter(cliApprover)
 		switch {
 		case *fullPerm:
 			b.Approver = tools.AlwaysApprove{}
@@ -165,7 +179,6 @@ func main() {
 		case *denyDanger:
 			b.Approver = tools.AlwaysDeny{}
 		default:
-			cliApprover = transport.NewCLIApprover(nil, os.Stderr)
 			b.Approver = cliApprover
 		}
 	}
@@ -223,13 +236,17 @@ func main() {
 		// remain the *fallback* default; -full-permission still wins because
 		// remote approval is unnecessary when the operator has opted into
 		// yolo mode.
-		if !*fullPerm && !*denyDanger {
-			if b, ok := bashTool.(*tools.Bash); ok {
+		if b, ok := bashTool.(*tools.Bash); ok {
+			prompter := control.NewRemotePrompterWithTimeout(client, cfg.ApprovalTimeoutDuration())
+			client.SetPrompter(prompter)
+			secretBook.SetPrompter(prompter)
+			if !*fullPerm && !*denyDanger {
 				approver := control.NewRemoteApproverWithTimeout(client, cfg.ApprovalTimeoutDuration())
 				client.SetApprover(approver)
 				b.Approver = approver
 				fmt.Fprintf(os.Stderr, "[approval] UI-routed approver: timeout=%s\n", cfg.ApprovalTimeoutDuration())
 			}
+			fmt.Fprintf(os.Stderr, "[secrets] UI-routed password book: timeout=%s\n", cfg.ApprovalTimeoutDuration())
 		}
 		go func() {
 			if err := client.Run(ctx); err != nil {

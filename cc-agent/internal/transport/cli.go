@@ -20,6 +20,7 @@ import (
 	"github.com/chzyer/readline"
 
 	"cc-agent/internal/agent"
+	"cc-agent/internal/secrets"
 	"cc-agent/internal/skills"
 )
 
@@ -34,6 +35,7 @@ type CLIApprover struct {
 	rl     *readline.Instance
 	Reader *bufio.Reader
 	Writer io.Writer
+	Book   *secrets.Book
 }
 
 func NewCLIApprover(rl *readline.Instance, w io.Writer) *CLIApprover {
@@ -76,6 +78,55 @@ func (a *CLIApprover) Approve(_ context.Context, cmd, reason string) (bool, erro
 // AskLine prompts the operator for one line of input. Used both for
 // destructive-command approval and the :install y/N confirm so all interactive
 // reads share the readline pipeline.
+// Prompt implements secrets.Prompter. The value is never echoed or added
+// to readline history.
+func (a *CLIApprover) Prompt(_ context.Context, req secrets.Request) ([]byte, bool, error) {
+	fmt.Fprintf(a.Writer, "\n\033[33m⚠ secret required\033[0m  name: %s\n", req.Name)
+	if req.Reason != "" {
+		fmt.Fprintf(a.Writer, "  reason: %s\n", req.Reason)
+	}
+	if req.Command != "" {
+		fmt.Fprintf(a.Writer, "  command: %s\n", req.Command)
+	}
+	secret, err := a.AskSecret("password: ")
+	if err != nil {
+		if errors.Is(err, readline.ErrInterrupt) || errors.Is(err, io.EOF) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if len(bytesTrim(secret)) == 0 {
+		secrets.Wipe(secret)
+		return nil, false, nil
+	}
+	return secret, true, nil
+}
+
+func bytesTrim(b []byte) []byte {
+	return []byte(strings.TrimSpace(string(b)))
+}
+
+// AskSecret reads one hidden line. Used for the password book.
+func (a *CLIApprover) AskSecret(prompt string) ([]byte, error) {
+	a.mu.Lock()
+	rl := a.rl
+	a.mu.Unlock()
+	if rl != nil {
+		return rl.ReadPassword(prompt)
+	}
+	r := a.Reader
+	if r == nil {
+		r = bufio.NewReader(os.Stdin)
+	}
+	fmt.Fprint(a.Writer, prompt)
+	line, err := r.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	line = strings.TrimRight(line, "\r\n")
+	return []byte(line), nil
+}
+
 func (a *CLIApprover) AskLine(prompt string) (string, error) {
 	a.mu.Lock()
 	rl := a.rl
@@ -143,6 +194,11 @@ func makeCompleter(ag *agent.Agent, rc *skills.RegistryClient) readline.AutoComp
 		readline.PcItem(":rollback", readline.PcItemDynamic(teamNames)),
 		readline.PcItem(":rewind"),
 		readline.PcItem(":use", readline.PcItemDynamic(localNames)),
+		readline.PcItem(":secrets"),
+		readline.PcItem(":secret",
+			readline.PcItem("set"),
+			readline.PcItem("drop"),
+		),
 		readline.PcItem(":quit"),
 		readline.PcItem(":exit"),
 		readline.PcItem("exit"),
@@ -364,6 +420,9 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
   :use <skill> [prompt]            force a specific skill on the next turn
   :use                             show the pinned skill
   :use -                           clear the pinned skill
+  :secrets                         list names in the password book (not values)
+  :secret set <name>               store a named secret (hidden prompt)
+  :secret drop <name>              wipe a named secret
   :quit | :exit | exit | quit | Ctrl+D   leave the REPL
   ! <command>                      run a shell command (LLM does NOT see it)
   !! <command>                     run a shell command and fold (cmd, output)
@@ -620,6 +679,52 @@ func handleSlashCommand(ctx context.Context, ag *agent.Agent, rc *skills.Registr
 			_ = reg.LoadDir(rc.TeamDir)
 		}
 		return nil
+	case ":secrets":
+		if approver == nil || approver.Book == nil {
+			fmt.Println("(no secret book)")
+			return nil
+		}
+		names := approver.Book.List()
+		if len(names) == 0 {
+			fmt.Println("(password book empty)")
+			return nil
+		}
+		for _, n := range names {
+			fmt.Printf("  - %s\n", n)
+		}
+		return nil
+	case ":secret":
+		if approver == nil || approver.Book == nil {
+			return fmt.Errorf("secret book is not available")
+		}
+		if len(parts) < 3 {
+			return fmt.Errorf("usage: :secret set <name> | :secret drop <name>")
+		}
+		op, name := parts[1], parts[2]
+		if !secrets.ValidName(name) {
+			return fmt.Errorf("invalid secret name %q (use e.g. sudo, mysql/prod)", name)
+		}
+		switch op {
+		case "drop":
+			approver.Book.Drop(name)
+			fmt.Printf("dropped secret %s\n", name)
+			return nil
+		case "set":
+			secret, err := approver.AskSecret("password: ")
+			if err != nil {
+				return err
+			}
+			if len(strings.TrimSpace(string(secret))) == 0 {
+				secrets.Wipe(secret)
+				return fmt.Errorf("empty password")
+			}
+			approver.Book.Put(name, secret, 0)
+			secrets.Wipe(secret)
+			fmt.Printf("stored secret %s\n", name)
+			return nil
+		default:
+			return fmt.Errorf("usage: :secret set <name> | :secret drop <name>")
+		}
 	default:
 		return fmt.Errorf("unknown command %q (try :help)", cmd)
 	}

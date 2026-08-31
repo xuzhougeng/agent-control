@@ -3,12 +3,14 @@ package tools
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 
 	"cc-agent/internal/host"
+	"cc-agent/internal/secrets"
 )
 
 // Bash runs a shell command. Constructed with a fixed cwd and an allow-list of
@@ -25,6 +27,13 @@ type Bash struct {
 	BlockedSubstr  []string // commands containing any of these strings are rejected outright
 	Approver       Approver
 	Shell          host.Shell
+	// Book supplies named secrets (sudo, mysql/..., ...) without putting
+	// them in the command string or the model context.
+	Book *secrets.Book
+
+	sudoAvailable func() bool
+	sudoHasTicket func() bool
+	startAskpass  func(secret []byte) (apply func(*exec.Cmd), cleanup func(), err error)
 }
 
 func NewBash(cwd string) *Bash {
@@ -43,7 +52,9 @@ func (b *Bash) Description() string {
 	return "Execute a shell command. Use for system inspection, log queries, " +
 		"package status, etc. Output is truncated to a fixed size; chain commands " +
 		"with shell pipelines as needed. Working directory is fixed by the agent. " +
-		"Commands run via " + b.Shell.DisplayName() + "."
+		"Commands run via " + b.Shell.DisplayName() + ". " +
+		"Do not put passwords on the command line (sudo -S, mysql -pSECRET, MYSQL_PWD=...). " +
+		"sudo and other named secrets are supplied by the operator password book."
 }
 
 func (b *Bash) InputSchema() map[string]any {
@@ -73,6 +84,10 @@ func (b *Bash) Run(ctx context.Context, input map[string]any) (string, error) {
 			return "", fmt.Errorf("command blocked: contains %q", blocked)
 		}
 	}
+	if leak := SecretLeakReason(cmdStr); leak != "" {
+		return fmt.Sprintf("DENIED (secret leak: %s).\ncommand: %s\ndo not put passwords in the command; request them from the operator secret book.\n",
+			leak, cmdStr), nil
+	}
 	if reason := DangerousReason(cmdStr); reason != "" && b.Approver != nil {
 		ok, err := b.Approver.Approve(ctx, cmdStr, reason)
 		if err != nil {
@@ -99,6 +114,15 @@ func (b *Bash) Run(ctx context.Context, input map[string]any) (string, error) {
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb
+
+	if cleanup, err := b.prepareSudo(ctx, cmd, cmdStr); err != nil {
+		if errors.Is(err, secrets.ErrDenied) || errors.Is(err, secrets.ErrNoPrompter) {
+			return fmt.Sprintf("DENIED by operator (secret: sudo).\ncommand: %s\n%v\n", cmdStr, err), nil
+		}
+		return fmt.Sprintf("sudo secret error: %v\ncommand: %s\n", err, cmdStr), nil
+	} else if cleanup != nil {
+		defer cleanup()
+	}
 
 	startErr := cmd.Run()
 	stdout := truncate(out.Bytes(), b.MaxOutputBytes)
@@ -133,6 +157,43 @@ func (b *Bash) Run(ctx context.Context, input map[string]any) (string, error) {
 		fmt.Fprintf(&sb, "--- error ---\n%v\n", startErr)
 	}
 	return sb.String(), nil
+}
+
+func (b *Bash) prepareSudo(ctx context.Context, cmd *exec.Cmd, cmdStr string) (func(), error) {
+	if !needsSudo(cmdStr) || !b.sudoPresent() {
+		return nil, nil
+	}
+	if b.sudoTicketValid() {
+		return nil, nil
+	}
+	if b.Book == nil {
+		return nil, secrets.ErrNoPrompter
+	}
+	secret, err := b.Book.Get(ctx, secrets.Request{
+		Name:    "sudo",
+		Reason:  "sudo needs a password",
+		Command: cmdStr,
+		Cache:   15 * time.Minute,
+	})
+	if err != nil {
+		return nil, err
+	}
+	start := b.startAskpass
+	if start == nil {
+		start = startSudoAskpass
+	}
+	apply, cleanup, err := start(secret)
+	secrets.Wipe(secret)
+	if err != nil {
+		if cleanup != nil {
+			cleanup()
+		}
+		return nil, err
+	}
+	if apply != nil {
+		apply(cmd)
+	}
+	return cleanup, nil
 }
 
 func truncate(b []byte, maxBytes int) []byte {

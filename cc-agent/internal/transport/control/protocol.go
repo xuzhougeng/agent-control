@@ -127,3 +127,24 @@ type ApprovalDecisionPayload struct {
 	Approved  bool   `json:"approved"`
 	Actor     string `json:"actor,omitempty"`
 }
+
+// CredentialRequestPayload is sent agent → control when a tool needs a
+// named secret from the operator password book. The control plane must
+// not persist or audit the eventual secret value.
+type CredentialRequestPayload struct {
+	RequestID string `json:"request_id"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind,omitempty"`
+	Reason    string `json:"reason"`
+	Command   string `json:"command,omitempty"`
+	TtlMS     int64  `json:"ttl_ms,omitempty"`
+}
+
+// CredentialDecisionPayload travels control → agent. Secret is present
+// only when Granted is true and must not be logged.
+type CredentialDecisionPayload struct {
+	RequestID string `json:"request_id"`
+	Granted   bool   `json:"granted"`
+	Secret    string `json:"secret,omitempty"`
+	Actor     string `json:"actor,omitempty"`
+}

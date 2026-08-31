@@ -73,7 +73,7 @@ export function createWSHandler(ctx) {
         ctx.session.pushNotification(ev);
         return;
       }
-      if (ev.kind === "approval_needed") {
+      if (ev.kind === "approval_needed" || ev.kind === "credential_needed") {
         ctx.state.approvals.set(ev.event_id, ev);
         ctx.session.renderApprovals();
       }

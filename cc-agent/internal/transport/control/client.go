@@ -60,6 +60,7 @@ type Client struct {
 	instances map[string]*chatInstance
 	send      chan Envelope
 	approver  *RemoteApprover
+	prompter  *RemotePrompter
 }
 
 // SetApprover attaches a RemoteApprover so this client can route
@@ -69,6 +70,14 @@ func (c *Client) SetApprover(a *RemoteApprover) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.approver = a
+}
+
+// SetPrompter attaches a RemotePrompter so credential_decision envelopes
+// unblock pending secret-book requests. Call before Run.
+func (c *Client) SetPrompter(p *RemotePrompter) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.prompter = p
 }
 
 // chatInstance tracks one logical chat session lifetime. session_id and
@@ -288,6 +297,28 @@ func (c *Client) handle(ctx context.Context, msg Envelope) error {
 		slog.Info("approval_decision received",
 			"request_id", p.RequestID, "approved", p.Approved, "actor", p.Actor,
 			"approver_attached", hasApprover, "pending_found", pendingFound)
+		return nil
+	case "credential_decision":
+		var p CredentialDecisionPayload
+		if err := json.Unmarshal(msg.Data, &p); err != nil {
+			return fmt.Errorf("credential_decision decode: %w", err)
+		}
+		c.mu.Lock()
+		prompter := c.prompter
+		c.mu.Unlock()
+		hasPrompter := prompter != nil
+		var pendingFound bool
+		if prompter != nil {
+			prompter.mu.Lock()
+			_, pendingFound = prompter.pending[p.RequestID]
+			prompter.mu.Unlock()
+			prompter.dispatch(p)
+		}
+		// Never log p.Secret.
+		slog.Info("credential_decision received",
+			"request_id", p.RequestID, "granted", p.Granted, "actor", p.Actor,
+			"prompter_attached", hasPrompter, "pending_found", pendingFound)
+		p.Secret = ""
 		return nil
 	case "install_skill_request":
 		return c.installSkillRequest(msg)
